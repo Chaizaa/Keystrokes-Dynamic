@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrasi Biometrik</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: #f4f4f9; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        /* Style Wrapper untuk Input + Ikon */
+        .input-wrapper {
+            position: relative;
+            width: 100%;
+            margin: 8px 0;
+        }
+        
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            padding-right: 40px; /* Beri ruang untuk ikon mata */
+            box-sizing: border-box; 
+            border: 1px solid #ccc; 
+            border-radius: 5px; 
+        }
+
+        /* Style Ikon Mata */
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #666;
+            user-select: none;
+        }
+        
+        .toggle-password:hover { color: #333; }
+
+        .progress-box { margin: 20px 0; padding: 15px; background: #eef; border-radius: 5px; text-align: center; }
+        .counter { font-size: 24px; font-weight: bold; color: #333; }
+        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #ccc; }
+        #status { color: red; font-size: 14px; margin-top: 5px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Registrasi Akun Baru</h2>
+    <p>Langkah 1: Buat Username & Password Utama</p>
+    
+    <input type="text" id="regUsername" placeholder="Buat Username">
+    
+    <!-- Wrapper Password Utama -->
+    <div class="input-wrapper">
+        <input type="password" id="mainPassword" placeholder="Buat Password (Yang akan dihafal)">
+        <span class="toggle-password" onclick="togglePass('mainPassword', this)">
+            <!-- Ikon Mata (SVG) -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </span>
+    </div>
+    
+    <hr>
+    
+    <div id="typingSection">
+        <p>Langkah 2: Ketik Ulang Password Anda (2x)</p>
+        <p style="font-size: 12px; color: #666;">Ketik password di bawah ini, lalu tekan <b>ENTER</b> untuk menyimpan sampel.</p>
+        
+        <div class="progress-box">
+            Progress Sampel: <span id="countDisplay" class="counter">0</span> / 10
+        </div>
+
+        <!-- Wrapper Password Typing -->
+        <div class="input-wrapper">
+            <input type="password" id="typingField" placeholder="Ketik password di sini & Tekan Enter...">
+            <span class="toggle-password" onclick="togglePass('typingField', this)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </span>
+        </div>
+
+        <p id="status"></p>
+    </div>
+
+    <div id="finishSection" class="hidden">
+        <h3>Registrasi Selesai!</h3>
+        <p>Data pola ketikan Anda telah tersimpan.</p>
+        <button onclick="window.location.href='/login'">Pergi ke Halaman Login</button>
+    </div>
+</div>
+
+<script>
+    // FUNGSI TOGGLE PASSWORD (SHOW/HIDE)
+    function togglePass(inputId, iconSpan) {
+        const input = document.getElementById(inputId);
+        const svgEye = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const svgEyeOff = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+        if (input.type === "password") {
+            input.type = "text";
+            iconSpan.innerHTML = svgEyeOff; // Ganti ikon jadi 'Mata Dicoret'
+        } else {
+            input.type = "password";
+            iconSpan.innerHTML = svgEye;    // Ganti ikon jadi 'Mata Biasa'
+        }
+    }
+
+    // --- LOGIKA UTAMA (SAMA SEPERTI SEBELUMNYA) ---
+    let sampleCount = 0;
+    const targetSamples = 2;
+    let rawEvents = [];
+    
+    const mainPassInput = document.getElementById('mainPassword');
+    const typingInput = document.getElementById('typingField');
+    const statusEl = document.getElementById('status');
+    const countDisplay = document.getElementById('countDisplay');
+
+    typingInput.addEventListener('keydown', (event) => {
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
+        
+        if (event.repeat && !isModifier) {
+            statusEl.innerText = "JANGAN DITAHAN! Ketik manual.";
+            event.preventDefault(); return;
+        } else {
+            statusEl.innerText = "";
+        }
+
+        if (event.repeat && isModifier) return; 
+
+        rawEvents.push({
+            key: event.key, code: event.code, evt: 'd', t: performance.now()
+        });
+    });
+
+    typingInput.addEventListener('keyup', (event) => {
+        rawEvents.push({
+            key: event.key, code: event.code, evt: 'u', t: performance.now()
+        });
+
+        if (event.key === 'Enter') {
+            handleEnterPress();
+        }
+    });
+
+    async function handleEnterPress() {
+        const username = document.getElementById('regUsername').value;
+        const mainPass = mainPassInput.value;
+        const typedPass = typingInput.value;
+
+        if (!username || !mainPass) {
+            statusEl.innerText = "Isi Username dan Password Utama dulu!";
+            return;
+        }
+        
+        if (typedPass !== mainPass) {
+            statusEl.innerText = "Salah ketik! Harus sama persis dengan password utama.";
+            typingInput.value = '';
+            rawEvents = [];
+            return;
+        }
+
+        statusEl.innerText = "Menyimpan sampel...";
+        try {
+            const response = await fetch('/api/register_sample', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    events: rawEvents,
+                    sample_count: sampleCount + 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                sampleCount++;
+                countDisplay.innerText = sampleCount;
+                typingInput.value = '';
+                rawEvents = []; 
+                statusEl.innerText = "Sampel tersimpan. Lanjut ketik lagi!";
+
+                if (sampleCount >= targetSamples) {
+                    finishRegistration();
+                }
+            } else {
+                statusEl.innerText = "Error: " + result.message;
+                typingInput.value = '';
+                rawEvents = [];
+            }
+
+        } catch (error) {
+            console.error(error);
+            statusEl.innerText = "Gagal koneksi server.";
+        }
+    }
+
+    function finishRegistration() {
+        typingInput.disabled = true;
+        typingInput.placeholder = "Cukup! 2 Sampel terkumpul.";
+        statusEl.innerText = "";
+        document.getElementById('finishSection').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
