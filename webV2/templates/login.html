@@ -80,19 +80,74 @@
 
     // LOGIKA UTAMA
     let rawEvents = [];
+    let activeKeys = {};  // Track tombol yang sedang ditekan
     const passwordField = document.getElementById('passwordField');
     const resultBox = document.getElementById('resultBox');
 
+    // [SAMA SEPERTI REGISTER] Batasi karakter di UI, tapi tetap catat waktu
     passwordField.addEventListener('keydown', (event) => {
         const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
-        if (event.repeat && !isModifier) { event.preventDefault(); return; }
+        const keyCode = event.code;
+        
+        // Deteksi auto-repeat (tombol ditahan) - termasuk karakter khusus seperti !!!
+        if (event.repeat && !isModifier) {
+            // TIDAK PERLU TAMPILKAN ERROR
+            // Karena user mungkin sengaja menahan tombol sebagai bagian pola biometriknya
+            
+            // Cegah karakter berulang muncul di UI
+            event.preventDefault();
+            
+            // TETAP rekam event untuk fitur waktu (PENTING!)
+            rawEvents.push({
+                key: event.key, 
+                code: event.code, 
+                evt: 'd', 
+                t: performance.now(),
+                isRepeat: true  // Tandai sebagai repeat
+            });
+            
+            return;
+        }
+
+        // Tandai tombol ini sedang ditekan (HANYA non-modifier!)
+        if (!isModifier) {
+            activeKeys[keyCode] = performance.now();
+        }
+
+        // Jangan rekam modifier yang di-repeat
         if (event.repeat && isModifier) return;
 
-        rawEvents.push({ key: event.key, code: event.code, evt: 'd', t: performance.now() });
+        // Rekam event normal - TIDAK termasuk modifier keys
+        if (!isModifier) {
+            rawEvents.push({ 
+                key: event.key, 
+                code: event.code, 
+                evt: 'd', 
+                t: performance.now(),
+                isRepeat: false
+            });
+        }
     });
 
     passwordField.addEventListener('keyup', (event) => {
-        rawEvents.push({ key: event.key, code: event.code, evt: 'u', t: performance.now() });
+        const keyCode = event.code;
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
+        
+        // Hapus dari tracking saat tombol dilepas
+        if (activeKeys[keyCode]) {
+            delete activeKeys[keyCode];
+        }
+        
+        // Rekam event keyup - HANYA non-modifier
+        if (!isModifier) {
+            rawEvents.push({ 
+                key: event.key, 
+                code: event.code, 
+                evt: 'u', 
+                t: performance.now() 
+            });
+        }
+        
         if (event.key === 'Enter') doLogin();
     });
 

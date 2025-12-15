@@ -20,10 +20,18 @@ class Database:
     def _save_to_csv(self, data):
         file_exists = os.path.isfile(self.csv_path)
         try:
-            with open(self.csv_path, mode='a', newline='') as file:
-                writer = csv.DictWriter(file, fieldnames=data.keys())
+            # Convert lists and dicts to JSON strings before CSV writing
+            csv_data = {}
+            for k, v in data.items():
+                if isinstance(v, (list, dict)):
+                    csv_data[k] = json.dumps(v)
+                else:
+                    csv_data[k] = v
+            
+            with open(self.csv_path, mode='a', newline='', encoding='utf-8') as file:
+                writer = csv.DictWriter(file, fieldnames=csv_data.keys())
                 if not file_exists: writer.writeheader()
-                writer.writerow(data)
+                writer.writerow(csv_data)
             print("[SUKSES] CSV Updated.")
         except PermissionError:
             print(f"[ERROR] Gagal menulis CSV! File '{self.csv_path}' sedang dibuka di Excel. Tutup dulu file tersebut.")
@@ -34,10 +42,10 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # 1. Persiapkan Data (Konversi List ke JSON String agar bisa masuk DB)
+        # 1. Persiapkan Data (Konversi List & Dict ke JSON String agar bisa masuk DB)
         db_data = {}
         for k, v in data.items():
-            if isinstance(v, list):
+            if isinstance(v, (list, dict)):  # Tambahkan dict juga!
                 db_data[k] = json.dumps(v)
             else:
                 db_data[k] = v
@@ -84,15 +92,17 @@ class Database:
     # FUNGSI GETTER: MENGAMBIL DATA UNTUK VERIFIKASI
     # =========================================================================
     def get_enrollment_samples(self, username):
-        """Mengambil 10 data sampel pendaftaran terakhir"""
+        """Mengambil semua data sampel pendaftaran (HANYA ENROLLMENT!)"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row # Agar hasil return berupa Dict
         cursor = conn.cursor()
         try:
+            # [FIX] HANYA ambil data enrollment, bukan login attempt!
+            # Ambil semua enrollment samples untuk training (no limit)
             cursor.execute("""
                 SELECT * FROM user_vectors 
-                WHERE username = ? 
-                ORDER BY id DESC LIMIT 10
+                WHERE username = ? AND data_type = 'enrollment'
+                ORDER BY id DESC
             """, (username,))
             
             rows = cursor.fetchall()

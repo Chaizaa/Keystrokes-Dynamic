@@ -4,7 +4,8 @@ import json
 class Verifier:
     def __init__(self):
         self.MAX_BACKSPACE = 3
-        self.OUTLIER_CAP = 1.0 
+        self.OUTLIER_CAP = 1.0
+        self.EXTREME_ANOMALY_THRESHOLD = 0.5  # [BARU] Jika 1 fitur beda > 0.5s = HARD REJECT
         self.THRESHOLD = 0.35 # Dilonggarkan sedikit karena sekarang ada banyak fitur
     
     def _parse_vector(self, vector_data):
@@ -12,6 +13,13 @@ class Verifier:
             try: return np.array(json.loads(vector_data))
             except: return np.array([])
         return np.array(vector_data)
+    
+    def _parse_features(self, feature_data):
+        """Parse H_features, DD_features, UD_features (dict format)"""
+        if isinstance(feature_data, str):
+            try: return json.loads(feature_data)
+            except: return {}
+        return feature_data if isinstance(feature_data, dict) else {}
 
     def calculate_capped_distance(self, vec_input, vec_profile, label=""):
         if len(vec_input) != len(vec_profile):
@@ -75,7 +83,7 @@ class Verifier:
 
         print(f"[INFO] Membangun Profil dari {len(clean_samples)} sampel bersih.")
 
-        # A. Profil Vektor
+        # A. Profil Vektor (Legacy - untuk backward compatibility)
         for key in vector_keys:
             vecs = []
             for row in clean_samples:
@@ -83,22 +91,42 @@ class Verifier:
                 vecs.append(v)
             mean_profile[key] = np.mean(vecs, axis=0)
 
+        # A2. [FITUR BARU] Profil Fitur Per-Karakter (H_features, DD_features, UD_features, UU_features, DU_features)
+        feature_keys = ['H_features', 'DD_features', 'UD_features', 'UU_features', 'DU_features']
+        for fkey in feature_keys:
+            # Kumpulkan semua key yang muncul di sampel
+            all_feature_keys = set()
+            for row in clean_samples:
+                feat_dict = self._parse_features(row.get(fkey, {}))
+                all_feature_keys.update(feat_dict.keys())
+            
+            # Hitung rata-rata per key
+            mean_profile[fkey] = {}
+            for k in all_feature_keys:
+                values = []
+                for row in clean_samples:
+                    feat_dict = self._parse_features(row.get(fkey, {}))
+                    if k in feat_dict:
+                        values.append(float(feat_dict[k]))
+                if values:
+                    mean_profile[fkey][k] = np.mean(values)
+            
+            print(f"[INFO] Profil {fkey}: {len(mean_profile[fkey])} fitur")
+
+
         # B. Profil Macro
-        macro_keys = ['total_duration', 'typing_rollover_ratio', 'modifier_rollover_ratio']
+        macro_keys = ['total_duration', 'typing_rollover_ratio']
         for key in macro_keys:
             vals = [float(row[key]) for row in clean_samples]
             mean_profile[key] = np.mean(vals)
-            
-        # C. Shift Dominance
-        shifts = [row['shift_dominance'] for row in clean_samples]
-        mean_profile['shift_dominance'] = max(set(shifts), key=shifts.count)
 
         # ---------------------------------------------------------
-        # 3. BANDINGKAN VEKTOR
+        # 3. BANDINGKAN VEKTOR & FITUR BARU
         # ---------------------------------------------------------
         input_vectors = {}
         scores = {}
         
+        # A. Bandingkan Vektor Legacy
         for key in vector_keys:
             input_vectors[key] = self._parse_vector(new_features[key])
             
@@ -111,9 +139,55 @@ class Verifier:
                 scores[key] = self.calculate_capped_distance(
                     input_vectors[key], mean_profile[key], key
                 )
+        
+        # B. [FITUR BARU] Bandingkan Fitur Per-Karakter
+        feature_scores = {}
+        has_extreme_anomaly = False  # Flag untuk deteksi anomaly ekstrem
+        
+        for fkey in ['H_features', 'DD_features', 'UD_features', 'UU_features', 'DU_features']:
+            input_feat = self._parse_features(new_features.get(fkey, {}))
+            profile_feat = mean_profile.get(fkey, {})
+            
+            if not profile_feat:
+                feature_scores[fkey] = 0.0  # Tidak ada data profil, skip
+                continue
+            
+            # Hitung rata-rata selisih untuk fitur yang cocok
+            diffs = []
+            for k in profile_feat.keys():
+                if k in input_feat:
+                    diff = abs(float(input_feat[k]) - float(profile_feat[k]))
+                    
+                    # [CRITICAL] Deteksi anomaly ekstrem (misal hold 2s vs 0.2s)
+                    if diff > self.EXTREME_ANOMALY_THRESHOLD:
+                        print(f"[ALERT] ANOMALY EKSTREM di {k}: Input={input_feat[k]:.4f}, Profil={profile_feat[k]:.4f}, Diff={diff:.4f}")
+                        has_extreme_anomaly = True
+                    
+                    capped_diff = min(diff, self.OUTLIER_CAP)
+                    diffs.append(capped_diff)
+            
+            if diffs:
+                feature_scores[fkey] = np.mean(diffs)
+                print(f"[DEBUG] {fkey} Distance: {feature_scores[fkey]:.4f}")
+            else:
+                feature_scores[fkey] = self.OUTLIER_CAP  # Tidak ada fitur cocok
+                print(f"[WARNING] {fkey}: Tidak ada fitur yang cocok!")
+        
+        # [CRITICAL] HARD REJECTION jika ada anomaly ekstrem
+        if has_extreme_anomaly:
+            print("\n" + "="*50)
+            print("⚠️  DETEKSI ANOMALY EKSTREM - LOGIN DITOLAK")
+            print("="*50)
+            return {
+                "result": False,
+                "score": 1.0,
+                "threshold": 0.45,
+                "reason": "Pola waktu tidak cocok! Ada perbedaan ekstrem (>0.5s) pada fitur biometrik."
+            }
+
 
         # ---------------------------------------------------------
-        # 4. HITUNG SKOR AKHIR
+        # 4. HITUNG SKOR AKHIR (Gabungkan Legacy + Fitur Baru)
         # ---------------------------------------------------------
         # ... (Kode bagian Macro sama seperti sebelumnya) ...
         
@@ -122,28 +196,35 @@ class Verifier:
         dur_score = min(dur_score, 1.0)
         
         roll_diff = abs(new_features['typing_rollover_ratio'] - mean_profile['typing_rollover_ratio'])
-        
-        shift_penalty = 0.0
-        if new_features['shift_dominance'] != mean_profile['shift_dominance']:
-            shift_penalty = 0.20
 
-        # HITUNG WEIGHTED SCORE
+        # HITUNG WEIGHTED SCORE (Legacy Vectors)
         w_vec = (scores['H_vector'] * 1.0 + 
                  scores['DD_vector'] * 1.5 + 
                  scores['UD_vector'] * 1.2 +
                  scores['UU_vector'] * 0.8 + 
                  scores['DU_vector'] * 0.5) / 5.0
-                 
-        w_macro = (dur_score * 1.0 + roll_diff * 1.5 + shift_penalty) / 2.5
-        final_score = (w_vec * 0.7) + (w_macro * 0.3)
         
-        # PERBAIKAN 2: Longgarkan Threshold
-        # Naikkan dari 0.35 ke 0.45 atau 0.50 agar lebih toleran
-        REAL_THRESHOLD = 0.45 
+        # [FITUR BARU] Score dari fitur per-karakter
+        w_features = (feature_scores.get('H_features', 0) * 2.5 +   # [FIX] Hold time SANGAT penting!
+                      feature_scores.get('DD_features', 0) * 1.5 +
+                      feature_scores.get('UD_features', 0) * 1.0 +
+                      feature_scores.get('UU_features', 0) * 0.8 +
+                      feature_scores.get('DU_features', 0) * 0.5) / 6.3  # Total weight: 6.3
+        
+        w_macro = (dur_score * 1.5 + roll_diff * 1.0) / 2.5
+        
+        # [FIX] Bobot baru: 60% fitur waktu per-karakter + 20% legacy + 20% macro
+        final_score = (w_vec * 0.2) + (w_features * 0.6) + (w_macro * 0.2)
+        
+        # [FIX] Perketat threshold untuk lebih strict
+        REAL_THRESHOLD = 0.30  # Turunkan dari 0.45 ke 0.30 
         
         is_verified = final_score < REAL_THRESHOLD
         
         print("-" * 30)
+        print(f"SKOR Legacy Vec  : {w_vec:.4f}")
+        print(f"SKOR Fitur Baru  : {w_features:.4f}")
+        print(f"SKOR Macro       : {w_macro:.4f}")
         print(f"SKOR AKHIR       : {final_score:.4f}")
         print(f"STATUS           : {'LOLOS' if is_verified else 'DITOLAK'}")
         print("-" * 30)

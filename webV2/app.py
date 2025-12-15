@@ -42,30 +42,17 @@ def process_web_events(raw_events_from_js, username):
         }
     
     # ----------------------------
+    # [REMOVED] Shift dominance detection - tidak diperlukan lagi
     
-    shift_l = sum(1 for x in raw_events_from_js if x['code'] == 'ShiftLeft' and x['evt'] == 'd')
-    shift_r = sum(1 for x in raw_events_from_js if x['code'] == 'ShiftRight' and x['evt'] == 'd')
-    if shift_l > 0 and shift_r == 0: shift_dominance = "Left"
-    elif shift_r > 0 and shift_l == 0: shift_dominance = "Right"
-    elif shift_l > 0 and shift_r > 0: shift_dominance = "Mixed"
-    else: shift_dominance = "None"
-
     # Data Cleaning & Pairing
     MAX_HOLD_NORMAL = 800    
     MAX_HOLD_MODIFIER = 5000 
+    MAX_HOLD_FOR_REPEAT = 800  # [FITUR BARU] Batas hold time sebelum dianggap auto-repeat (0.8 detik)
     
-    active_keys = {}
-    for x in raw_events_from_js:
-        k_id = x['code']
-        is_safe = ('Shift' in k_id or 'Control' in k_id or 'Alt' in k_id or 'Meta' in k_id)
-        if x['evt'] == 'd':
-            cnt = active_keys.get(k_id, 0)
-            if cnt > 0 and not is_safe:
-                return {"status": "error", "msg": f"Tombol {x['key']} ditahan (Auto-Repeat)."}
-            active_keys[k_id] = cnt + 1
-        elif x['evt'] == 'u':
-            active_keys[k_id] = 0
-
+    # [CATATAN] Validasi auto-repeat DIHAPUS dari backend karena frontend (register.html)
+    # sudah menangani dengan benar: mencatat waktu repeat tapi batasi karakter di UI.
+    # Backend sekarang hanya fokus pada ekstraksi fitur dari data yang diterima.
+    
     temp_keystrokes = []
     temp_dict = {}
     
@@ -74,25 +61,37 @@ def process_web_events(raw_events_from_js, username):
         if x['evt'] == 'd':
             # PERBAIKAN: Simpan Tuple (Waktu, Karakter Asli saat ditekan)
             # Agar '!' tetap '!' meskipun saat dilepas shift sudah mati
-            temp_dict[k_id] = (x['t'], x['key']) 
+            # Jika belum ada (keydown pertama), simpan
+            # Jika sudah ada (event repeat), JANGAN overwrite - biarkan waktu pertama tetap
+            if k_id not in temp_dict:
+                temp_dict[k_id] = (x['t'], x['key']) 
             
         elif x['evt'] == 'u':
             if k_id in temp_dict:
-                # Ambil data waktu start & karakter dari event DOWN
+                # Ambil data waktu start & karakter dari event DOWN PERTAMA
                 down_time, char_at_down = temp_dict[k_id] 
                 
                 up_time = x['t']
-                hold_time = up_time - down_time
+                hold_time = up_time - down_time  # Ini akan menghitung TOTAL hold time termasuk repeat
                 del temp_dict[k_id]
 
                 is_modifier = ('Shift' in k_id or 'Control' in k_id or 'Alt' in k_id or 'Meta' in k_id or 'CapsLock' in k_id)
                 limit = MAX_HOLD_MODIFIER if is_modifier else MAX_HOLD_NORMAL
                 
-                if hold_time > limit:
-                    return {"status": "error", "msg": f"Tombol {char_at_down} ditahan terlalu lama."}
+                # Validasi hold time maksimal (untuk mencegah tombol macet/error hardware)
+                # CATATAN: Batas ini dinaikkan untuk mengakomodasi user yang sengaja menahan tombol lama
+                if hold_time > limit and not is_modifier:
+                    # JANGAN langsung reject, beri toleransi lebih
+                    # Hanya reject jika SANGAT ekstrem (misal > 5 detik)
+                    if hold_time > 5000:
+                        return {"status": "error", "msg": f"Tombol {char_at_down} ditahan terlalu lama (>{hold_time}ms). Mungkin tombol macet?"}
+                
+                # [CATATAN] Validasi is_potential_repeat DIHAPUS
+                # Frontend sudah menangani repeat dengan mencatat waktu tapi batasi karakter
+                # Backend hanya perlu memproses data yang diterima
 
                 temp_keystrokes.append({
-                    'key_char': char_at_down, # <--- GUNAKAN KARAKTER DARI DOWN EVENT
+                    'key_char': char_at_down,
                     'key_code': x['code'],
                     'down': down_time, 
                     'up': up_time,
@@ -107,16 +106,21 @@ def process_web_events(raw_events_from_js, username):
         if item['is_backspace']:
             if final_stack: final_stack.pop()
         else:
+            # [CATATAN] Validasi is_potential_repeat DIHAPUS
+            # Frontend sudah mencegah repeat, backend hanya proses data yang valid
             final_stack.append(item)
 
     if len(final_stack) < 2: return {"status": "error", "msg": "Password terlalu pendek."}
 
-    # Build Hash & Vektor
+    # Build Hash & String Password dengan Sekuens Karakter Terpisah
     real_password_string = ""
+    char_sequence = []  # [FITUR BARU #1] Sekuens karakter terpisah
     masked_sequence = []
+    
     for k in final_stack:
         if len(k['key_char']) == 1:
             real_password_string += k['key_char']
+            char_sequence.append(k['key_char'])  # [FITUR BARU #1] Simpan karakter asli
             masked_sequence.append("*")
         else:
             masked_sequence.append(k['key_code']) 
@@ -126,13 +130,25 @@ def process_web_events(raw_events_from_js, username):
     # Rollover & Vector Calculation
     typing_overlap_count = 0
     total_typing_trans = 0
-    modifier_overlap_count = 0
-    total_modifier_trans = 0
     
+    # [FITUR BARU #1] VEKTOR TERPISAH: Waktu vs Huruf
+    # Vektor waktu saja (seperti sebelumnya)
     H_vec, DD_vec, UD_vec, UU_vec, DU_vec = [], [], [], [], []
+    
+    # [FITUR BARU #1] Vektor dengan label karakter (seperti keystrokev1)
+    H_features = {}   # Format: "H.a_0": 0.123, "H.b_1": 0.234
+    DD_features = {}  # Format: "DD.a_0.b_1": 0.145
+    UD_features = {}  # Format: "UD.a_0.b_1": 0.089
+    UU_features = {}  # Format: "UU.a_0.b_1": 0.234
+    DU_features = {}  # Format: "DU.a_0.b_1": 0.345
 
-    for k in final_stack:
-        H_vec.append(round((k['up'] - k['down']) / 1000, 4))
+    for i, k in enumerate(final_stack):
+        hold_time_sec = (k['up'] - k['down']) / 1000
+        H_vec.append(round(hold_time_sec, 4))
+        
+        # [FITUR BARU #1] Simpan dengan label karakter
+        char = char_sequence[i] if i < len(char_sequence) else 'X'
+        H_features[f"H.{char}_{i}"] = round(hold_time_sec, 4)
 
     for i in range(len(final_stack) - 1):
         k1 = final_stack[i]
@@ -143,37 +159,49 @@ def process_web_events(raw_events_from_js, username):
         uu_val = (k2['up'] - k1['up']) / 1000
         du_val = (k2['up'] - k1['down']) / 1000
         
-        k1_code = k1['key_code']
-        is_k1_modifier = ('Shift' in k1_code or 'Control' in k1_code or 'Alt' in k1_code)
-        
-        if is_k1_modifier:
-            total_modifier_trans += 1
-            if ud_val < 0: modifier_overlap_count += 1
-        else:
-            total_typing_trans += 1
-            if ud_val < 0: typing_overlap_count += 1
+        # Hitung rollover (semua transition, tidak dibedakan modifier/typing)
+        total_typing_trans += 1
+        if ud_val < 0: typing_overlap_count += 1
             
         DD_vec.append(round(dd_val, 4))
         UD_vec.append(round(ud_val, 4))
         UU_vec.append(round(uu_val, 4))
         DU_vec.append(round(du_val, 4))
+        
+        # [FITUR BARU #1] Simpan dengan label karakter
+        char1 = char_sequence[i] if i < len(char_sequence) else 'X'
+        char2 = char_sequence[i+1] if i+1 < len(char_sequence) else 'X'
+        DD_features[f"DD.{char1}_{i}.{char2}_{i+1}"] = round(dd_val, 4)
+        UD_features[f"UD.{char1}_{i}.{char2}_{i+1}"] = round(ud_val, 4)
+        UU_features[f"UU.{char1}_{i}.{char2}_{i+1}"] = round(uu_val, 4)
+        DU_features[f"DU.{char1}_{i}.{char2}_{i+1}"] = round(du_val, 4)
 
     typing_rollover_ratio = round(typing_overlap_count / total_typing_trans, 4) if total_typing_trans > 0 else 0
-    modifier_rollover_ratio = round(modifier_overlap_count / total_modifier_trans, 4) if total_modifier_trans > 0 else 0
 
     features = {
         'username': username,
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'password_hash': full_hash,
         'keys_sequence': masked_sequence, 
+        'char_sequence': char_sequence,  # [FITUR BARU #1] Sekuens karakter asli
         'dev_real_password': real_password_string, # [DEV ONLY]
         'total_duration': round(total_duration_sec, 4),
         'backspace_count': backspace_count,
-        'shift_dominance': shift_dominance,
         'typing_rollover_ratio': typing_rollover_ratio,
-        'modifier_rollover_ratio': modifier_rollover_ratio,
-        'H_vector': H_vec, 'DD_vector': DD_vec, 'UD_vector': UD_vec, 
-        'UU_vector': UU_vec, 'DU_vector': DU_vec
+        
+        # [VEKTOR LAMA] Waktu saja (backward compatibility)
+        'H_vector': H_vec, 
+        'DD_vector': DD_vec, 
+        'UD_vector': UD_vec, 
+        'UU_vector': UU_vec, 
+        'DU_vector': DU_vec,
+        
+        # [FITUR BARU #1] Vektor dengan label karakter (seperti keystrokev1)
+        'H_features': H_features,
+        'DD_features': DD_features,
+        'UD_features': UD_features,
+        'UU_features': UU_features,
+        'DU_features': DU_features
     }
 
     return {"status": "success", "data": features}
@@ -240,8 +268,8 @@ def login_attempt():
     # 2. Ambil Data Latihan dari Database (via db.py)
     enrollment_data = db_manager.get_enrollment_samples(username)
     
-    if len(enrollment_data) < 2:
-        return jsonify({"status": "error", "message": "User belum terdaftar atau data latihan kurang (Min 2)."}), 404
+    if len(enrollment_data) < 5:
+        return jsonify({"status": "error", "message": f"User belum terdaftar atau data enrollment kurang. Anda punya {len(enrollment_data)} sampel, minimal 5 diperlukan untuk verifikasi."}), 404
 
     # 3. PANGGIL VERIFIER UNTUK MENILAI (via verifier.py)
     #    Ini adalah langkah "KONEKSI" yang Anda tanyakan

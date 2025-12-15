@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -107,35 +109,97 @@
 
     // --- LOGIKA UTAMA (SAMA SEPERTI SEBELUMNYA) ---
     let sampleCount = 0;
-    const targetSamples = 2;
+    const targetSamples = 10;
     let rawEvents = [];
+    let activeKeys = {};  // [FITUR BARU] Track tombol yang sedang ditekan
     
     const mainPassInput = document.getElementById('mainPassword');
     const typingInput = document.getElementById('typingField');
     const statusEl = document.getElementById('status');
     const countDisplay = document.getElementById('countDisplay');
 
-    typingInput.addEventListener('keydown', (event) => {
+    // [FITUR BARU] BATASI KARAKTER DI UI UNTUK KOLOM "BUAT PASSWORD"
+    mainPassInput.addEventListener('keydown', (event) => {
         const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
         
+        console.log('[DEBUG mainPass]', event.key, 'repeat:', event.repeat, 'isModifier:', isModifier);
+        
+        // Jika bukan modifier DAN repeat, cegah (termasuk karakter khusus seperti !!!)
         if (event.repeat && !isModifier) {
-            statusEl.innerText = "JANGAN DITAHAN! Ketik manual.";
-            event.preventDefault(); return;
+            console.log('[BLOCKED] Karakter repeat dicegah!');
+            // Cegah karakter berulang muncul di UI
+            event.preventDefault();
+            return;
+        }
+    });
+
+    // [FITUR BARU] LOGIKA UNTUK KOLOM KETIK PASSWORD - BATASI KARAKTER DI UI
+    typingInput.addEventListener('keydown', (event) => {
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
+        const keyCode = event.code;
+        
+        // Cek apakah tombol ini sudah ditekan sebelumnya (auto-repeat detection)
+        if (event.repeat && !isModifier) {
+            // Tampilkan info (opsional)
+            statusEl.innerText = "⚠️ Tombol ditahan (waktu tetap dicatat)";
+            
+            // Cegah karakter berulang muncul di UI (termasuk !!! atau ###)
+            event.preventDefault();
+            
+            // TETAP rekam event untuk fitur waktu (PENTING!)
+            rawEvents.push({
+                key: event.key, 
+                code: event.code, 
+                evt: 'd', 
+                t: performance.now(),
+                isRepeat: true
+            });
+            
+            return;
         } else {
-            statusEl.innerText = "";
+            if (statusEl.innerText.includes('ditahan')) {
+                statusEl.innerText = "";
+            }
         }
 
+        // Tandai tombol ini sedang ditekan (HANYA non-modifier!)
+        if (!isModifier) {
+            activeKeys[keyCode] = performance.now();
+        }
+
+        // Jangan rekam modifier yang di-repeat (Shift, Ctrl, dll)
         if (event.repeat && isModifier) return; 
 
-        rawEvents.push({
-            key: event.key, code: event.code, evt: 'd', t: performance.now()
-        });
+        // Rekam event normal - TIDAK termasuk modifier keys
+        if (!isModifier) {
+            rawEvents.push({
+                key: event.key, 
+                code: event.code, 
+                evt: 'd', 
+                t: performance.now(),
+                isRepeat: false
+            });
+        }
     });
 
     typingInput.addEventListener('keyup', (event) => {
-        rawEvents.push({
-            key: event.key, code: event.code, evt: 'u', t: performance.now()
-        });
+        const keyCode = event.code;
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
+        
+        // Hapus dari tracking saat tombol dilepas
+        if (activeKeys[keyCode]) {
+            delete activeKeys[keyCode];
+        }
+        
+        // Rekam event keyup - HANYA non-modifier
+        if (!isModifier) {
+            rawEvents.push({
+                key: event.key, 
+                code: event.code, 
+                evt: 'u', 
+                t: performance.now()
+            });
+        }
 
         if (event.key === 'Enter') {
             handleEnterPress();
