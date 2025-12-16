@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# CSV Data (optional - uncomment if you don't want to track collected data)
+# biometric_auth.csv
+
+# Backup files
+*_backup_*.csv
+*_backup_*.db
+FINAL_CORRUPT_backup.*
+corrupted_backup_*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask
+instance/
+.webassets-cache
+
+# Logs
+*.log

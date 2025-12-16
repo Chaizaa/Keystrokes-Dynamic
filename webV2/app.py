@@ -3,6 +3,15 @@ from flask_cors import CORS
 import time
 import hashlib
 from datetime import datetime
+import sys
+import importlib
+
+# Force reload modules in debug mode (prevents __pycache__ issues)
+if 'db' in sys.modules:
+    importlib.reload(sys.modules['db'])
+if 'verifier' in sys.modules:
+    importlib.reload(sys.modules['verifier'])
+
 from db import Database 
 from verifier import Verifier  # <--- (1) KITA IMPORT OTAKNYA DI SINI
 

@@ -20,11 +20,14 @@ class Database:
     def _save_to_csv(self, data):
         file_exists = os.path.isfile(self.csv_path)
         try:
-            # Convert lists and dicts to JSON strings before CSV writing
+            # Convert ALL complex types to JSON strings before CSV writing
             csv_data = {}
             for k, v in data.items():
-                if isinstance(v, (list, dict)):
+                # Handle semua data types yang bisa bikin masalah di CSV
+                if isinstance(v, (list, dict, bool)) or v is None:
                     csv_data[k] = json.dumps(v)
+                elif isinstance(v, (int, float)):
+                    csv_data[k] = str(v)  # Convert ke string untuk safety
                 else:
                     csv_data[k] = v
             
@@ -42,11 +45,14 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # 1. Persiapkan Data (Konversi List & Dict ke JSON String agar bisa masuk DB)
+        # 1. Persiapkan Data (Konversi semua complex types ke JSON String agar bisa masuk DB)
         db_data = {}
         for k, v in data.items():
-            if isinstance(v, (list, dict)):  # Tambahkan dict juga!
+            # Handle semua data types yang bisa bikin masalah (SAMA DENGAN CSV!)
+            if isinstance(v, (list, dict, bool)) or v is None:
                 db_data[k] = json.dumps(v)
+            elif isinstance(v, (int, float)):
+                db_data[k] = str(v)  # Convert ke string untuk consistency dengan CSV
             else:
                 db_data[k] = v
 
