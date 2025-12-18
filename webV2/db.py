@@ -151,6 +151,24 @@ class Database:
             return 0
         finally:
             conn.close()
+    
+    def get_login_count(self, username):
+        """Get jumlah login samples untuk username tertentu"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM user_vectors 
+                WHERE username = ? AND data_type = 'login'
+            """, (username,))
+            count = cursor.fetchone()[0]
+            return count
+        except Exception as e:
+            print(f"[DB ERROR] Get Login Count: {e}")
+            return 0
+        finally:
+            conn.close()
 
     # =========================================================================
     # [DEV ONLY] - FITUR TAMBAHAN UNTUK MENYIMPAN PASSWORD ASLI

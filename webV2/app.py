@@ -154,14 +154,6 @@ def process_web_events(raw_events_from_js, username):
                 is_modifier = ('Shift' in k_id or 'Control' in k_id or 'Alt' in k_id or 'Meta' in k_id or 'CapsLock' in k_id)
                 limit = MAX_HOLD_MODIFIER if is_modifier else MAX_HOLD_NORMAL
                 
-                # Validasi hold time maksimal (untuk mencegah tombol macet/error hardware)
-                # CATATAN: Batas ini dinaikkan untuk mengakomodasi user yang sengaja menahan tombol lama
-                if hold_time > limit and not is_modifier:
-                    # JANGAN langsung reject, beri toleransi lebih
-                    # Hanya reject jika SANGAT ekstrem (misal > 5 detik)
-                    if hold_time > 5000:
-                        return {"status": "error", "msg": f"Tombol {char_at_down} ditahan terlalu lama (>{hold_time}ms). Mungkin tombol macet?"}
-                
                 # [CATATAN] Validasi is_potential_repeat DIHAPUS
                 # Frontend sudah menangani repeat dengan mencatat waktu tapi batasi karakter
                 # Backend hanya perlu memproses data yang diterima
@@ -306,6 +298,19 @@ def process_web_events(raw_events_from_js, username):
         'UU_features': UU_features,
         'DU_features': DU_features,
         
+        # =========================================================================
+        # [PHASE 1] STATISTICAL FEATURES - Variable Length Support
+        # =========================================================================
+        # Extract 35 fixed-size features (7 stats × 5 vectors)
+        # Allows users to use different password lengths!
+        'statistical_features': verifier.extract_statistical_features({
+            'H_vector': H_vec,
+            'DD_vector': DD_vec,
+            'UD_vector': UD_vec,
+            'UU_vector': UU_vec,
+            'DU_vector': DU_vec
+        }).tolist(),  # Convert numpy array to list for JSON serialization
+        
         # STATISTICAL FEATURES (20 features)
         'H_mean': round(H_mean, 4),
         'H_std': round(H_std, 4),
@@ -360,13 +365,74 @@ def register_page():
 # API ENDPOINTS
 # ============================================================================
 
+@app.route('/api/check_username', methods=['POST'])
+def check_username():
+    """Check username availability for registration"""
+    data = request.json
+    username = data.get('username', '').strip()
+    
+    if not username:
+        return jsonify({
+            "status": "error",
+            "message": "Username tidak boleh kosong"
+        }), 400
+    
+    # Get enrollment count
+    enrollment_count = db_manager.get_enrollment_count(username)
+    
+    if enrollment_count >= 10:
+        # Username taken (enrollment complete)
+        return jsonify({
+            "status": "taken",
+            "available": False,
+            "message": f"❌ Username '{username}' sudah terdaftar lengkap!",
+            "detail": "Gunakan username lain atau login untuk melanjutkan.",
+            "enrollment_count": enrollment_count
+        })
+    elif enrollment_count > 0:
+        # Username exists but enrollment incomplete (allow retry)
+        return jsonify({
+            "status": "available",
+            "available": True,
+            "message": f"✅ Username '{username}' ditemukan (progress: {enrollment_count}/10). Anda bisa melanjutkan enrollment.",
+            "enrollment_count": enrollment_count,
+            "is_retry": True
+        })
+    else:
+        # Username available (new user)
+        return jsonify({
+            "status": "available",
+            "available": True,
+            "message": f"✅ Username '{username}' tersedia!",
+            "enrollment_count": 0,
+            "is_retry": False
+        })
+
 @app.route('/api/register_sample', methods=['POST'])
 def register_sample():
     data = request.json
-    username = data.get('username')
+    username = data.get('username', '').strip()
     events = data.get('events') 
     
-    if not events or not username: return jsonify({"message": "Data tidak lengkap"}), 400
+    # Basic validation
+    if not events or not username:
+        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+    
+    # === USERNAME UNIQUENESS CHECK (CRITICAL!) ===
+    enrollment_count = db_manager.get_enrollment_count(username)
+    
+    if enrollment_count >= 10:
+        return jsonify({
+            "status": "error",
+            "message": f"❌ Username '{username}' sudah terdaftar lengkap dengan {enrollment_count} enrollment samples!",
+            "detail": "Gunakan username lain atau lanjut ke halaman login.",
+            "error_code": "USERNAME_TAKEN"
+        }), 409  # HTTP 409 Conflict
+    
+    # Allow jika masih < 10 (retry-friendly)
+    if enrollment_count > 0:
+        print(f"[INFO] User '{username}' melanjutkan registrasi (progress: {enrollment_count}/10)")
+    # === END USERNAME CHECK ===
         
     result = process_web_events(events, username)
     
@@ -385,53 +451,118 @@ def register_sample():
         if real_pass: db_manager.save_dev_credentials(username, real_pass)
         
         db_manager.save_data(features)
-        return jsonify({"status": "success", "message": "Sampel berhasil disimpan.", "quality": quality})
+        
+        # Check completion
+        new_count = db_manager.get_enrollment_count(username)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"✅ Sampel {new_count}/10 berhasil disimpan.",
+            "progress": {
+                "current": new_count,
+                "target": 10,
+                "complete": new_count >= 10
+            },
+            "quality": quality
+        })
     else:
         return jsonify({"status": "error", "message": result['msg']}), 400
 
 
 @app.route('/api/login_sample', methods=['POST'])
 def login_sample():
-    """NEW: Pure data collection for login samples (no verification)"""
+    """Collection Mode WITH Verification (verified login samples only)"""
     data = request.json
-    username = data.get('username')
+    username = data.get('username', '').strip()
     events = data.get('events')
     
     if not events or not username:
         return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
     
-    # Process events to extract features
+    # === CHECK ENROLLMENT COMPLETE ===
+    enrollment_count = db_manager.get_enrollment_count(username)
+    
+    if enrollment_count < 10:
+        return jsonify({
+            "status": "error",
+            "message": f"❌ Enrollment belum lengkap! ({enrollment_count}/10 samples)",
+            "detail": "Selesaikan enrollment dulu di halaman register.",
+            "error_code": "ENROLLMENT_INCOMPLETE"
+        }), 400
+    # === END CHECK ===
+    
+    # 1. Extract features from new keystroke
     result = process_web_events(events, username)
     
-    if result['status'] == 'success':
-        features = result['data']
-        features['data_type'] = 'login'  # Mark as login sample
-        
-        # Quality assessment (non-blocking)
-        quality = assess_sample_quality(features)
-        features['quality_label'] = quality['quality_label']
-        features['quality_score'] = quality['quality_score']
-        features['quality_warnings'] = quality['quality_warnings']
-        
-        # [DEV ONLY] Simpan password asli
-        real_pass = features.pop('dev_real_password', None)
-        if real_pass:
-            db_manager.save_dev_credentials(username, real_pass)
-        
-        db_manager.save_data(features)
-        
-        # Get current counts for progress tracking
-        enrollment_count = db_manager.get_enrollment_count(username)
-        
-        print(f"✅ Login sample saved: {username} (total enrollment: {enrollment_count})")
-        
-        return jsonify({
-            "status": "success",
-            "message": "Login sample berhasil disimpan.",
-            "quality": quality
-        })
-    else:
+    if result['status'] == 'error':
         return jsonify({"status": "error", "message": result['msg']}), 400
+    
+    new_features = result['data']
+    
+    # ========================================================================
+    # 2. [NEW] VERIFY USER IDENTITY FIRST! (CRITICAL for data integrity)
+    # ========================================================================
+    enrollment_data = db_manager.get_enrollment_samples(username)
+    
+    if len(enrollment_data) < 5:
+        return jsonify({
+            "status": "error",
+            "message": "Enrollment data tidak cukup untuk verifikasi (minimal 5 samples)."
+        }), 400
+    
+    # Call verifier to validate identity
+    verification_result = verifier.verify_user(new_features, enrollment_data)
+    
+    if not verification_result['result']:
+        # ❌ VERIFICATION FAILED - DO NOT SAVE!
+        return jsonify({
+            "status": "error",
+            "message": f"❌ Verifikasi biometrik gagal! Keystroke pattern tidak cocok.",
+            "detail": verification_result.get('msg', ''),
+            "score": verification_result.get('score', 'N/A'),
+            "error_code": "VERIFICATION_FAILED"
+        }), 403  # HTTP 403 Forbidden
+    
+    # ========================================================================
+    # 3. VERIFICATION PASSED - NOW SAVE VERIFIED DATA
+    # ========================================================================
+    new_features['data_type'] = 'login'
+    new_features['verification_score'] = verification_result.get('score', 0)  # Store verification score
+    
+    # Quality assessment
+    quality = assess_sample_quality(new_features)
+    new_features['quality_label'] = quality['quality_label']
+    new_features['quality_score'] = quality['quality_score']
+    new_features['quality_warnings'] = quality['quality_warnings']
+    
+    # [DEV ONLY] Save password
+    real_pass = new_features.pop('dev_real_password', None)
+    if real_pass:
+        db_manager.save_dev_credentials(username, real_pass)
+    
+    # ✅ SAVE VERIFIED DATA ONLY
+    db_manager.save_data(new_features)
+    
+    # Get current counts
+    login_count = db_manager.get_login_count(username)
+    
+    print(f"✅ Verified login sample saved: {username} (score: {verification_result['score']:.2f}, progress: {login_count}/10)")
+    
+    return jsonify({
+        "status": "success",
+        "message": f"✅ Login sample {login_count}/10 berhasil disimpan (verified).",
+        "verification": {
+            "passed": True,
+            "score": verification_result['score'],
+            "detail": verification_result.get('msg', '')
+        },
+        "progress": {
+            "current": login_count,
+            "target": 10,
+            "complete": login_count >= 10
+        },
+        "quality": quality
+    })
 
 
 @app.route('/api/verify_user', methods=['POST'])

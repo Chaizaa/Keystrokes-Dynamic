@@ -44,44 +44,97 @@
         button:disabled { background: #ccc; }
         #status { color: red; font-size: 14px; margin-top: 5px; }
         .hidden { display: none; }
+        
+        /* Username validation status */
+        .username-status {
+            margin-top: 5px;
+            font-size: 13px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .username-status.success {
+            color: #28a745;
+            background: #d4edda;
+            border-left: 3px solid #28a745;
+        }
+        .username-status.error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-left: 3px solid #dc3545;
+        }
+        .username-status.info {
+            color: #0c5460;
+            background: #d1ecf1;
+            border-left: 3px solid #0c5460;
+        }
+        
+        /* Disabled state untuk enrollment section */
+        .disabled-section {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        input:disabled {
+            background: #e9ecef;
+            cursor: not-allowed;
+        }
+        
+        /* Loading indicator */
+        .checking {
+            color: #666;
+            font-size: 13px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>Registrasi Akun Baru</h2>
-    <p>Langkah 1: Buat Username & Password Utama</p>
     
-    <input type="text" id="regUsername" placeholder="Buat Username">
-    
-    <!-- Wrapper Password Utama -->
-    <div class="input-wrapper">
-        <input type="password" id="mainPassword" placeholder="Buat Password (Yang akan dihafal)">
-        <span class="toggle-password" onclick="togglePass('mainPassword', this)">
-            <!-- Ikon Mata (SVG) -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-        </span>
+    <!-- Link to Login -->
+    <div style="text-align: center; margin-bottom: 20px; padding: 10px; background: #f0f8ff; border-radius: 5px; border-left: 4px solid #007bff;">
+        <p style="margin: 0; font-size: 14px; color: #555;">
+            ✅ Sudah punya akun? 
+            <a href="/login" style="color: #007bff; text-decoration: none; font-weight: bold;">Login di sini</a>
+        </p>
     </div>
     
-    <hr>
+    <p>Langkah 1: Buat Username & Password Utama</p>
     
-    <div id="typingSection">
-        <p>Langkah 2: Ketik Ulang Password Anda (10x)</p>
-        <p style="font-size: 12px; color: #666;">Ketik password di bawah ini, lalu tekan <b>ENTER</b> untuk menyimpan sampel.</p>
-        
-        <div class="progress-box">
-            Progress Sampel: <span id="countDisplay" class="counter">0</span> / 10
-        </div>
-
-        <!-- Wrapper Password Typing -->
+    <input type="text" id="regUsername" placeholder="Buat Username" autocomplete="off">
+    <div id="usernameStatus" class="username-status hidden"></div>
+    
+    <div id="enrollmentSection">
+        <!-- Wrapper Password Utama -->
         <div class="input-wrapper">
-            <input type="password" id="typingField" placeholder="Ketik password di sini & Tekan Enter...">
-            <span class="toggle-password" onclick="togglePass('typingField', this)">
+            <input type="password" id="mainPassword" placeholder="Buat Password (Yang akan dihafal)" disabled>
+            <span class="toggle-password" onclick="togglePass('mainPassword', this)">
+                <!-- Ikon Mata (SVG) -->
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </span>
         </div>
+        
+        <hr>
+        
+        <div id="typingSection">
+            <p>Langkah 2: Ketik Ulang Password Anda (10x)</p>
+            <p style="font-size: 12px; color: #666;">Ketik password di bawah ini, lalu tekan <b>ENTER</b> untuk menyimpan sampel.</p>
+            
+            <div class="progress-box">
+                Progress Sampel: <span id="countDisplay" class="counter">0</span> / 10
+            </div>
 
-        <p id="status"></p>
+            <!-- Wrapper Password Typing -->
+            <div class="input-wrapper">
+                <input type="password" id="typingField" placeholder="Ketik password di sini & Tekan Enter..." disabled>
+                <span class="toggle-password" onclick="togglePass('typingField', this)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </span>
+            </div>
+
+            <p id="status"></p>
+        </div>
     </div>
 
     <div id="finishSection" class="hidden">
@@ -112,11 +165,170 @@
     const targetSamples = 10;
     let rawEvents = [];
     let activeKeys = {};
+    let usernameAvailable = false;
+    let isCheckingUsername = false;
     
+    const usernameInput = document.getElementById('regUsername');
     const mainPassInput = document.getElementById('mainPassword');
     const typingInput = document.getElementById('typingField');
     const statusEl = document.getElementById('status');
     const countDisplay = document.getElementById('countDisplay');
+    const usernameStatusEl = document.getElementById('usernameStatus');
+    const enrollmentSection = document.getElementById('enrollmentSection');
+
+    // === USERNAME VALIDATION ===
+    
+    let usernameCheckTimeout = null;
+    
+    // Real-time validation with debounce (500ms)
+    usernameInput.addEventListener('input', () => {
+        // Clear previous timeout
+        if (usernameCheckTimeout) {
+            clearTimeout(usernameCheckTimeout);
+        }
+        
+        // Hide previous status while typing
+        if (usernameStatusEl.textContent !== '') {
+            usernameStatusEl.classList.add('hidden');
+        }
+        
+        // Reset state while typing
+        usernameAvailable = false;
+        
+        const username = usernameInput.value.trim();
+        
+        // Don't validate if empty or too short
+        if (!username || username.length < 3) {
+            disableEnrollment();
+            return;
+        }
+        
+        // Set timeout for debounced validation (500ms after user stops typing)
+        usernameCheckTimeout = setTimeout(async () => {
+            await checkUsername();
+        }, 500);
+    });
+    
+    // Check username on blur (when user leaves the field) - fallback
+    usernameInput.addEventListener('blur', async () => {
+        // Clear timeout jika ada
+        if (usernameCheckTimeout) {
+            clearTimeout(usernameCheckTimeout);
+        }
+        await checkUsername();
+    });
+    
+    // Check username on Enter key
+    usernameInput.addEventListener('keypress', async (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            // Clear timeout jika ada
+            if (usernameCheckTimeout) {
+                clearTimeout(usernameCheckTimeout);
+            }
+            await checkUsername();
+            if (usernameAvailable) {
+                mainPassInput.focus(); // Move focus to password field
+            }
+        }
+    });
+    
+    async function checkUsername() {
+        const username = usernameInput.value.trim();
+        
+        // Reset state
+        usernameAvailable = false;
+        
+        if (!username) {
+            showUsernameStatus('error', '❌ Username tidak boleh kosong');
+            disableEnrollment();
+            return;
+        }
+        
+        // Validation: minimum 3 characters
+        if (username.length < 3) {
+            showUsernameStatus('error', '❌ Username minimal 3 karakter');
+            disableEnrollment();
+            return;
+        }
+        
+        // Validation: alphanumeric only
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            showUsernameStatus('error', '❌ Username hanya boleh huruf, angka, dan underscore');
+            disableEnrollment();
+            return;
+        }
+        
+        // Show checking status
+        usernameStatusEl.className = 'username-status checking';
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = '🔍 Memeriksa ketersediaan username...';
+        isCheckingUsername = true;
+        
+        try {
+            const response = await fetch('/api/check_username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'taken') {
+                // Username taken (enrollment complete)
+                showUsernameStatus('error', result.message + ' ' + result.detail);
+                disableEnrollment();
+                usernameInput.focus();
+                usernameInput.select();
+            } else if (result.status === 'available') {
+                // Username available
+                usernameAvailable = true;
+                
+                if (result.is_retry) {
+                    // Continuing enrollment
+                    showUsernameStatus('info', result.message);
+                    sampleCount = result.enrollment_count; // Set current progress
+                    countDisplay.textContent = sampleCount;
+                } else {
+                    // New user
+                    showUsernameStatus('success', result.message);
+                    sampleCount = 0;
+                    countDisplay.textContent = 0;
+                }
+                
+                enableEnrollment();
+            }
+            
+        } catch (error) {
+            console.error('Error checking username:', error);
+            showUsernameStatus('error', '❌ Gagal memeriksa username. Coba lagi.');
+            disableEnrollment();
+        } finally {
+            isCheckingUsername = false;
+        }
+    }
+    
+    function showUsernameStatus(type, message) {
+        usernameStatusEl.className = `username-status ${type}`;
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = message;
+    }
+    
+    function enableEnrollment() {
+        enrollmentSection.classList.remove('disabled-section');
+        mainPassInput.disabled = false;
+        typingInput.disabled = false;
+    }
+    
+    function disableEnrollment() {
+        enrollmentSection.classList.add('disabled-section');
+        mainPassInput.disabled = true;
+        mainPassInput.value = '';
+        typingInput.disabled = true;
+        typingInput.value = '';
+        rawEvents = [];
+        statusEl.textContent = '';
+    }
 
     // [FITUR BARU] BATASI KARAKTER DI UI UNTUK KOLOM "BUAT PASSWORD"
     mainPassInput.addEventListener('keydown', (event) => {
@@ -215,9 +427,16 @@
     });
 
     async function handleEnterPress() {
-        const username = document.getElementById('regUsername').value;
+        const username = document.getElementById('regUsername').value.trim();
         const mainPass = mainPassInput.value;
         const typedPass = typingInput.value;
+
+        // Check if username is validated
+        if (!usernameAvailable) {
+            statusEl.innerText = "❌ Username belum divalidasi atau tidak tersedia!";
+            usernameInput.focus();
+            return;
+        }
 
         if (!username || !mainPass) {
             statusEl.innerText = "Isi Username dan Password Utama dulu!";

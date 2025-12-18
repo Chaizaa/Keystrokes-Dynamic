@@ -38,12 +38,50 @@
         #resultBox { margin-top: 20px; padding: 10px; border-radius: 5px; display: none; }
         .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        
+        /* Username validation status */
+        .username-status {
+            margin-top: 5px;
+            font-size: 13px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .username-status.success {
+            color: #28a745;
+            background: #d4edda;
+            border-left: 3px solid #28a745;
+        }
+        .username-status.error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-left: 3px solid #dc3545;
+        }
+        .username-status.info {
+            color: #0c5460;
+            background: #d1ecf1;
+            border-left: 3px solid #0c5460;
+        }
+        .checking {
+            color: #666;
+            font-size: 13px;
+            font-style: italic;
+        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>📊 Login - Hybrid Mode</h2>
+    
+    <!-- Link to Register -->
+    <div style="text-align: center; margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+        <p style="margin: 0; font-size: 14px; color: #555;">
+            🆕 Belum punya akun? 
+            <a href="/register" style="color: #ff6b35; text-decoration: none; font-weight: bold;">Registrasi di sini</a>
+        </p>
+    </div>
+    
     <p style="font-size: 14px; color: #666; margin-bottom: 20px;">Pilih mode: Collection (simpan data) atau Verification (cek biometrik)</p>
     
     <!-- Mode Selection -->
@@ -63,6 +101,7 @@
     </div>
     
     <input type="text" id="username" placeholder="Username" autocomplete="off">
+    <div id="usernameStatus" class="username-status hidden"></div>
     
     <!-- Wrapper Password -->
     <div class="input-wrapper">
@@ -89,7 +128,6 @@
     </div>
     
     <button id="startBtn" onclick="startCollection()" style="background: #007bff;">Mulai Pengumpulan Data</button>
-    <p style="text-align: center; margin-top: 10px;"><a href="/register">Belum punya akun? Daftar</a></p>
 
     <div id="resultBox"></div>
     
@@ -127,6 +165,9 @@
     let username = '';
     let password = '';
     let currentMode = 'collection'; // 'collection' or 'verification'
+    let usernameCheckTimeout = null;
+    let usernameValidated = false;
+    let enrollmentComplete = false;
     
     const usernameField = document.getElementById('username');
     const passwordField = document.getElementById('passwordField');
@@ -141,6 +182,132 @@
     const collectionModeBtn = document.getElementById('collectionModeBtn');
     const verificationModeBtn = document.getElementById('verificationModeBtn');
     const modeDescription = document.getElementById('modeDescription');
+    const usernameStatusEl = document.getElementById('usernameStatus');
+    
+    // === USERNAME VALIDATION ===
+    
+    // Real-time validation with debounce (500ms)
+    usernameField.addEventListener('input', () => {
+        // Clear previous timeout
+        if (usernameCheckTimeout) {
+            clearTimeout(usernameCheckTimeout);
+        }
+        
+        // Hide previous status while typing
+        if (usernameStatusEl.textContent !== '') {
+            usernameStatusEl.classList.add('hidden');
+        }
+        
+        // Reset state while typing
+        usernameValidated = false;
+        enrollmentComplete = false;
+        
+        const usernameValue = usernameField.value.trim();
+        
+        // Don't validate if empty or too short
+        if (!usernameValue || usernameValue.length < 3) {
+            return;
+        }
+        
+        // Set timeout for debounced validation (500ms after user stops typing)
+        usernameCheckTimeout = setTimeout(async () => {
+            await checkUsername();
+        }, 500);
+    });
+    
+    // Check username on blur (fallback)
+    usernameField.addEventListener('blur', async () => {
+        if (usernameCheckTimeout) {
+            clearTimeout(usernameCheckTimeout);
+        }
+        const usernameValue = usernameField.value.trim();
+        if (usernameValue && usernameValue.length >= 3) {
+            await checkUsername();
+        }
+    });
+    
+    // Check username on Enter key
+    usernameField.addEventListener('keypress', async (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            if (usernameCheckTimeout) {
+                clearTimeout(usernameCheckTimeout);
+            }
+            await checkUsername();
+            if (usernameValidated && enrollmentComplete) {
+                passwordField.focus();
+            }
+        }
+    });
+    
+    async function checkUsername() {
+        const usernameValue = usernameField.value.trim();
+        
+        // Reset state
+        usernameValidated = false;
+        enrollmentComplete = false;
+        
+        if (!usernameValue) {
+            showUsernameStatus('error', '❌ Username tidak boleh kosong');
+            return;
+        }
+        
+        // Validation: minimum 3 characters
+        if (usernameValue.length < 3) {
+            showUsernameStatus('error', '❌ Username minimal 3 karakter');
+            return;
+        }
+        
+        // Validation: alphanumeric only
+        if (!/^[a-zA-Z0-9_]+$/.test(usernameValue)) {
+            showUsernameStatus('error', '❌ Username hanya boleh huruf, angka, dan underscore');
+            return;
+        }
+        
+        // Show checking status
+        usernameStatusEl.className = 'username-status checking';
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = '🔍 Memeriksa enrollment status...';
+        
+        try {
+            const response = await fetch('/api/check_username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameValue })
+            });
+            
+            const result = await response.json();
+            
+            if (result.enrollment_count >= 10) {
+                // Enrollment complete - OK untuk login
+                showUsernameStatus('success', `✅ Username valid! Enrollment lengkap (${result.enrollment_count}/10 samples).`);
+                usernameValidated = true;
+                enrollmentComplete = true;
+            } else if (result.enrollment_count > 0) {
+                // Enrollment incomplete
+                showUsernameStatus('error', `❌ Enrollment belum lengkap! (${result.enrollment_count}/10 samples). Selesaikan enrollment dulu.`);
+                usernameValidated = false;
+                enrollmentComplete = false;
+            } else {
+                // No enrollment
+                showUsernameStatus('error', '❌ User belum terdaftar! Registrasi dulu di halaman register.');
+                usernameValidated = false;
+                enrollmentComplete = false;
+            }
+            
+        } catch (error) {
+            console.error('Error checking username:', error);
+            showUsernameStatus('error', '❌ Gagal memeriksa username. Coba lagi.');
+            usernameValidated = false;
+            enrollmentComplete = false;
+        }
+    }
+    
+    function showUsernameStatus(type, message) {
+        usernameStatusEl.className = `username-status ${type}`;
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = message;
+    }
     
     function selectMode(mode) {
         currentMode = mode;
@@ -174,6 +341,13 @@
     function startCollection() {
         username = usernameField.value.trim();
         password = passwordField.value;
+        
+        // Check username validation
+        if (!usernameValidated || !enrollmentComplete) {
+            showResult('❌ Username belum divalidasi atau enrollment belum lengkap!', 'error');
+            usernameField.focus();
+            return;
+        }
         
         if (!username || username.length < 3) {
             showResult('Username minimal 3 karakter!', 'error');

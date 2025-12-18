@@ -159,7 +159,7 @@ if __name__ == '__main__':
         while True:
             os.system('cls' if os.name == 'nt' else 'clear')
             monitor_progress()
-            print("🔄 Refreshing in 10 seconds... (Ctrl+C to stop)")
-            time.sleep(10)
+            print("🔄 Refreshing in 5 Mins... (Ctrl+C to stop)")
+            time.sleep(300)
     except KeyboardInterrupt:
         print("\n\n👋 Monitoring stopped.")
