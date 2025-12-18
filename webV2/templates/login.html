@@ -43,21 +43,61 @@
 <body>
 
 <div class="container">
-    <h2>Login</h2>
-    <input type="text" id="username" placeholder="Username">
+    <h2>📊 Login - Hybrid Mode</h2>
+    <p style="font-size: 14px; color: #666; margin-bottom: 20px;">Pilih mode: Collection (simpan data) atau Verification (cek biometrik)</p>
+    
+    <!-- Mode Selection -->
+    <div style="margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px;">
+        <label style="font-weight: bold; display: block; margin-bottom: 10px;">🔧 Pilih Mode:</label>
+        <div style="display: flex; gap: 10px;">
+            <button id="collectionModeBtn" onclick="selectMode('collection')" style="flex: 1; background: #007bff; padding: 10px; border: 2px solid #007bff;">
+                📊 Collection Mode
+            </button>
+            <button id="verificationModeBtn" onclick="selectMode('verification')" style="flex: 1; background: #fff; color: #666; padding: 10px; border: 2px solid #ddd;">
+                🔐 Verification Mode
+            </button>
+        </div>
+        <p id="modeDescription" style="margin-top: 10px; font-size: 13px; color: #666;">
+            <strong>Collection Mode:</strong> Simpan 10 login samples untuk dataset (tidak perlu enrollment dulu)
+        </p>
+    </div>
+    
+    <input type="text" id="username" placeholder="Username" autocomplete="off">
     
     <!-- Wrapper Password -->
     <div class="input-wrapper">
-        <input type="password" id="passwordField" placeholder="Password">
+        <input type="password" id="passwordField" placeholder="Password" autocomplete="off">
         <span class="toggle-password" onclick="togglePass()">
             <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
         </span>
     </div>
     
-    <button onclick="doLogin()">Masuk</button>
+    <div class="progress-box" id="progressBox" style="display: none; margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 5px; text-align: center;">
+        <strong id="progressTitle">COLLECTION MODE</strong><br>
+        Progress: <span id="countDisplay" style="font-size: 20px; font-weight: bold; color: #2e7d32;">0</span> / <span id="targetDisplay">10</span>
+    </div>
+    
+    <!-- Verification Result Box -->
+    <div id="verificationBox" style="display: none; margin: 15px 0; padding: 15px; border-radius: 5px;">
+        <h3 id="verifyTitle"></h3>
+        <p id="verifyMessage" style="margin: 10px 0;"></p>
+        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 10px;">
+            <strong>Score:</strong> <span id="verifyScore">-</span><br>
+            <strong>Detail:</strong> <span id="verifyDetail">-</span>
+        </div>
+        <button onclick="resetVerification()" style="margin-top: 10px; background: #007bff;">Verify Again</button>
+    </div>
+    
+    <button id="startBtn" onclick="startCollection()" style="background: #007bff;">Mulai Pengumpulan Data</button>
     <p style="text-align: center; margin-top: 10px;"><a href="/register">Belum punya akun? Daftar</a></p>
 
     <div id="resultBox"></div>
+    
+    <div id="finishBox" style="display: none; margin-top: 20px; padding: 15px; background: #d4edda; color: #155724; border-radius: 5px; text-align: center;">
+        <h3>✅ Selesai!</h3>
+        <p>10 login samples berhasil dikumpulkan!</p>
+        <button onclick="window.location.href='/'" style="background: #28a745; margin-top: 10px;">Kembali ke Home</button>
+    </div>
 </div>
 
 <script>
@@ -78,46 +118,134 @@
         }
     }
 
-    // LOGIKA UTAMA
+    // LOGIKA UTAMA: HYBRID MODE (Collection + Verification)
     let rawEvents = [];
-    let activeKeys = {};  // Track tombol yang sedang ditekan
+    let activeKeys = {};
+    let sampleCount = 0;
+    let targetSamples = 10;
+    let isCollecting = false;
+    let username = '';
+    let password = '';
+    let currentMode = 'collection'; // 'collection' or 'verification'
+    
+    const usernameField = document.getElementById('username');
     const passwordField = document.getElementById('passwordField');
     const resultBox = document.getElementById('resultBox');
+    const progressBox = document.getElementById('progressBox');
+    const countDisplay = document.getElementById('countDisplay');
+    const targetDisplay = document.getElementById('targetDisplay');
+    const progressTitle = document.getElementById('progressTitle');
+    const startBtn = document.getElementById('startBtn');
+    const finishBox = document.getElementById('finishBox');
+    const verificationBox = document.getElementById('verificationBox');
+    const collectionModeBtn = document.getElementById('collectionModeBtn');
+    const verificationModeBtn = document.getElementById('verificationModeBtn');
+    const modeDescription = document.getElementById('modeDescription');
+    
+    function selectMode(mode) {
+        currentMode = mode;
+        
+        if (mode === 'collection') {
+            collectionModeBtn.style.background = '#007bff';
+            collectionModeBtn.style.color = 'white';
+            collectionModeBtn.style.border = '2px solid #007bff';
+            verificationModeBtn.style.background = '#fff';
+            verificationModeBtn.style.color = '#666';
+            verificationModeBtn.style.border = '2px solid #ddd';
+            modeDescription.innerHTML = '<strong>Collection Mode:</strong> Simpan 10 login samples untuk dataset (tidak perlu enrollment dulu)';
+            startBtn.innerText = 'Mulai Pengumpulan Data';
+            targetSamples = 10;
+        } else {
+            verificationModeBtn.style.background = '#007bff';
+            verificationModeBtn.style.color = 'white';
+            verificationModeBtn.style.border = '2px solid #007bff';
+            collectionModeBtn.style.background = '#fff';
+            collectionModeBtn.style.color = '#666';
+            collectionModeBtn.style.border = '2px solid #ddd';
+            modeDescription.innerHTML = '<strong>Verification Mode:</strong> Test biometric login (perlu minimal 5 enrollment samples dulu)';
+            startBtn.innerText = 'Mulai Verifikasi';
+            targetSamples = 1;
+        }
+        
+        // Reset states
+        resetVerification();
+    }
+    
+    function startCollection() {
+        username = usernameField.value.trim();
+        password = passwordField.value;
+        
+        if (!username || username.length < 3) {
+            showResult('Username minimal 3 karakter!', 'error');
+            return;
+        }
+        
+        if (!password || password.length < 6) {
+            showResult('Password minimal 6 karakter!', 'error');
+            return;
+        }
+        
+        // Lock inputs and start
+        usernameField.disabled = true;
+        passwordField.disabled = false;
+        passwordField.value = '';
+        passwordField.focus();
+        startBtn.disabled = true;
+        startBtn.style.background = '#ccc';
+        collectionModeBtn.disabled = true;
+        verificationModeBtn.disabled = true;
+        
+        isCollecting = true;
+        sampleCount = 0;
+        verificationBox.style.display = 'none';
+        
+        if (currentMode === 'collection') {
+            progressBox.style.display = 'block';
+            progressTitle.innerText = 'COLLECTION MODE';
+            targetDisplay.innerText = targetSamples;
+            showResult('✅ Mulai ketik password ' + targetSamples + 'x (tekan ENTER setiap kali)', 'success');
+        } else {
+            progressBox.style.display = 'none';
+            showResult('🔐 Ketik password untuk verifikasi biometrik (tekan ENTER)', 'success');
+        }
+    }
+    
+    function showResult(message, type) {
+        resultBox.innerText = message;
+        resultBox.className = type;
+        resultBox.style.display = 'block';
+    }
 
-    // [SAMA SEPERTI REGISTER] Batasi karakter di UI, tapi tetap catat waktu
     passwordField.addEventListener('keydown', (event) => {
+        if (!isCollecting) return;  // Only capture when collecting
+        
         const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
         const keyCode = event.code;
         
-        // Deteksi auto-repeat (tombol ditahan) - termasuk karakter khusus seperti !!!
+        // [FIX] Filter Enter key - jangan rekam sebagai keystroke!
+        // Enter hanya dipakai sebagai trigger submit, bukan bagian dari password
+        if (event.key === 'Enter') {
+            return; // Skip recording, biarkan propagate ke keyup untuk submit
+        }
+        
         if (event.repeat && !isModifier) {
-            // TIDAK PERLU TAMPILKAN ERROR
-            // Karena user mungkin sengaja menahan tombol sebagai bagian pola biometriknya
-            
-            // Cegah karakter berulang muncul di UI
             event.preventDefault();
-            
-            // TETAP rekam event untuk fitur waktu (PENTING!)
             rawEvents.push({
                 key: event.key, 
                 code: event.code, 
                 evt: 'd', 
                 t: performance.now(),
-                isRepeat: true  // Tandai sebagai repeat
+                isRepeat: true
             });
-            
             return;
         }
 
-        // Tandai tombol ini sedang ditekan (HANYA non-modifier!)
         if (!isModifier) {
             activeKeys[keyCode] = performance.now();
         }
 
-        // Jangan rekam modifier yang di-repeat
         if (event.repeat && isModifier) return;
 
-        // Rekam event normal - TIDAK termasuk modifier keys
         if (!isModifier) {
             rawEvents.push({ 
                 key: event.key, 
@@ -130,15 +258,21 @@
     });
 
     passwordField.addEventListener('keyup', (event) => {
+        if (!isCollecting) return;
+        
         const keyCode = event.code;
         const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
         
-        // Hapus dari tracking saat tombol dilepas
         if (activeKeys[keyCode]) {
             delete activeKeys[keyCode];
         }
         
-        // Rekam event keyup - HANYA non-modifier
+        // [FIX] Handle Enter BEFORE recording - Enter tidak masuk ke rawEvents
+        if (event.key === 'Enter') {
+            submitSample(); // Submit data
+            return; // Jangan rekam Enter keyup
+        }
+        
         if (!isModifier) {
             rawEvents.push({ 
                 key: event.key, 
@@ -147,44 +281,143 @@
                 t: performance.now() 
             });
         }
-        
-        if (event.key === 'Enter') doLogin();
     });
 
-    async function doLogin() {
-        const user = document.getElementById('username').value;
+    async function submitSample() {
+        const typedPassword = passwordField.value;
         
-        resultBox.style.display = 'block';
-        resultBox.className = ''; 
-        resultBox.innerText = "Memverifikasi...";
-
-        try {
-            const response = await fetch('/api/login_attempt', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: user,
-                    events: rawEvents
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.status === 'success') {
-                resultBox.className = 'success';
-                resultBox.innerText = "LOGIN SUKSES! (Data tersimpan untuk analisis)";
-            } else {
-                resultBox.className = 'error';
-                resultBox.innerText = "GAGAL: " + result.message;
-            }
-            
-            rawEvents = [];
+        if (typedPassword !== password) {
+            showResult('❌ Password salah! Ketik yang benar.', 'error');
             passwordField.value = '';
-
-        } catch (error) {
-            resultBox.className = 'error';
-            resultBox.innerText = "Server Error.";
+            rawEvents = [];
+            return;
         }
+        
+        if (rawEvents.length === 0) {
+            showResult('❌ Tidak ada keystroke data!', 'error');
+            return;
+        }
+        
+        if (currentMode === 'collection') {
+            // COLLECTION MODE: Save to dataset
+            showResult('💾 Menyimpan sample...', 'success');
+
+            try {
+                const response = await fetch('/api/login_sample', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        events: rawEvents
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    sampleCount++;
+                    countDisplay.innerText = sampleCount;
+                    passwordField.value = '';
+                    rawEvents = [];
+                    
+                    // Show quality feedback
+                    let qualityMsg = '';
+                    if (result.quality) {
+                        const q = result.quality;
+                        qualityMsg = ` [Quality: ${q.quality_label.toUpperCase()} (${q.quality_score}/100)]`;
+                        if (q.quality_warnings.length > 0) {
+                            qualityMsg += ` - ${q.quality_warnings[0]}`;
+                        }
+                    }
+                    
+                    if (sampleCount >= targetSamples) {
+                        finishCollection();
+                    } else {
+                        const remaining = targetSamples - sampleCount;
+                        showResult(`✅ Sample ${sampleCount} tersimpan!${qualityMsg} Sisa ${remaining} lagi...`, 'success');
+                        passwordField.focus();
+                    }
+                } else {
+                    showResult('❌ Error: ' + result.message, 'error');
+                    passwordField.value = '';
+                    rawEvents = [];
+                }
+
+            } catch (error) {
+                showResult('❌ Server Error: ' + error.message, 'error');
+                passwordField.value = '';
+                rawEvents = [];
+            }
+        } else {
+            // VERIFICATION MODE: Check biometric authentication
+            showResult('🔐 Verifikasi biometrik...', 'success');
+
+            try {
+                const response = await fetch('/api/verify_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        events: rawEvents
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Show verification result
+                resultBox.style.display = 'none';
+                verificationBox.style.display = 'block';
+                
+                if (result.authenticated) {
+                    verificationBox.style.background = '#d4edda';
+                    verificationBox.style.border = '2px solid #c3e6cb';
+                    document.getElementById('verifyTitle').innerText = '✅ LOGIN SUKSES!';
+                    document.getElementById('verifyTitle').style.color = '#155724';
+                } else {
+                    verificationBox.style.background = '#f8d7da';
+                    verificationBox.style.border = '2px solid #f5c6cb';
+                    document.getElementById('verifyTitle').innerText = '❌ LOGIN GAGAL';
+                    document.getElementById('verifyTitle').style.color = '#721c24';
+                }
+                
+                document.getElementById('verifyMessage').innerText = result.message;
+                document.getElementById('verifyScore').innerText = result.score || 'N/A';
+                document.getElementById('verifyDetail').innerText = result.detail || '-';
+                
+                isCollecting = false;
+                passwordField.disabled = true;
+
+            } catch (error) {
+                showResult('❌ Server Error: ' + error.message, 'error');
+                passwordField.value = '';
+                rawEvents = [];
+            }
+        }
+    }
+    
+    function finishCollection() {
+        isCollecting = false;
+        passwordField.disabled = true;
+        progressBox.style.display = 'none';
+        resultBox.style.display = 'none';
+        finishBox.style.display = 'block';
+    }
+    
+    function resetVerification() {
+        isCollecting = false;
+        sampleCount = 0;
+        rawEvents = [];
+        usernameField.disabled = false;
+        passwordField.disabled = false;
+        passwordField.value = '';
+        startBtn.disabled = false;
+        startBtn.style.background = '#007bff';
+        collectionModeBtn.disabled = false;
+        verificationModeBtn.disabled = false;
+        progressBox.style.display = 'none';
+        verificationBox.style.display = 'none';
+        finishBox.style.display = 'none';
+        resultBox.style.display = 'none';
     }
 </script>
 

@@ -134,6 +134,23 @@ class Database:
             return None
         finally:
             conn.close()
+    
+    def get_enrollment_count(self, username):
+        """Get jumlah enrollment samples untuk user (untuk adaptive learning)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) FROM user_vectors 
+                WHERE username = ? AND data_type = 'enrollment'
+            """, (username,))
+            count = cursor.fetchone()[0]
+            return count
+        except Exception as e:
+            print(f"[DB ERROR] Get Enrollment Count: {e}")
+            return 0
+        finally:
+            conn.close()
 
     # =========================================================================
     # [DEV ONLY] - FITUR TAMBAHAN UNTUK MENYIMPAN PASSWORD ASLI

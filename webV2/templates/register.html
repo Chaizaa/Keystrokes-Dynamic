@@ -66,7 +66,7 @@
     <hr>
     
     <div id="typingSection">
-        <p>Langkah 2: Ketik Ulang Password Anda (2x)</p>
+        <p>Langkah 2: Ketik Ulang Password Anda (10x)</p>
         <p style="font-size: 12px; color: #666;">Ketik password di bawah ini, lalu tekan <b>ENTER</b> untuk menyimpan sampel.</p>
         
         <div class="progress-box">
@@ -107,11 +107,11 @@
         }
     }
 
-    // --- LOGIKA UTAMA (SAMA SEPERTI SEBELUMNYA) ---
+    // --- LOGIKA UTAMA: 10 ENROLLMENT SAMPLES ---
     let sampleCount = 0;
     const targetSamples = 10;
     let rawEvents = [];
-    let activeKeys = {};  // [FITUR BARU] Track tombol yang sedang ditekan
+    let activeKeys = {};
     
     const mainPassInput = document.getElementById('mainPassword');
     const typingInput = document.getElementById('typingField');
@@ -137,6 +137,12 @@
     typingInput.addEventListener('keydown', (event) => {
         const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod);
         const keyCode = event.code;
+        
+        // [FIX] Filter Enter key - jangan rekam sebagai keystroke!
+        // Enter hanya dipakai sebagai trigger submit, bukan bagian dari password
+        if (event.key === 'Enter') {
+            return; // Skip recording, biarkan propagate ke keyup untuk submit
+        }
         
         // Cek apakah tombol ini sudah ditekan sebelumnya (auto-repeat detection)
         if (event.repeat && !isModifier) {
@@ -191,6 +197,12 @@
             delete activeKeys[keyCode];
         }
         
+        // [FIX] Handle Enter BEFORE recording - Enter tidak masuk ke rawEvents
+        if (event.key === 'Enter') {
+            handleEnterPress(); // Submit data
+            return; // Jangan rekam Enter keyup
+        }
+        
         // Rekam event keyup - HANYA non-modifier
         if (!isModifier) {
             rawEvents.push({
@@ -199,10 +211,6 @@
                 evt: 'u', 
                 t: performance.now()
             });
-        }
-
-        if (event.key === 'Enter') {
-            handleEnterPress();
         }
     });
 
@@ -242,7 +250,7 @@
                 countDisplay.innerText = sampleCount;
                 typingInput.value = '';
                 rawEvents = []; 
-                statusEl.innerText = "Sampel tersimpan. Lanjut ketik lagi!";
+                statusEl.innerText = "✅ Sampel tersimpan. Lanjut ketik lagi!";
 
                 if (sampleCount >= targetSamples) {
                     finishRegistration();
@@ -261,7 +269,7 @@
 
     function finishRegistration() {
         typingInput.disabled = true;
-        typingInput.placeholder = "Cukup! 2 Sampel terkumpul.";
+        typingInput.placeholder = "✅ Selesai! 10 enrollment sampel terkumpul.";
         statusEl.innerText = "";
         document.getElementById('finishSection').classList.remove('hidden');
     }

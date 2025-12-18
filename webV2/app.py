@@ -23,6 +23,66 @@ db_manager = Database()
 verifier = Verifier()          # <--- (2) INISIALISASI VERIFIER
 
 # ============================================================================
+# QUALITY ASSESSMENT FUNCTION
+# ============================================================================
+def assess_sample_quality(features):
+    """Assess sample quality and return warnings (non-blocking)"""
+    warnings = []
+    score = 100
+    
+    # Extract vectors for analysis
+    H_vec = features.get('H_vector', [])
+    DD_vec = features.get('DD_vector', [])
+    UD_vec = features.get('UD_vector', [])
+    
+    # Check 1: Extremely long hold times (> 1 second)
+    long_holds = [h for h in H_vec if h > 1.0]
+    if long_holds:
+        warnings.append(f"Very long hold times detected: {len(long_holds)} keys held > 1s")
+        score -= 20
+    
+    # Check 2: Extremely long pauses (DD > 2 seconds)
+    long_pauses = [dd for dd in DD_vec if dd > 2.0]
+    if long_pauses:
+        warnings.append(f"Long pauses detected: {len(long_pauses)} intervals > 2s")
+        score -= 15
+    
+    # Check 3: Extremely fast typing (DD < 0.05s = 50ms)
+    super_fast = [dd for dd in DD_vec if 0 < dd < 0.05]
+    if len(super_fast) > len(DD_vec) * 0.3:  # More than 30% super fast
+        warnings.append(f"Unusually fast typing: {len(super_fast)} intervals < 50ms")
+        score -= 10
+    
+    # Check 4: High variance in timing (inconsistent typing)
+    if len(DD_vec) > 0:
+        import statistics
+        dd_mean = statistics.mean(DD_vec)
+        dd_std = statistics.stdev(DD_vec) if len(DD_vec) > 1 else 0
+        if dd_std > dd_mean * 1.5:  # CV > 150%
+            warnings.append(f"High timing variance detected (inconsistent rhythm)")
+            score -= 10
+    
+    # Check 5: Too many rollovers (> 80%)
+    rollover_ratio = features.get('typing_rollover_ratio', 0)
+    if rollover_ratio > 0.8:
+        warnings.append(f"Very high rollover rate: {rollover_ratio*100:.0f}%")
+        score -= 5
+    
+    # Determine quality label
+    if score >= 80:
+        quality_label = 'good'
+    elif score >= 60:
+        quality_label = 'questionable'
+    else:
+        quality_label = 'poor'
+    
+    return {
+        'quality_label': quality_label,
+        'quality_score': max(0, score),
+        'quality_warnings': warnings
+    }
+
+# ============================================================================
 # LOGIKA PEMROSESAN RAW DATA (Sama seperti sebelumnya)
 # ============================================================================
 def process_web_events(raw_events_from_js, username):
@@ -66,7 +126,14 @@ def process_web_events(raw_events_from_js, username):
     temp_dict = {}
     
     for x in raw_events_from_js:
-        k_id = x['code'] 
+        k_id = x['code']
+        
+        # [FIX - DEFENSIVE] Filter Enter key - tidak relevan untuk biometric analysis
+        # Enter hanya trigger submit, hold time & transition ke Enter tidak konsisten
+        # Primary filter di frontend, ini sebagai fallback/secondary defense
+        if k_id == 'Enter' or x.get('key') == 'Enter':
+            continue  # Skip Enter key completely
+        
         if x['evt'] == 'd':
             # PERBAIKAN: Simpan Tuple (Waktu, Karakter Asli saat ditekan)
             # Agar '!' tetap '!' meskipun saat dilepas shift sudah mati
@@ -187,30 +254,89 @@ def process_web_events(raw_events_from_js, username):
 
     typing_rollover_ratio = round(typing_overlap_count / total_typing_trans, 4) if total_typing_trans > 0 else 0
 
+    # =========================================================================
+    # CALCULATE STATISTICAL FEATURES
+    # =========================================================================
+    import statistics
+    
+    # Helper function for safe statistics
+    def safe_stats(vec):
+        if not vec or len(vec) == 0:
+            return 0, 0, 0, 0, 0
+        mean_val = statistics.mean(vec)
+        std_val = statistics.stdev(vec) if len(vec) > 1 else 0
+        min_val = min(vec)
+        max_val = max(vec)
+        cv_val = (std_val / mean_val) if mean_val > 0 else 0
+        return mean_val, std_val, min_val, max_val, cv_val
+    
+    H_mean, H_std, H_min, H_max, H_cv = safe_stats(H_vec)
+    DD_mean, DD_std, DD_min, DD_max, DD_cv = safe_stats(DD_vec)
+    UD_mean, UD_std, UD_min, UD_max, UD_cv = safe_stats(UD_vec)
+    UU_mean, UU_std, UU_min, UU_max, UU_cv = safe_stats(UU_vec)
+    DU_mean, DU_std, DU_min, DU_max, DU_cv = safe_stats(DU_vec)
+    
+    # Calculate advanced features
+    rollover_frequency = typing_overlap_count  # Absolute count of rollovers
+    error_rate = backspace_count / len(final_stack) if len(final_stack) > 0 else 0
+    typing_speed = len(final_stack) / total_duration_sec if total_duration_sec > 0 else 0  # chars per second
+
     features = {
         'username': username,
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'password_hash': full_hash,
-        'keys_sequence': masked_sequence, 
-        'char_sequence': char_sequence,  # [FITUR BARU #1] Sekuens karakter asli
+        'keys_sequence': masked_sequence,
+        'char_sequence': char_sequence,  # [DEBUG] Sekuens karakter untuk debugging
         'dev_real_password': real_password_string, # [DEV ONLY]
         'total_duration': round(total_duration_sec, 4),
         'backspace_count': backspace_count,
         'typing_rollover_ratio': typing_rollover_ratio,
         
-        # [VEKTOR LAMA] Waktu saja (backward compatibility)
+        # RAW VECTORS (for ML)
         'H_vector': H_vec, 
         'DD_vector': DD_vec, 
         'UD_vector': UD_vec, 
         'UU_vector': UU_vec, 
         'DU_vector': DU_vec,
         
-        # [FITUR BARU #1] Vektor dengan label karakter (seperti keystrokev1)
+        # LABELED FEATURES (with character position - for ML with context)
         'H_features': H_features,
         'DD_features': DD_features,
         'UD_features': UD_features,
         'UU_features': UU_features,
-        'DU_features': DU_features
+        'DU_features': DU_features,
+        
+        # STATISTICAL FEATURES (20 features)
+        'H_mean': round(H_mean, 4),
+        'H_std': round(H_std, 4),
+        'H_min': round(H_min, 4),
+        'H_max': round(H_max, 4),
+        'DD_mean': round(DD_mean, 4),
+        'DD_std': round(DD_std, 4),
+        'DD_min': round(DD_min, 4),
+        'DD_max': round(DD_max, 4),
+        'UD_mean': round(UD_mean, 4),
+        'UD_std': round(UD_std, 4),
+        'UD_min': round(UD_min, 4),
+        'UD_max': round(UD_max, 4),
+        'UU_mean': round(UU_mean, 4),
+        'UU_std': round(UU_std, 4),
+        'UU_min': round(UU_min, 4),
+        'UU_max': round(UU_max, 4),
+        'DU_mean': round(DU_mean, 4),
+        'DU_std': round(DU_std, 4),
+        'DU_min': round(DU_min, 4),
+        'DU_max': round(DU_max, 4),
+        
+        # ADVANCED FEATURES (8 features)
+        'rollover_frequency': rollover_frequency,
+        'error_rate': round(error_rate, 4),
+        'typing_speed': round(typing_speed, 4),
+        'H_cv': round(H_cv, 4),
+        'DD_cv': round(DD_cv, 4),
+        'UD_cv': round(UD_cv, 4),
+        'UU_cv': round(UU_cv, 4),
+        'DU_cv': round(DU_cv, 4)
     }
 
     return {"status": "success", "data": features}
@@ -248,19 +374,119 @@ def register_sample():
         features = result['data']
         features['data_type'] = 'enrollment' 
         
+        # Quality assessment (non-blocking)
+        quality = assess_sample_quality(features)
+        features['quality_label'] = quality['quality_label']
+        features['quality_score'] = quality['quality_score']
+        features['quality_warnings'] = quality['quality_warnings']
+        
         # [DEV ONLY] Simpan password asli
         real_pass = features.pop('dev_real_password', None)
         if real_pass: db_manager.save_dev_credentials(username, real_pass)
         
         db_manager.save_data(features)
-        return jsonify({"status": "success", "message": "Sampel berhasil disimpan."})
+        return jsonify({"status": "success", "message": "Sampel berhasil disimpan.", "quality": quality})
     else:
         return jsonify({"status": "error", "message": result['msg']}), 400
 
 
+@app.route('/api/login_sample', methods=['POST'])
+def login_sample():
+    """NEW: Pure data collection for login samples (no verification)"""
+    data = request.json
+    username = data.get('username')
+    events = data.get('events')
+    
+    if not events or not username:
+        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+    
+    # Process events to extract features
+    result = process_web_events(events, username)
+    
+    if result['status'] == 'success':
+        features = result['data']
+        features['data_type'] = 'login'  # Mark as login sample
+        
+        # Quality assessment (non-blocking)
+        quality = assess_sample_quality(features)
+        features['quality_label'] = quality['quality_label']
+        features['quality_score'] = quality['quality_score']
+        features['quality_warnings'] = quality['quality_warnings']
+        
+        # [DEV ONLY] Simpan password asli
+        real_pass = features.pop('dev_real_password', None)
+        if real_pass:
+            db_manager.save_dev_credentials(username, real_pass)
+        
+        db_manager.save_data(features)
+        
+        # Get current counts for progress tracking
+        enrollment_count = db_manager.get_enrollment_count(username)
+        
+        print(f"✅ Login sample saved: {username} (total enrollment: {enrollment_count})")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Login sample berhasil disimpan.",
+            "quality": quality
+        })
+    else:
+        return jsonify({"status": "error", "message": result['msg']}), 400
+
+
+@app.route('/api/verify_user', methods=['POST'])
+def verify_user():
+    """HYBRID MODE: Verify user with biometric authentication (no data saving)"""
+    data = request.json
+    username = data.get('username')
+    events = data.get('events')
+    
+    if not events or not username:
+        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+    
+    # 1. Extract features from keystroke events
+    process_result = process_web_events(events, username)
+    if process_result['status'] == 'error':
+        return jsonify({"status": "error", "message": process_result['msg']}), 400
+    
+    new_features = process_result['data']
+    
+    # 2. Get enrollment data from database
+    enrollment_data = db_manager.get_enrollment_samples(username)
+    
+    if len(enrollment_data) < 5:
+        return jsonify({
+            "status": "error",
+            "message": f"User belum terdaftar atau data enrollment kurang. Anda punya {len(enrollment_data)} sampel, minimal 5 diperlukan untuk verifikasi."
+        }), 404
+    
+    # 3. Call verifier for authentication
+    verification_result = verifier.verify_user(new_features, enrollment_data)
+    
+    # 4. Return result (NO SAVING in verification mode)
+    if verification_result['result']:
+        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
+        return jsonify({
+            "status": "success",
+            "authenticated": True,
+            "message": f"✅ LOGIN SUKSES! Skor: {verification_result['score']}",
+            "score": verification_result['score'],
+            "detail": detail_msg
+        })
+    else:
+        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
+        return jsonify({
+            "status": "error",
+            "authenticated": False,
+            "message": f"❌ LOGIN GAGAL. {detail_msg}",
+            "score": verification_result.get('score', 'N/A'),
+            "detail": detail_msg
+        })
+
+
 @app.route('/api/login_attempt', methods=['POST'])
 def login_attempt():
-    """Endpoint Login yang SUDAH TERHUBUNG dengan Verifier"""
+    """LEGACY: Keep for backward compatibility / testing verification"""
     data = request.json
     username = data.get('username')
     events = data.get('events') 
@@ -281,7 +507,6 @@ def login_attempt():
         return jsonify({"status": "error", "message": f"User belum terdaftar atau data enrollment kurang. Anda punya {len(enrollment_data)} sampel, minimal 5 diperlukan untuk verifikasi."}), 404
 
     # 3. PANGGIL VERIFIER UNTUK MENILAI (via verifier.py)
-    #    Ini adalah langkah "KONEKSI" yang Anda tanyakan
     verification_result = verifier.verify_user(new_features, enrollment_data)
     
     # 4. Simpan Log Hasilnya
@@ -292,27 +517,22 @@ def login_attempt():
     # [DEV ONLY] Hapus password asli sebelum simpan log
     new_features.pop('dev_real_password', None)
     
-    # Jika SUKSES -> Update DB (Adaptive Learning)
-    # Jika GAGAL  -> Simpan sebagai log gagal
+    # PURE COLLECTION MODE: Just save, no adaptive learning
     if verification_result['result']:
-        new_features['data_type'] = 'enrollment' # Jadi data latihan baru
-    
-    db_manager.save_data(new_features)
-    
-    # 5. Kirim Balik ke HTML
-    # Mengambil pesan detail (msg) atau alasan gagal (reason) dari verifier
-    detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
-    
-    if verification_result['result']:
+        db_manager.save_data(new_features)
+        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
         return jsonify({
-            "status": "success", 
-            "message": f"LOGIN SUKSES! Skor: {verification_result['score']} {detail_msg}"
+            "status": "success",
+            "message": f"✅ LOGIN SUKSES! Skor: {verification_result['score']} {detail_msg}"
         })
     else:
+        db_manager.save_data(new_features)
+        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
         return jsonify({
-            "status": "error", 
-            "message": f"LOGIN GAGAL. {detail_msg} (Skor: {verification_result.get('score', 'N/A')})"
+            "status": "error",
+            "message": f"❌ LOGIN GAGAL. {detail_msg} (Skor: {verification_result.get('score', 'N/A')})"
         })
+
 
 if __name__ == '__main__':
     app.run(debug=True)
