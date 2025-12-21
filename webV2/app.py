@@ -11,9 +11,12 @@ if 'db' in sys.modules:
     importlib.reload(sys.modules['db'])
 if 'verifier' in sys.modules:
     importlib.reload(sys.modules['verifier'])
+if 'password_strength' in sys.modules:
+    importlib.reload(sys.modules['password_strength'])
 
 from db import Database 
-from verifier import Verifier  # <--- (1) KITA IMPORT OTAKNYA DI SINI
+from verifier import Verifier
+from password_strength import calculate_password_strength, get_strength_label, get_strength_recommendations
 
 app = Flask(__name__, template_folder='templates')
 CORS(app) 
@@ -421,7 +424,7 @@ def register_sample():
     # === USERNAME UNIQUENESS CHECK (CRITICAL!) ===
     enrollment_count = db_manager.get_enrollment_count(username)
     
-    if enrollment_count >= 10:
+    if enrollment_count >= 20:
         return jsonify({
             "status": "error",
             "message": f"❌ Username '{username}' sudah terdaftar lengkap dengan {enrollment_count} enrollment samples!",
@@ -429,9 +432,9 @@ def register_sample():
             "error_code": "USERNAME_TAKEN"
         }), 409  # HTTP 409 Conflict
     
-    # Allow jika masih < 10 (retry-friendly)
+    # Allow jika masih < 20 (retry-friendly)
     if enrollment_count > 0:
-        print(f"[INFO] User '{username}' melanjutkan registrasi (progress: {enrollment_count}/10)")
+        print(f"[INFO] User '{username}' melanjutkan registrasi (progress: {enrollment_count}/20)")
     # === END USERNAME CHECK ===
         
     result = process_web_events(events, username)
@@ -446,27 +449,168 @@ def register_sample():
         features['quality_score'] = quality['quality_score']
         features['quality_warnings'] = quality['quality_warnings']
         
-        # [DEV ONLY] Simpan password asli
-        real_pass = features.pop('dev_real_password', None)
-        if real_pass: db_manager.save_dev_credentials(username, real_pass)
+        # [NEW] Password Strength Detection
+        real_pass = features.get('dev_real_password', None)
+        password_hash = features.get('password_hash', None)
+        if real_pass:
+            strength_result = calculate_password_strength(real_pass)
+            features['password_strength'] = strength_result['strength']  # 'strong' or 'weak'
+            features['password_score'] = strength_result['score']
+            features['password_details'] = str(strength_result['details'])  # Convert dict to string for CSV
+            
+            # Save to dev credentials table WITH password hash
+            db_manager.save_dev_credentials(username, real_pass, password_hash)
+            
+            # Remove password from features before saving (security)
+            features.pop('dev_real_password', None)
+        else:
+            # Fallback if no password (shouldn't happen)
+            features['password_strength'] = 'unknown'
+            features['password_score'] = 0
+            features['password_details'] = '{}'
         
         db_manager.save_data(features)
         
         # Check completion
         new_count = db_manager.get_enrollment_count(username)
         
+        # Return with password strength info
+        # Return with password strength info
         return jsonify({
             "status": "success",
-            "message": f"✅ Sampel {new_count}/10 berhasil disimpan.",
+            "message": f"✅ Sampel {new_count}/20 berhasil disimpan.",
             "progress": {
                 "current": new_count,
-                "target": 10,
-                "complete": new_count >= 10
+                "target": 20,
+                "complete": new_count >= 20
             },
-            "quality": quality
+            "quality": quality,
+            "password_strength": {
+                "strength": strength_result['strength'] if real_pass else 'unknown',
+                "score": strength_result['score'] if real_pass else 0,
+                "label": get_strength_label(strength_result) if real_pass else 'Unknown',
+                "recommendations": get_strength_recommendations(strength_result) if real_pass else []
+            }
         })
     else:
         return jsonify({"status": "error", "message": result['msg']}), 400
+
+
+@app.route('/api/pre_verify_password', methods=['POST'])
+def pre_verify_password():
+    """
+    Pre-verification sebelum collection/verification mode:
+    1. Check password hash (fast reject jika typo parah)
+    2. Verify keystroke biometric (1 sample)
+    
+    Returns:
+        - valid: True/False
+        - message: Pesan untuk user
+    """
+    try:
+        data = request.json
+        username = data.get('username')
+        raw_events = data.get('events')
+        
+        if not username or not raw_events:
+            return jsonify({
+                'valid': False,
+                'message': '❌ Data tidak lengkap!'
+            }), 400
+        
+        # Step 1: Get enrollment data
+        enrollment_data = db_manager.get_enrollment_samples(username)
+        if not enrollment_data or len(enrollment_data) == 0:
+            return jsonify({
+                'valid': False,
+                'message': '❌ User belum registrasi! Silakan daftar dulu.'
+            }), 404
+        
+        # Step 2: Process events to extract password and features
+        result = process_web_events(raw_events, username)
+        if result['status'] != 'success':
+            return jsonify({
+                'valid': False,
+                'message': '❌ Gagal memproses keystroke data!'
+            }), 400
+        
+        features = result['data']
+        real_password_string = features.get('dev_real_password', '')
+        password_hash = features.get('password_hash', '')
+        
+        # Step 3: Determine security tier based on stored hash
+        stored_hash = db_manager.get_password_hash(username)
+        
+        if stored_hash:
+            # === TIER 2: MODERN SECURITY (Hash + Keystroke) ===
+            print(f"[Pre-Verify] User '{username}' → Tier 2 (Hash + Keystroke)")
+            
+            # Hash verification (FAST REJECT)
+            if password_hash != stored_hash:
+                print(f"[Pre-Verify] ❌ Hash mismatch for '{username}'")
+                return jsonify({
+                    'valid': False,
+                    'message': '❌ Password SALAH! Hash tidak cocok.',
+                    'reason': 'hash_mismatch'
+                }), 403
+            
+            print(f"[Pre-Verify] ✅ Hash verified for '{username}'")
+            keystroke_threshold = 0.3  # Normal threshold
+            tier_label = "Hash+Keystroke"
+            
+        else:
+            # === TIER 1: LEGACY MODE (Keystroke Only) ===
+            print(f"[Pre-Verify] User '{username}' → Tier 1 (Keystroke Only - LEGACY)")
+            print(f"[WARNING] Legacy user '{username}' - Consider re-registering for full security")
+            keystroke_threshold = 0.2  # Stricter threshold to compensate for no hash
+            tier_label = "Keystroke Only (LEGACY)"
+        
+        # Step 4: Keystroke biometric verification (threshold depends on tier)
+        verifier_adaptive = Verifier(method='euclidean', threshold=keystroke_threshold)
+        verification_result = verifier_adaptive.verify_user(features, enrollment_data)
+        
+        score = float(verification_result['score'])
+        is_genuine = verification_result['result']
+        
+        print(f"[Pre-Verify] {tier_label} | Score: {score:.4f} | Threshold: {keystroke_threshold} | Result: {'✅ PASS' if is_genuine else '❌ FAIL'}")
+        
+        if not is_genuine:
+            if stored_hash:
+                error_msg = f"❌ Ritme ketikan tidak cocok! (score: {score:.3f} > {keystroke_threshold})\n💡 Ketik dengan ritme yang sama seperti saat enrollment."
+            else:
+                error_msg = f"❌ Ritme ketikan tidak cocok! (score: {score:.3f} > {keystroke_threshold})\n💡 [Legacy Mode] Threshold lebih ketat karena tidak ada hash verification.\n🔄 Tip: Re-register untuk keamanan penuh & threshold normal."
+            
+            return jsonify({
+                'valid': False,
+                'message': error_msg,
+                'reason': 'keystroke_mismatch',
+                'score': score,
+                'threshold': keystroke_threshold,
+                'security_tier': 'modern' if stored_hash else 'legacy'
+            }), 403
+        
+        # Success: Verification passed
+        if stored_hash:
+            success_msg = f'✅ Pre-verification berhasil! (Hash ✓ + Keystroke ✓)\nSecurity: Full Protection'
+        else:
+            success_msg = f'✅ Pre-verification berhasil! (Keystroke ✓)\n⚠️ Legacy Mode: Consider re-registering for hash protection'
+        
+        return jsonify({
+            'valid': True,
+            'message': success_msg,
+            'score': score,
+            'threshold': keystroke_threshold,
+            'security_tier': 'modern' if stored_hash else 'legacy'
+        }), 200
+        
+    except Exception as e:
+        print(f"[ERROR] Pre-verification failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'valid': False,
+            'message': f'❌ Server Error: {str(e)}'
+        }), 500
 
 
 @app.route('/api/login_sample', methods=['POST'])
@@ -482,10 +626,10 @@ def login_sample():
     # === CHECK ENROLLMENT COMPLETE ===
     enrollment_count = db_manager.get_enrollment_count(username)
     
-    if enrollment_count < 10:
+    if enrollment_count < 20:
         return jsonify({
             "status": "error",
-            "message": f"❌ Enrollment belum lengkap! ({enrollment_count}/10 samples)",
+            "message": f"❌ Enrollment belum lengkap! ({enrollment_count}/20 samples)",
             "detail": "Selesaikan enrollment dulu di halaman register.",
             "error_code": "ENROLLMENT_INCOMPLETE"
         }), 400
@@ -510,16 +654,20 @@ def login_sample():
             "message": "Enrollment data tidak cukup untuk verifikasi (minimal 5 samples)."
         }), 400
     
-    # Call verifier to validate identity
-    verification_result = verifier.verify_user(new_features, enrollment_data)
+    # Call verifier to validate identity (LENIENT for Collection Mode)
+    # Use higher threshold multiplier for collection to be more permissive
+    verifier_lenient = Verifier(method='euclidean', threshold=0.5)  # More lenient
+    verification_result = verifier_lenient.verify_user(new_features, enrollment_data)
     
     if not verification_result['result']:
-        # ❌ VERIFICATION FAILED - DO NOT SAVE!
+        # ❌ VERIFICATION FAILED - Show helpful message
         return jsonify({
             "status": "error",
-            "message": f"❌ Verifikasi biometrik gagal! Keystroke pattern tidak cocok.",
-            "detail": verification_result.get('msg', ''),
+            "message": f"❌ Keystroke pattern tidak cocok dengan enrollment Anda.",
+            "detail": f"Score: {verification_result.get('score', 'N/A'):.4f}, Threshold: {verification_result.get('threshold', 'N/A'):.4f}",
             "score": verification_result.get('score', 'N/A'),
+            "threshold": verification_result.get('threshold', 'N/A'),
+            "hint": "Coba ketik dengan rhythm yang sama seperti saat enrollment. Jangan terlalu cepat atau lambat.",
             "error_code": "VERIFICATION_FAILED"
         }), 403  # HTTP 403 Forbidden
     
@@ -535,10 +683,11 @@ def login_sample():
     new_features['quality_score'] = quality['quality_score']
     new_features['quality_warnings'] = quality['quality_warnings']
     
-    # [DEV ONLY] Save password
+    # [DEV ONLY] Save password with hash
     real_pass = new_features.pop('dev_real_password', None)
+    password_hash = new_features.get('password_hash', None)
     if real_pass:
-        db_manager.save_dev_credentials(username, real_pass)
+        db_manager.save_dev_credentials(username, real_pass, password_hash)
     
     # ✅ SAVE VERIFIED DATA ONLY
     db_manager.save_data(new_features)
@@ -565,9 +714,81 @@ def login_sample():
     })
 
 
+# ============================================================================
+# VERIFICATION LOGGING FUNCTION
+# ============================================================================
+def log_verification_result(username, comprehensive_result):
+    """Log comprehensive verification results to CSV for analysis"""
+    import csv
+    import os
+    
+    log_file = 'verification_log.csv'
+    file_exists = os.path.isfile(log_file)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    with open(log_file, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        
+        # Write header if file doesn't exist
+        if not file_exists:
+            writer.writerow([
+                'timestamp', 'username', 'final_decision', 'final_score', 
+                'recommended_method', 'consensus_accept', 'consensus_total',
+                'euclidean_result', 'euclidean_score', 'euclidean_threshold',
+                'manhattan_result', 'manhattan_score', 'manhattan_threshold',
+                'mahalanobis_result', 'mahalanobis_score', 'mahalanobis_threshold',
+                'euclidean_iqr_result', 'euclidean_iqr_score', 'euclidean_iqr_threshold',
+                'euclidean_zscore_result', 'euclidean_zscore_score', 'euclidean_zscore_threshold',
+                'euclidean_iforest_result', 'euclidean_iforest_score', 'euclidean_iforest_threshold',
+                'euclidean_robust_result', 'euclidean_robust_score', 'euclidean_robust_threshold',
+                'manhattan_robust_result', 'manhattan_robust_score', 'manhattan_robust_threshold',
+                'mahalanobis_robust_result', 'mahalanobis_robust_score', 'mahalanobis_robust_threshold',
+                'n_samples_original', 'n_samples_after_iqr', 'n_samples_after_zscore', 'n_samples_after_iforest'
+            ])
+        
+        results = comprehensive_result['results']
+        consensus = comprehensive_result['consensus']
+        training = comprehensive_result['training_quality']
+        
+        # Prepare row data
+        row = [
+            timestamp,
+            username,
+            comprehensive_result['final_decision'],
+            f"{comprehensive_result['final_score']:.4f}",
+            comprehensive_result['recommended'],
+            consensus['accept_count'],
+            consensus['total_count']
+        ]
+        
+        # Add all method results
+        for method_name in ['euclidean', 'manhattan', 'mahalanobis', 
+                            'euclidean_iqr', 'euclidean_zscore', 'euclidean_iforest',
+                            'euclidean_robust', 'manhattan_robust', 'mahalanobis_robust']:
+            if method_name in results and results[method_name]:
+                r = results[method_name]
+                row.extend([r['result'], f"{r['score']:.4f}", f"{r['threshold']:.4f}"])
+            else:
+                row.extend(['N/A', 'N/A', 'N/A'])
+        
+        # Add training quality metrics
+        row.extend([
+            training['n_samples_original'],
+            training['n_samples_after_iqr'],
+            training['n_samples_after_zscore'],
+            training['n_samples_after_iforest']
+        ])
+        
+        writer.writerow(row)
+
+
 @app.route('/api/verify_user', methods=['POST'])
 def verify_user():
-    """HYBRID MODE: Verify user with biometric authentication (no data saving)"""
+    """
+    COMPREHENSIVE VERIFICATION: Verify user with ALL 9 methods
+    Returns detailed comparison of all detection methods
+    """
     data = request.json
     username = data.get('username')
     events = data.get('events')
@@ -591,27 +812,45 @@ def verify_user():
             "message": f"User belum terdaftar atau data enrollment kurang. Anda punya {len(enrollment_data)} sampel, minimal 5 diperlukan untuk verifikasi."
         }), 404
     
-    # 3. Call verifier for authentication
-    verification_result = verifier.verify_user(new_features, enrollment_data)
+    # 3. Call COMPREHENSIVE verifier (9 methods)
+    comprehensive_result = verifier.verify_user_comprehensive(new_features, enrollment_data)
     
-    # 4. Return result (NO SAVING in verification mode)
-    if verification_result['result']:
-        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
+    if comprehensive_result.get('error'):
+        return jsonify({
+            "status": "error",
+            "message": comprehensive_result['msg']
+        }), 400
+    
+    # 4. Log verification result to CSV
+    try:
+        log_verification_result(username, comprehensive_result)
+    except Exception as e:
+        print(f"[WARNING] Failed to log verification result: {e}")
+    
+    # 5. Return comprehensive results (NO SAVING in verification mode)
+    if comprehensive_result['final_decision']:
         return jsonify({
             "status": "success",
             "authenticated": True,
-            "message": f"✅ LOGIN SUKSES! Skor: {verification_result['score']}",
-            "score": verification_result['score'],
-            "detail": detail_msg
+            "message": f"✅ LOGIN SUKSES!",
+            "comprehensive": True,
+            "final_score": comprehensive_result['final_score'],
+            "recommended_method": comprehensive_result['recommended'],
+            "consensus": comprehensive_result['consensus'],
+            "results": comprehensive_result['results'],
+            "training_quality": comprehensive_result['training_quality']
         })
     else:
-        detail_msg = verification_result.get('msg') or verification_result.get('reason', '')
         return jsonify({
             "status": "error",
             "authenticated": False,
-            "message": f"❌ LOGIN GAGAL. {detail_msg}",
-            "score": verification_result.get('score', 'N/A'),
-            "detail": detail_msg
+            "message": f"❌ LOGIN GAGAL. Impostor terdeteksi.",
+            "comprehensive": True,
+            "final_score": comprehensive_result['final_score'],
+            "recommended_method": comprehensive_result['recommended'],
+            "consensus": comprehensive_result['consensus'],
+            "results": comprehensive_result['results'],
+            "training_quality": comprehensive_result['training_quality']
         })
 
 

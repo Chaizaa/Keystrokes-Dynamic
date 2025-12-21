@@ -115,14 +115,49 @@
             </span>
         </div>
         
+        <!-- Password Strength Indicator -->
+        <div id="passwordStrengthIndicator" style="display: none; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 13px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span id="strengthLabel" style="font-weight: bold;"></span>
+                <span id="strengthScore" style="font-size: 12px; opacity: 0.8;"></span>
+            </div>
+            <div style="background: rgba(0,0,0,0.1); height: 6px; border-radius: 3px; overflow: hidden;">
+                <div id="strengthBar" style="height: 100%; width: 0%; transition: all 0.3s ease; border-radius: 3px;"></div>
+            </div>
+            <div id="strengthTips" style="margin-top: 8px; font-size: 11px; opacity: 0.9;"></div>
+        </div>
+        
         <hr>
         
         <div id="typingSection">
-            <p>Langkah 2: Ketik Ulang Password Anda (10x)</p>
+            <p>Langkah 2: Ketik Ulang Password Anda (20x)</p>
             <p style="font-size: 12px; color: #666;">Ketik password di bawah ini, lalu tekan <b>ENTER</b> untuk menyimpan sampel.</p>
             
-            <div class="progress-box">
-                Progress Sampel: <span id="countDisplay" class="counter">0</span> / 10
+            <!-- Enhanced Progress Display -->
+            <div class="progress-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px;">
+                <div style="font-size: 14px; margin-bottom: 8px; opacity: 0.9;">Progress Enrollment</div>
+                <div style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">
+                    <span id="countDisplay" class="counter">0</span> / 20
+                </div>
+                
+                <!-- Progress Bar -->
+                <div style="background: rgba(255,255,255,0.3); border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 12px;">
+                    <div id="progressBar" style="background: #4caf50; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                </div>
+                
+                <!-- Motivational Message -->
+                <div id="motivationalMsg" style="font-size: 13px; font-weight: 500; opacity: 0.95;">
+                    🎯 Take your time, type naturally!
+                </div>
+            </div>
+            
+            <!-- Typing Timer Display -->
+            <div id="typingTimer" style="display: none; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; text-align: center; color: white; box-shadow: 0 2px 8px rgba(102,126,234,0.4);">
+                <div style="font-size: 13px; font-weight: 600; opacity: 0.9; margin-bottom: 5px;">⏱️ TYPING RHYTHM</div>
+                <div style="font-size: 28px; font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 2px;">
+                    <span id="timerDisplay">0.000</span><span style="font-size: 20px; opacity: 0.8;">s</span>
+                </div>
+                <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">Time since first keystroke</div>
             </div>
 
             <!-- Wrapper Password Typing -->
@@ -160,13 +195,18 @@
         }
     }
 
-    // --- LOGIKA UTAMA: 10 ENROLLMENT SAMPLES ---
+    // --- LOGIKA UTAMA: 20 ENROLLMENT SAMPLES ---
     let sampleCount = 0;
-    const targetSamples = 10;
+    const targetSamples = 20;
     let rawEvents = [];
     let activeKeys = {};
     let usernameAvailable = false;
     let isCheckingUsername = false;
+    
+    // Timer variables
+    let typingStartTime = null;
+    let timerInterval = null;
+    let isFirstKeystroke = true;
     
     const usernameInput = document.getElementById('regUsername');
     const mainPassInput = document.getElementById('mainPassword');
@@ -175,6 +215,39 @@
     const countDisplay = document.getElementById('countDisplay');
     const usernameStatusEl = document.getElementById('usernameStatus');
     const enrollmentSection = document.getElementById('enrollmentSection');
+    const typingTimerEl = document.getElementById('typingTimer');
+    const timerDisplayEl = document.getElementById('timerDisplay');
+    
+    // Timer Functions
+    function startTimer() {
+        if (!typingStartTime) {
+            typingStartTime = performance.now();
+            typingTimerEl.style.display = 'block';
+            
+            // Update timer setiap 50ms untuk smooth display
+            timerInterval = setInterval(() => {
+                if (typingStartTime) {
+                    const elapsed = (performance.now() - typingStartTime) / 1000;
+                    timerDisplayEl.textContent = elapsed.toFixed(3);
+                }
+            }, 50);
+        }
+    }
+    
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        typingStartTime = null;
+        typingTimerEl.style.display = 'none';
+        timerDisplayEl.textContent = '0.000';
+    }
+    
+    function resetTimer() {
+        stopTimer();
+        isFirstKeystroke = true;
+    }
 
     // === USERNAME VALIDATION ===
     
@@ -390,6 +463,12 @@
 
         // Rekam event normal - TIDAK termasuk modifier keys
         if (!isModifier) {
+            // Start timer pada keystroke pertama (non-modifier)
+            if (isFirstKeystroke) {
+                startTimer();
+                isFirstKeystroke = false;
+            }
+            
             rawEvents.push({
                 key: event.key, 
                 code: event.code, 
@@ -444,9 +523,11 @@
         }
         
         if (typedPass !== mainPass) {
+            stopTimer();
             statusEl.innerText = "Salah ketik! Harus sama persis dengan password utama.";
             typingInput.value = '';
             rawEvents = [];
+            resetTimer();
             return;
         }
 
@@ -465,19 +546,25 @@
             const result = await response.json();
 
             if (result.status === 'success') {
+                stopTimer();
                 sampleCount++;
                 countDisplay.innerText = sampleCount;
                 typingInput.value = '';
                 rawEvents = []; 
+                resetTimer();
                 statusEl.innerText = "✅ Sampel tersimpan. Lanjut ketik lagi!";
 
                 if (sampleCount >= targetSamples) {
                     finishRegistration();
+                } else {
+                    updateProgress();
                 }
             } else {
+                stopTimer();
                 statusEl.innerText = "Error: " + result.message;
                 typingInput.value = '';
                 rawEvents = [];
+                resetTimer();
             }
 
         } catch (error) {
@@ -485,12 +572,35 @@
             statusEl.innerText = "Gagal koneksi server.";
         }
     }
+    
+    function updateProgress() {
+        // Update progress bar
+        const percentage = (sampleCount / targetSamples) * 100;
+        document.getElementById('progressBar').style.width = percentage + '%';
+        
+        // Motivational messages based on progress
+        const msgEl = document.getElementById('motivationalMsg');
+        
+        if (sampleCount <= 5) {
+            msgEl.innerHTML = "💪 Great start! Take your time, get comfortable.";
+        } else if (sampleCount <= 10) {
+            msgEl.innerHTML = "🔥 You're halfway there! Keep up the rhythm.";
+        } else if (sampleCount <= 15) {
+            msgEl.innerHTML = "⚡ Almost done! You're doing great!";
+        } else if (sampleCount < 20) {
+            msgEl.innerHTML = "🎯 Final stretch! Just " + (20 - sampleCount) + " more to go!";
+        }
+    }
 
     function finishRegistration() {
+        stopTimer();
         typingInput.disabled = true;
-        typingInput.placeholder = "✅ Selesai! 10 enrollment sampel terkumpul.";
+        typingInput.placeholder = "✅ Selesai! 20 enrollment sampel terkumpul.";
         statusEl.innerText = "";
         document.getElementById('finishSection').classList.remove('hidden');
+        
+        // Final celebration message
+        document.getElementById('motivationalMsg').innerHTML = "🎉 Excellent! All 20 samples collected!";
     }
 </script>
 

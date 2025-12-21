@@ -21,8 +21,8 @@ print("📦 MIGRATION: Add Statistical Features to Old Data")
 print("="*70)
 
 # Paths
-csv_path = "webV2/biometric_auth.csv"
-backup_path = f"webV2/biometric_auth_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+csv_path = "webV2/biometric_weak_auth.csv"
+backup_path = f"webV2/biometric_weak_auth_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
 # Step 1: Backup original file
 print("\n1️⃣ Creating backup...")

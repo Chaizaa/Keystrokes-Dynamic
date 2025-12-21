@@ -68,7 +68,7 @@ print(f"   ✅ Can be used for classification/clustering!")
 print("\n4️⃣ Test Case: Real Data from CSV")
 import csv
 
-csv_path = "webV2/biometric_auth.csv"
+csv_path = "webV2/biometric_weak_auth.csv"
 with open(csv_path, 'r', encoding='utf-8') as f:
     reader = csv.DictReader(f)
     samples = list(reader)

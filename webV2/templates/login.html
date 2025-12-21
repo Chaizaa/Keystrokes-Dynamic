@@ -38,6 +38,7 @@
         #resultBox { margin-top: 20px; padding: 10px; border-radius: 5px; display: none; }
         .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
         
         /* Username validation status */
         .username-status {
@@ -116,18 +117,88 @@
         Progress: <span id="countDisplay" style="font-size: 20px; font-weight: bold; color: #2e7d32;">0</span> / <span id="targetDisplay">10</span>
     </div>
     
+    <!-- Typing Timer Display -->
+    <div id="typingTimer" style="display: none; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; text-align: center; color: white; box-shadow: 0 2px 8px rgba(102,126,234,0.4);">
+        <div style="font-size: 13px; font-weight: 600; opacity: 0.9; margin-bottom: 5px;">⏱️ TYPING RHYTHM</div>
+        <div style="font-size: 28px; font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 2px;">
+            <span id="timerDisplay">0.000</span><span style="font-size: 20px; opacity: 0.8;">s</span>
+        </div>
+        <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">Time since first keystroke</div>
+    </div>
+    
     <!-- Verification Result Box -->
     <div id="verificationBox" style="display: none; margin: 15px 0; padding: 15px; border-radius: 5px;">
         <h3 id="verifyTitle"></h3>
         <p id="verifyMessage" style="margin: 10px 0;"></p>
-        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 10px;">
-            <strong>Score:</strong> <span id="verifyScore">-</span><br>
-            <strong>Detail:</strong> <span id="verifyDetail">-</span>
+        
+        <!-- Toggle Button for Simple/Detailed View -->
+        <div style="text-align: center; margin: 10px 0;">
+            <button id="toggleViewBtn" onclick="toggleComparisonView()" style="padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">
+                📊 Show Detailed Analysis
+            </button>
         </div>
-        <button onclick="resetVerification()" style="margin-top: 10px; background: #007bff;">Verify Again</button>
+        
+        <!-- Simple View (Default) -->
+        <div id="simpleView" style="background: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 10px;">
+            <strong>Score:</strong> <span id="verifyScore">-</span><br>
+            <strong>Method:</strong> <span id="verifyMethod">-</span><br>
+            <strong>Confidence:</strong> <span id="verifyConfidence">-</span>
+        </div>
+        
+        <!-- Comprehensive Comparison Panel (Hidden by default) -->
+        <div id="comparisonPanel" style="display: none; margin-top: 15px;">
+            
+            <!-- Summary Card -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 10px; color: white; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(102,126,234,0.3);">
+                <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;" id="finalVerdict">-</div>
+                <div style="font-size: 14px; opacity: 0.9;" id="confidenceText">-</div>
+                <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;" id="scoreText">-</div>
+            </div>
+            
+            <!-- Method Comparison Table -->
+            <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="background: #f8f9fa; padding: 12px; border-bottom: 2px solid #dee2e6;">
+                    <h4 style="margin: 0; font-size: 16px; color: #333;">🔬 Method Comparison</h4>
+                </div>
+                
+                <table id="comparisonTable" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead style="background: #e9ecef;">
+                        <tr>
+                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Method</th>
+                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Score</th>
+                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Decision</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparisonTableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Training Data Quality -->
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 15px; font-size: 13px;">
+                <strong>📊 Training Data Quality:</strong><br>
+                <div id="trainingQuality" style="margin-top: 5px; line-height: 1.6;">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+            
+            <!-- Recommended Method -->
+            <div id="recommendationBox" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 15px; border-radius: 8px; margin-top: 15px; color: white; box-shadow: 0 4px 15px rgba(245,87,108,0.3);">
+                <h4 style="margin: 0 0 10px 0; font-size: 15px;">⭐ RECOMMENDED METHOD</h4>
+                <div id="recommendedMethodText" style="font-size: 14px; line-height: 1.6;">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="resetVerification()" style="margin-top: 10px; background: #007bff; width: 100%;">Verify Again</button>
     </div>
     
-    <button id="startBtn" onclick="startCollection()" style="background: #007bff;">Mulai Pengumpulan Data</button>
+    <div id="instructionBox" style="display: none; margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #4caf50;">
+        <p id="instructionText" style="margin: 0; font-size: 14px; color: #2e7d32;"></p>
+    </div>
 
     <div id="resultBox"></div>
     
@@ -163,11 +234,15 @@
     let targetSamples = 10;
     let isCollecting = false;
     let username = '';
-    let password = '';
     let currentMode = 'collection'; // 'collection' or 'verification'
     let usernameCheckTimeout = null;
     let usernameValidated = false;
     let enrollmentComplete = false;
+    
+    // Timer variables
+    let typingStartTime = null;
+    let timerInterval = null;
+    let isFirstKeystroke = true;
     
     const usernameField = document.getElementById('username');
     const passwordField = document.getElementById('passwordField');
@@ -176,13 +251,45 @@
     const countDisplay = document.getElementById('countDisplay');
     const targetDisplay = document.getElementById('targetDisplay');
     const progressTitle = document.getElementById('progressTitle');
-    const startBtn = document.getElementById('startBtn');
     const finishBox = document.getElementById('finishBox');
     const verificationBox = document.getElementById('verificationBox');
     const collectionModeBtn = document.getElementById('collectionModeBtn');
     const verificationModeBtn = document.getElementById('verificationModeBtn');
     const modeDescription = document.getElementById('modeDescription');
     const usernameStatusEl = document.getElementById('usernameStatus');
+    const typingTimerEl = document.getElementById('typingTimer');
+    const timerDisplayEl = document.getElementById('timerDisplay');
+    
+    // Timer Functions
+    function startTimer() {
+        if (!typingStartTime) {
+            typingStartTime = performance.now();
+            typingTimerEl.style.display = 'block';
+            
+            // Update timer setiap 50ms untuk smooth display
+            timerInterval = setInterval(() => {
+                if (typingStartTime) {
+                    const elapsed = (performance.now() - typingStartTime) / 1000;
+                    timerDisplayEl.textContent = elapsed.toFixed(3);
+                }
+            }, 50);
+        }
+    }
+    
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        typingStartTime = null;
+        typingTimerEl.style.display = 'none';
+        timerDisplayEl.textContent = '0.000';
+    }
+    
+    function resetTimer() {
+        stopTimer();
+        isFirstKeystroke = true;
+    }
     
     // === USERNAME VALIDATION ===
     
@@ -234,8 +341,9 @@
                 clearTimeout(usernameCheckTimeout);
             }
             await checkUsername();
+            // Auto-start collection mode if username is valid
             if (usernameValidated && enrollmentComplete) {
-                passwordField.focus();
+                startCollectionMode();
             }
         }
     });
@@ -278,14 +386,16 @@
             
             const result = await response.json();
             
-            if (result.enrollment_count >= 10) {
+            if (result.enrollment_count >= 20) {
                 // Enrollment complete - OK untuk login
-                showUsernameStatus('success', `✅ Username valid! Enrollment lengkap (${result.enrollment_count}/10 samples).`);
+                showUsernameStatus('success', `✅ Username valid! Enrollment lengkap (${result.enrollment_count}/20 samples).`);
                 usernameValidated = true;
                 enrollmentComplete = true;
+                // Auto-start collection mode
+                setTimeout(() => startCollectionMode(), 300);
             } else if (result.enrollment_count > 0) {
                 // Enrollment incomplete
-                showUsernameStatus('error', `❌ Enrollment belum lengkap! (${result.enrollment_count}/10 samples). Selesaikan enrollment dulu.`);
+                showUsernameStatus('error', `❌ Enrollment belum lengkap! (${result.enrollment_count}/20 samples). Selesaikan enrollment dulu.`);
                 usernameValidated = false;
                 enrollmentComplete = false;
             } else {
@@ -320,7 +430,6 @@
             verificationModeBtn.style.color = '#666';
             verificationModeBtn.style.border = '2px solid #ddd';
             modeDescription.innerHTML = '<strong>Collection Mode:</strong> Simpan 10 login samples untuk dataset (tidak perlu enrollment dulu)';
-            startBtn.innerText = 'Mulai Pengumpulan Data';
             targetSamples = 10;
         } else {
             verificationModeBtn.style.background = '#007bff';
@@ -330,7 +439,6 @@
             collectionModeBtn.style.color = '#666';
             collectionModeBtn.style.border = '2px solid #ddd';
             modeDescription.innerHTML = '<strong>Verification Mode:</strong> Test biometric login (perlu minimal 5 enrollment samples dulu)';
-            startBtn.innerText = 'Mulai Verifikasi';
             targetSamples = 1;
         }
         
@@ -338,50 +446,39 @@
         resetVerification();
     }
     
-    function startCollection() {
+    function startCollectionMode() {
+        // Called when username is validated - auto-start the collection/verification
         username = usernameField.value.trim();
-        password = passwordField.value;
         
-        // Check username validation
-        if (!usernameValidated || !enrollmentComplete) {
-            showResult('❌ Username belum divalidasi atau enrollment belum lengkap!', 'error');
-            usernameField.focus();
-            return;
-        }
-        
-        if (!username || username.length < 3) {
-            showResult('Username minimal 3 karakter!', 'error');
-            return;
-        }
-        
-        if (!password || password.length < 6) {
-            showResult('Password minimal 6 karakter!', 'error');
-            return;
-        }
-        
-        // Lock inputs and start
+        // Lock username field and mode buttons
         usernameField.disabled = true;
-        passwordField.disabled = false;
-        passwordField.value = '';
-        passwordField.focus();
-        startBtn.disabled = true;
-        startBtn.style.background = '#ccc';
         collectionModeBtn.disabled = true;
         verificationModeBtn.disabled = true;
         
-        isCollecting = true;
-        sampleCount = 0;
-        verificationBox.style.display = 'none';
+        // Enable password field and show instruction
+        passwordField.disabled = false;
+        passwordField.focus();
+        
+        // Show appropriate instruction based on mode
+        const instructionBox = document.getElementById('instructionBox');
+        const instructionText = document.getElementById('instructionText');
+        instructionBox.style.display = 'block';
         
         if (currentMode === 'collection') {
             progressBox.style.display = 'block';
             progressTitle.innerText = 'COLLECTION MODE';
             targetDisplay.innerText = targetSamples;
-            showResult('✅ Mulai ketik password ' + targetSamples + 'x (tekan ENTER setiap kali)', 'success');
+            instructionText.innerHTML = '🔐 Ketik password lalu tekan <strong>ENTER</strong> (ulangi ' + targetSamples + 'x). Hash+keystroke akan diverifikasi otomatis.';
+            showResult('📊 Collection Mode: Ketik password ' + targetSamples + ' kali (setiap sample diverifikasi hash+keystroke)', 'info');
         } else {
             progressBox.style.display = 'none';
-            showResult('🔐 Ketik password untuk verifikasi biometrik (tekan ENTER)', 'success');
+            instructionText.innerHTML = '🔐 Ketik password lalu tekan <strong>ENTER</strong> untuk verifikasi biometrik.';
+            showResult('🔒 Verification Mode: Ketik password untuk verifikasi (hash+keystroke)', 'info');
         }
+        
+        isCollecting = true;
+        sampleCount = 0;
+        verificationBox.style.display = 'none';
     }
     
     function showResult(message, type) {
@@ -389,6 +486,17 @@
         resultBox.className = type;
         resultBox.style.display = 'block';
     }
+
+    // [GLOBAL] Auto-repeat protection untuk password field
+    // Aktif SEBELUM klik "Mulai Verifikasi" atau "Mulai Pengumpulan Data"
+    // Mencegah karakter berulang di UI saat hold key > 0.8s
+    passwordField.addEventListener('keydown', (event) => {
+        // Jika belum mulai collection/verification, tetap cegah auto-repeat di UI
+        if (!isCollecting && event.repeat && !['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].some(mod => event.key === mod)) {
+            event.preventDefault(); // Cegah karakter spam di UI
+            return;
+        }
+    }, true); // Use capture phase untuk prioritas
 
     passwordField.addEventListener('keydown', (event) => {
         if (!isCollecting) return;  // Only capture when collecting
@@ -402,31 +510,58 @@
             return; // Skip recording, biarkan propagate ke keyup untuk submit
         }
         
+        // [FITUR] AUTO-REPEAT DETECTION - Batasi karakter di UI, tapi TETAP rekam timing!
+        // Ketika user hold tombol > 0.8s, browser trigger repeat events
         if (event.repeat && !isModifier) {
+            // Tampilkan info ke user (optional, bisa dikomen kalau mengganggu)
+            showResult("⚠️ Tombol ditahan > 0.8s (waktu tetap dicatat, karakter dibatasi di UI)", 'info');
+            
+            // PENTING: Cegah karakter berulang muncul di UI (mencegah aaaaaaa atau !!!!!!!)
             event.preventDefault();
+            
+            // TETAP rekam event repeat untuk hold time calculation!
+            // Backend akan menghitung TOTAL hold time = keyup - keydown PERTAMA
             rawEvents.push({
                 key: event.key, 
                 code: event.code, 
                 evt: 'd', 
                 t: performance.now(),
-                isRepeat: true
+                isRepeat: true  // Tandai sebagai repeat event
             });
             return;
+        } else {
+            // Clear info message jika sebelumnya ada peringatan hold
+            if (resultBox.textContent && resultBox.textContent.includes('ditahan')) {
+                if (currentMode === 'collection') {
+                    showResult('✅ Mulai ketik password ' + targetSamples + 'x (tekan ENTER setiap kali)', 'success');
+                } else {
+                    showResult('✅ Ketik password untuk verifikasi (tekan ENTER)', 'success');
+                }
+            }
         }
 
+        // Tandai tombol ini sedang ditekan (HANYA non-modifier!)
         if (!isModifier) {
             activeKeys[keyCode] = performance.now();
         }
 
+        // Jangan rekam modifier yang di-repeat (Shift, Ctrl, dll)
         if (event.repeat && isModifier) return;
 
+        // Rekam event normal (keydown pertama) - TIDAK termasuk modifier keys
         if (!isModifier) {
+            // Start timer pada keystroke pertama (non-modifier)
+            if (isFirstKeystroke) {
+                startTimer();
+                isFirstKeystroke = false;
+            }
+            
             rawEvents.push({ 
                 key: event.key, 
                 code: event.code, 
                 evt: 'd', 
                 t: performance.now(),
-                isRepeat: false
+                isRepeat: false  // Keydown pertama
             });
         }
     });
@@ -460,17 +595,51 @@
     async function submitSample() {
         const typedPassword = passwordField.value;
         
-        if (typedPassword !== password) {
-            showResult('❌ Password salah! Ketik yang benar.', 'error');
-            passwordField.value = '';
-            rawEvents = [];
-            return;
-        }
+        // Stop timer saat submit
+        stopTimer();
         
         if (rawEvents.length === 0) {
             showResult('❌ Tidak ada keystroke data!', 'error');
+            resetTimer();
             return;
         }
+        
+        // === HASH + KEYSTROKE PRE-VERIFICATION ===
+        // Check password correctness with hash+keystroke BEFORE saving/verifying
+        showResult('🔐 Memverifikasi hash+keystroke...', 'info');
+        
+        try {
+            const preVerifyResponse = await fetch('/api/pre_verify_password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    events: rawEvents
+                })
+            });
+            
+            const preVerifyResult = await preVerifyResponse.json();
+            
+            if (!preVerifyResult.valid) {
+                // Pre-verification FAILED - wrong password or keystroke mismatch
+                showResult('❌ ' + preVerifyResult.message, 'error');
+                passwordField.value = '';
+                rawEvents = [];
+                resetTimer();
+                return; // Stop here, don't proceed to collection/verification
+            }
+            
+            // Pre-verification PASSED - proceed based on mode
+            
+        } catch (error) {
+            showResult('❌ Pre-verification error: ' + error.message, 'error');
+            passwordField.value = '';
+            rawEvents = [];
+            resetTimer();
+            return;
+        }
+        
+        // === COLLECTION MODE or VERIFICATION MODE ===
         
         if (currentMode === 'collection') {
             // COLLECTION MODE: Save to dataset
@@ -493,6 +662,7 @@
                     countDisplay.innerText = sampleCount;
                     passwordField.value = '';
                     rawEvents = [];
+                    resetTimer(); // Reset timer untuk sample berikutnya
                     
                     // Show quality feedback
                     let qualityMsg = '';
@@ -542,21 +712,54 @@
                 resultBox.style.display = 'none';
                 verificationBox.style.display = 'block';
                 
-                if (result.authenticated) {
-                    verificationBox.style.background = '#d4edda';
-                    verificationBox.style.border = '2px solid #c3e6cb';
-                    document.getElementById('verifyTitle').innerText = '✅ LOGIN SUKSES!';
-                    document.getElementById('verifyTitle').style.color = '#155724';
+                // Check if comprehensive results available
+                if (result.comprehensive && result.results) {
+                    // COMPREHENSIVE MODE
+                    if (result.authenticated) {
+                        verificationBox.style.background = '#d4edda';
+                        verificationBox.style.border = '2px solid #c3e6cb';
+                        document.getElementById('verifyTitle').innerText = '✅ LOGIN SUKSES!';
+                        document.getElementById('verifyTitle').style.color = '#155724';
+                    } else {
+                        verificationBox.style.background = '#f8d7da';
+                        verificationBox.style.border = '2px solid #f5c6cb';
+                        document.getElementById('verifyTitle').innerText = '❌ LOGIN GAGAL';
+                        document.getElementById('verifyTitle').style.color = '#721c24';
+                    }
+                    
+                    document.getElementById('verifyMessage').innerText = result.message;
+                    
+                    // Update simple view
+                    document.getElementById('verifyScore').innerText = result.final_score ? result.final_score.toFixed(3) : 'N/A';
+                    document.getElementById('verifyMethod').innerText = result.recommended_method || '-';
+                    document.getElementById('verifyConfidence').innerText = result.consensus ? 
+                        `${result.consensus.accept_count}/${result.consensus.total_count} methods agree (${result.consensus.agreement_percentage.toFixed(0)}%)` : '-';
+                    
+                    // Populate comprehensive comparison panel
+                    populateComparisonPanel(result);
+                    
                 } else {
-                    verificationBox.style.background = '#f8d7da';
-                    verificationBox.style.border = '2px solid #f5c6cb';
-                    document.getElementById('verifyTitle').innerText = '❌ LOGIN GAGAL';
-                    document.getElementById('verifyTitle').style.color = '#721c24';
+                    // FALLBACK: Simple mode (if comprehensive not available)
+                    if (result.authenticated) {
+                        verificationBox.style.background = '#d4edda';
+                        verificationBox.style.border = '2px solid #c3e6cb';
+                        document.getElementById('verifyTitle').innerText = '✅ LOGIN SUKSES!';
+                        document.getElementById('verifyTitle').style.color = '#155724';
+                    } else {
+                        verificationBox.style.background = '#f8d7da';
+                        verificationBox.style.border = '2px solid #f5c6cb';
+                        document.getElementById('verifyTitle').innerText = '❌ LOGIN GAGAL';
+                        document.getElementById('verifyTitle').style.color = '#721c24';
+                    }
+                    
+                    document.getElementById('verifyMessage').innerText = result.message;
+                    document.getElementById('verifyScore').innerText = result.score || 'N/A';
+                    document.getElementById('verifyMethod').innerText = '-';
+                    document.getElementById('verifyConfidence').innerText = '-';
+                    
+                    // Hide toggle button if not comprehensive
+                    document.getElementById('toggleViewBtn').style.display = 'none';
                 }
-                
-                document.getElementById('verifyMessage').innerText = result.message;
-                document.getElementById('verifyScore').innerText = result.score || 'N/A';
-                document.getElementById('verifyDetail').innerText = result.detail || '-';
                 
                 isCollecting = false;
                 passwordField.disabled = true;
@@ -575,6 +778,7 @@
         progressBox.style.display = 'none';
         resultBox.style.display = 'none';
         finishBox.style.display = 'block';
+        stopTimer(); // Stop timer saat selesai
     }
     
     function resetVerification() {
@@ -582,16 +786,145 @@
         sampleCount = 0;
         rawEvents = [];
         usernameField.disabled = false;
-        passwordField.disabled = false;
+        usernameValidated = false;
+        enrollmentComplete = false;
+        passwordField.disabled = true;
         passwordField.value = '';
-        startBtn.disabled = false;
-        startBtn.style.background = '#007bff';
         collectionModeBtn.disabled = false;
         verificationModeBtn.disabled = false;
         progressBox.style.display = 'none';
         verificationBox.style.display = 'none';
         finishBox.style.display = 'none';
         resultBox.style.display = 'none';
+        document.getElementById('instructionBox').style.display = 'none';
+        usernameStatusEl.classList.add('hidden');
+        resetTimer(); // Reset timer
+        
+        // Reset comparison panel
+        document.getElementById('comparisonPanel').style.display = 'none';
+        document.getElementById('simpleView').style.display = 'block';
+        document.getElementById('toggleViewBtn').innerText = '📊 Show Detailed Analysis';
+    }
+    
+    // ===================================================================
+    // COMPREHENSIVE COMPARISON FUNCTIONS
+    // ===================================================================
+    
+    function toggleComparisonView() {
+        const panel = document.getElementById('comparisonPanel');
+        const simpleView = document.getElementById('simpleView');
+        const btn = document.getElementById('toggleViewBtn');
+        
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            simpleView.style.display = 'none';
+            btn.innerText = '📋 Show Simple View';
+        } else {
+            panel.style.display = 'none';
+            simpleView.style.display = 'block';
+            btn.innerText = '📊 Show Detailed Analysis';
+        }
+    }
+    
+    function populateComparisonPanel(result) {
+        const results = result.results;
+        const consensus = result.consensus;
+        const training = result.training_quality;
+        const recommended = result.recommended_method;
+        
+        // Update summary card
+        const finalVerdict = result.authenticated ? '✅ GENUINE USER DETECTED' : '❌ IMPOSTOR DETECTED';
+        document.getElementById('finalVerdict').innerText = finalVerdict;
+        document.getElementById('confidenceText').innerText = 
+            `Confidence: ${consensus.agreement_percentage.toFixed(0)}% (${consensus.accept_count}/${consensus.total_count} methods agree)`;
+        document.getElementById('scoreText').innerText = 
+            `Overall Score: ${result.final_score.toFixed(3)} | Threshold: ${results[recommended].threshold.toFixed(3)}`;
+        
+        // Populate comparison table
+        const tableBody = document.getElementById('comparisonTableBody');
+        tableBody.innerHTML = ''; // Clear existing rows
+        
+        // Group methods by category
+        const categories = [
+            {
+                name: '📊 BASELINE METHODS',
+                methods: ['euclidean', 'manhattan', 'mahalanobis']
+            },
+            {
+                name: '🛡️ OUTLIER-ROBUST METHODS',
+                methods: ['euclidean_iqr', 'euclidean_zscore', 'euclidean_iforest']
+            },
+            {
+                name: '📈 ROBUST STATISTICS',
+                methods: ['euclidean_robust', 'manhattan_robust', 'mahalanobis_robust']
+            }
+        ];
+        
+        categories.forEach(category => {
+            // Add category header
+            const headerRow = document.createElement('tr');
+            headerRow.style.background = '#f8f9fa';
+            headerRow.style.fontWeight = 'bold';
+            headerRow.innerHTML = `<td colspan="4" style="padding: 10px; border-bottom: 1px solid #dee2e6;">${category.name}</td>`;
+            tableBody.appendChild(headerRow);
+            
+            // Add method rows
+            category.methods.forEach(methodKey => {
+                if (results[methodKey]) {
+                    const r = results[methodKey];
+                    const row = document.createElement('tr');
+                    
+                    // Apply color based on decision
+                    if (r.result) {
+                        row.style.background = '#d4edda'; // Green for accept
+                    } else {
+                        row.style.background = '#f8d7da'; // Red for reject
+                    }
+                    
+                    // Highlight recommended method
+                    if (methodKey === recommended) {
+                        row.style.border = '2px solid #ffc107';
+                        row.style.fontWeight = 'bold';
+                    }
+                    
+                    const decisionBadge = r.result ? 
+                        '<span style="background: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">✓ Accept</span>' :
+                        '<span style="background: #dc3545; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">✗ Reject</span>';
+                    
+                    const details = `Used ${r.n_samples_used} samples` + 
+                                    (methodKey === recommended ? ' <strong>(RECOMMENDED)</strong>' : '');
+                    
+                    row.innerHTML = `
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${r.method}</td>
+                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #dee2e6; font-family: monospace;">${r.score.toFixed(3)}</td>
+                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #dee2e6;">${decisionBadge}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 12px;">${details}</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                }
+            });
+        });
+        
+        // Update training quality info
+        const trainingQualityDiv = document.getElementById('trainingQuality');
+        trainingQualityDiv.innerHTML = `
+            • Enrollment samples: <strong>${training.n_samples_original}</strong><br>
+            • After IQR filtering: <strong>${training.n_samples_after_iqr}</strong> (${training.n_samples_original - training.n_samples_after_iqr} outliers removed)<br>
+            • After Z-Score filtering: <strong>${training.n_samples_after_zscore}</strong> (${training.n_samples_original - training.n_samples_after_zscore} outliers removed)<br>
+            • After Isolation Forest: <strong>${training.n_samples_after_iforest}</strong> (${training.n_samples_original - training.n_samples_after_iforest} anomalies removed)
+        `;
+        
+        // Update recommendation box
+        const recommendedMethodText = document.getElementById('recommendedMethodText');
+        const recMethod = results[recommended];
+        recommendedMethodText.innerHTML = `
+            <strong>${recMethod.method}</strong><br>
+            Score: ${recMethod.score.toFixed(3)} | Threshold: ${recMethod.threshold.toFixed(3)}<br>
+            Decision: ${recMethod.result ? '✅ Accept' : '❌ Reject'}<br>
+            Reason: ${recMethod.outlier_method !== 'none' ? 'Outlier-robust with ' + recMethod.outlier_method.toUpperCase() : 
+                      recMethod.use_robust_stats ? 'Uses robust statistics (trimmed mean)' : 'Baseline method'}
+        `;
     }
 </script>
 

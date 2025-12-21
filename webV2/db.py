@@ -7,6 +7,41 @@ class Database:
     def __init__(self, db_name="biometric_auth.db", csv_name="biometric_auth.csv"):
         self.db_path = os.path.abspath(db_name)
         self.csv_path = os.path.abspath(csv_name)
+        
+        # Ensure password_hash column exists in users table
+        self._migrate_users_table()
+    
+    def _migrate_users_table(self):
+        """Migrate users table to add password_hash column if missing"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            # Create users table if not exists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE,
+                    plain_password TEXT,
+                    password_hash TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Check if password_hash column exists
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Add password_hash column if missing (for legacy users)
+            if 'password_hash' not in columns:
+                print("[MIGRATION] Adding password_hash column to users table...")
+                cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+                conn.commit()
+                print("[MIGRATION] ✅ password_hash column added successfully!")
+            
+        except Exception as e:
+            print(f"[MIGRATION ERROR] {e}")
+        finally:
+            conn.close()
 
     # =========================================================================
     # FUNGSI UTAMA: MENYIMPAN DATA VEKTOR BIOMETRIK
@@ -173,41 +208,65 @@ class Database:
     # =========================================================================
     # [DEV ONLY] - FITUR TAMBAHAN UNTUK MENYIMPAN PASSWORD ASLI
     # =========================================================================
-    def save_dev_credentials(self, username, plain_password):
+    def save_dev_credentials(self, username, plain_password, password_hash=None):
         """
-        [HAPUS SAAT PRODUKSI]
-        Menyimpan username dan password asli ke tabel 'users' untuk keperluan debugging.
-        Berguna jika Anda lupa password saat masa pengembangan.
+        [DEV MODE + SECURITY]
+        Menyimpan username, password asli (dev), dan password hash (security).
+        Hash digunakan untuk pre-verification sebelum collection/verification mode.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         try:
-            # 1. Buat tabel 'users' khusus dev jika belum ada
+            # 1. Buat tabel 'users' dengan kolom password_hash
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
                     plain_password TEXT,
+                    password_hash TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
             # 2. Simpan / Update Password (Upsert sederhana)
-            # Kita cek dulu apakah user sudah ada?
             cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
             exists = cursor.fetchone()
             
             if exists:
                 # Update password kalau user sudah ada
-                cursor.execute("UPDATE users SET plain_password = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?", (plain_password, username))
+                if password_hash:
+                    cursor.execute("UPDATE users SET plain_password = ?, password_hash = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?", 
+                                   (plain_password, password_hash, username))
+                else:
+                    cursor.execute("UPDATE users SET plain_password = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?", 
+                                   (plain_password, username))
                 print(f"[DEV MODE] Password asli untuk '{username}' diperbarui di tabel 'users'.")
             else:
                 # Insert baru
-                cursor.execute("INSERT INTO users (username, plain_password) VALUES (?, ?)", (username, plain_password))
+                if password_hash:
+                    cursor.execute("INSERT INTO users (username, plain_password, password_hash) VALUES (?, ?, ?)", 
+                                   (username, plain_password, password_hash))
+                else:
+                    cursor.execute("INSERT INTO users (username, plain_password) VALUES (?, ?)", 
+                                   (username, plain_password))
                 print(f"[DEV MODE] Password asli untuk '{username}' disimpan di tabel 'users'.")
             
             conn.commit()
         except Exception as e:
             print(f"[DEV ERROR] Gagal simpan password asli: {e}")
+        finally:
+            conn.close()
+    
+    def get_password_hash(self, username):
+        """Mengambil password hash untuk pre-verification"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+        except Exception as e:
+            print(f"[DB ERROR] Get Password Hash: {e}")
+            return None
         finally:
             conn.close()
