@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-12-21T10:00:00.000Z" agent="5.0" version="24.0.0" type="device">
+  <diagram id="verification_mode_sequence" name="Verification Mode Sequence">
+    <mxGraphModel dx="1500" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1200" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="VERIFICATION MODE SEQUENCE - 9-Method Consensus Authentication" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1500" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Actors -->
+        <mxCell id="actor_user" value="Pengguna" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="70" y="60" width="40" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_browser" value="login.html" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_api" value="Flask API" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="470" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_db" value="Database" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="720" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_verifier" value="Verifier" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="970" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="line_user" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="105" width="1" height="1090" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_browser" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="290" y="105" width="1" height="1090" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_api" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="540" y="105" width="1" height="1090" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_db" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="790" y="105" width="1" height="1090" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_verifier" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="1040" y="105" width="1" height="1090" as="geometry" />
+        </mxCell>
+
+        <!-- Messages -->
+        <mxCell id="msg1" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="150" as="sourcePoint" />
+            <mxPoint x="290" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg1_label" value="1. Buka /login" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg2" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="200" as="sourcePoint" />
+            <mxPoint x="290" y="200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg2_label" value="2. Pilih 'Verification Mode'" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg2">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg3" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="250" as="sourcePoint" />
+            <mxPoint x="290" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg3_label" value="3. Input Username + Password" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg3">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="capture_box" value="4. Capture Keystroke" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff4cc;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="280" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg5" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="340" as="sourcePoint" />
+            <mxPoint x="540" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg5_label" value="5. POST /api/verify_login" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg5">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg6" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="380" as="sourcePoint" />
+            <mxPoint x="790" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg6_label" value="6. get_password_hash()" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg6">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="preverify_box" value="7. Pre-Verification&#10;Hash + Keystroke" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="470" y="420" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg8" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="490" as="sourcePoint" />
+            <mxPoint x="1040" y="490" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_label" value="8. verify_user(threshold=0.5)" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg8">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- 9 Methods Box -->
+        <mxCell id="methods_box" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="970" y="520" width="500" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="methods_label" value="9-METHOD ANALYSIS" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="980" y="525" width="150" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method1_box" value="Method 1: Euclidean Distance&#10;Score: 0.21" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="990" y="560" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method2_box" value="Method 2: Manhattan Distance&#10;Score: 0.19" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="990" y="620" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method3_box" value="Method 3: Mahalanobis Distance&#10;Score: 0.25" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="990" y="680" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method4_box" value="Method 4: Cosine Similarity&#10;Score: 0.18" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="990" y="740" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method5_box" value="Method 5: IQR-based Outlier&#10;Score: 0.22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="990" y="800" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method6_box" value="Method 6: Z-Score&#10;Score: 0.20" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="560" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method7_box" value="Method 7: Isolation Forest&#10;Score: 0.23" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="620" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method8_box" value="Method 8: Robust Covariance&#10;Score: 0.24" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="680" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="method9_box" value="Method 9: Gaussian Mixture&#10;Score: 0.26" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="740" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="consensus_box" value="CONSENSUS CALCULATION&#10;Average Score: 0.22&#10;Threshold: 0.50&#10;Result: ✅ AUTHENTIC (score &lt; threshold)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeWidth=3;align=left;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="990" y="820" width="450" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="weights_box" value="Note: Each method has equal weight (1/9)&#10;Lower score = More authentic&#10;Higher score = Potential impostor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeWidth=1;align=left;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="990" y="920" width="450" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- End Methods Box -->
+
+        <mxCell id="msg9" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1040" y="1020" as="sourcePoint" />
+            <mxPoint x="540" y="1020" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg9_label" value="9. {authenticated: true, score: 0.22}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg9">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT Box: Success -->
+        <mxCell id="alt_success" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1050" width="800" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_success_label" value="[ALT] Authentication SUCCESS" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1055" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg10" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="1085" as="sourcePoint" />
+            <mxPoint x="290" y="1085" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg10_label" value="10. Redirect to /home" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg10">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT Box: Fail -->
+        <mxCell id="alt_fail" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1130" width="800" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_fail_label" value="[ELSE] Authentication FAIL" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1135" width="160" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg11" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="1165" as="sourcePoint" />
+            <mxPoint x="290" y="1165" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg11_label" value="11. '❌ Login ditolak (score: X.XX)'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg11">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

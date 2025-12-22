@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-12-21T10:00:00.000Z" agent="5.0" version="24.0.0" type="device">
+  <diagram id="export_datasets_sequence" name="Export Datasets Sequence">
+    <mxGraphModel dx="1300" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1000" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="EXPORT DATASETS SEQUENCE - Strong/Weak Password Classification" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Actors -->
+        <mxCell id="actor_admin" value="Admin" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="70" y="60" width="40" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_script" value="export_datasets.py" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="250" y="60" width="160" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_db" value="Database" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="530" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_strength" value="password_strength.py" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="790" y="60" width="160" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_csv" value="CSV Files" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="line_admin" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="105" width="1" height="890" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_script" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="330" y="105" width="1" height="890" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_db" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="600" y="105" width="1" height="890" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_strength" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="870" y="105" width="1" height="890" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_csv" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="1140" y="105" width="1" height="890" as="geometry" />
+        </mxCell>
+
+        <!-- Messages -->
+        <mxCell id="msg1" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="150" as="sourcePoint" />
+            <mxPoint x="330" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg1_label" value="1. python export_datasets.py" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg2" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="200" as="sourcePoint" />
+            <mxPoint x="600" y="200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg2_label" value="2. SELECT * FROM users" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg2">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg3" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="240" as="sourcePoint" />
+            <mxPoint x="330" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg3_label" value="3. Return all user records" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg3">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Loop Processing -->
+        <mxCell id="loop_box" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="1180" height="620" as="geometry" />
+        </mxCell>
+        <mxCell id="loop_label" value="[LOOP] For Each User" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="285" width="140" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg4" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="320" as="sourcePoint" />
+            <mxPoint x="600" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg4_label" value="4. SELECT password FROM users WHERE id = ?" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg4">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg5" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="360" as="sourcePoint" />
+            <mxPoint x="330" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg5_label" value="5. Return hashed_password" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg5">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg6" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="400" as="sourcePoint" />
+            <mxPoint x="870" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg6_label" value="6. calculate_password_strength(password)" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg6">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="strength_calc" value="7. 6-Criteria Analysis&#10;(Length, Upper, Lower, Digit, Special, Common)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="790" y="430" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg8" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="870" y="510" as="sourcePoint" />
+            <mxPoint x="330" y="510" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_label" value="8. {score: 85.7, category: 'STRONG'}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg8">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Classification Decision -->
+        <mxCell id="classify_box" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="250" y="550" width="640" height="330" as="geometry" />
+        </mxCell>
+        <mxCell id="classify_label" value="9. CLASSIFICATION LOGIC" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="260" y="555" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ALT: Strong -->
+        <mxCell id="alt_strong" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="270" y="590" width="600" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_strong_label" value="[IF] Score ≥ 76% → STRONG" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="595" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg10" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="630" as="sourcePoint" />
+            <mxPoint x="600" y="630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg10_label" value="10. get_enrollment_data(user_id)" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg10">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg11" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="670" as="sourcePoint" />
+            <mxPoint x="1140" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg11_label" value="11. Append to strong_passwords.csv" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg11">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT: Weak -->
+        <mxCell id="alt_weak" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="270" y="720" width="600" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_weak_label" value="[ELSE IF] Score &lt; 76% → WEAK" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="725" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg12" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="760" as="sourcePoint" />
+            <mxPoint x="600" y="760" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg12_label" value="12. get_enrollment_data(user_id)" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg12">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg13" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="800" as="sourcePoint" />
+            <mxPoint x="1140" y="800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg13_label" value="13. Append to weak_passwords.csv" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg13">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="note_box" value="Note: Threshold is 76%&#10;• VERY_WEAK, WEAK, MODERATE → weak_passwords.csv&#10;• STRONG, VERY_STRONG → strong_passwords.csv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeWidth=1;align=left;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="280" y="850" width="580" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- End Loop -->
+
+        <mxCell id="msg14" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="940" as="sourcePoint" />
+            <mxPoint x="90" y="940" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg14_label" value="14. '✅ Export complete!'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg14">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Summary Box -->
+        <mxCell id="summary_box" value="EXPORT SUMMARY:&#10;• strong_passwords.csv: 127 users&#10;• weak_passwords.csv: 45 users&#10;• Total processed: 172 users&#10;&#10;CSV Format:&#10;username, password_hash, score, category,&#10;feature1, feature2, ..., feature31" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeWidth=3;align=left;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="950" width="320" height="130" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

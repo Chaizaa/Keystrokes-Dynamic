@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-12-21T10:00:00.000Z" agent="5.0" version="24.0.0" type="device">
+  <diagram id="username_check_sequence" name="Username Check Sequence">
+    <mxGraphModel dx="1000" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="700" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="USERNAME AVAILABILITY CHECK - Real-time Validation" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1000" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Actors -->
+        <mxCell id="actor_user" value="Pengguna" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="70" y="60" width="40" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_browser" value="register.html" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_api" value="Flask API" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="470" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_db" value="Database" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="720" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="line_user" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="105" width="1" height="590" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_browser" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="290" y="105" width="1" height="590" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_api" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="540" y="105" width="1" height="590" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_db" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="790" y="105" width="1" height="590" as="geometry" />
+        </mxCell>
+
+        <!-- Messages -->
+        <mxCell id="msg1" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="150" as="sourcePoint" />
+            <mxPoint x="290" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg1_label" value="1. Ketik Username" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg2" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="200" as="sourcePoint" />
+            <mxPoint x="290" y="200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg2_label" value="2. Tekan ENTER" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg2">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="trigger_box" value="3. Event: keypress (Enter)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff4cc;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="230" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg4" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="290" as="sourcePoint" />
+            <mxPoint x="540" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg4_label" value="4. POST /api/check_username" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg4">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="payload_box" value="Payload:&#10;{username: 'john_doe'}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="305" width="150" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg5" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="370" as="sourcePoint" />
+            <mxPoint x="790" y="370" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg5_label" value="5. SELECT * WHERE username = ?" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg5">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg6" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="790" y="410" as="sourcePoint" />
+            <mxPoint x="540" y="410" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg6_label" value="6. Return user record or null" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg6">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT Box: Available -->
+        <mxCell id="alt_available" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="450" width="800" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_available_label" value="[ALT] Username NOT exists (Available)" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="455" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg7" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="490" as="sourcePoint" />
+            <mxPoint x="290" y="490" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg7_label" value="7. {available: true}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg7">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg8" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="530" as="sourcePoint" />
+            <mxPoint x="90" y="530" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_label" value="8. Show '✅ Username tersedia!'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg8">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="ui_effect1" value="UI Effect: Green border, enable continue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeWidth=2;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="70" y="540" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ALT Box: Taken -->
+        <mxCell id="alt_taken" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="580" width="800" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_taken_label" value="[ELSE] Username EXISTS (Taken)" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="585" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg9" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="620" as="sourcePoint" />
+            <mxPoint x="290" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg9_label" value="9. {available: false}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg9">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg10" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="660" as="sourcePoint" />
+            <mxPoint x="90" y="660" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg10_label" value="10. Show '❌ Username sudah digunakan!'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg10">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="ui_effect2" value="UI Effect: Red border, disable continue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeWidth=2;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="70" y="670" width="180" height="30" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

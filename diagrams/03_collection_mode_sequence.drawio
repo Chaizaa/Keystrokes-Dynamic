@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-12-21T10:00:00.000Z" agent="5.0" version="24.0.0" type="device">
+  <diagram id="collection_mode_sequence" name="Collection Mode Sequence">
+    <mxGraphModel dx="1400" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1100" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="COLLECTION MODE SEQUENCE - Collect 10 Login Samples" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1400" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Actors -->
+        <mxCell id="actor_user" value="Pengguna" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="70" y="60" width="40" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_browser" value="login.html" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_api" value="Flask API" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="470" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_db" value="Database" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="720" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box_verifier" value="Verifier" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="970" y="60" width="140" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="line_user" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="105" width="1" height="990" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_browser" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="290" y="105" width="1" height="990" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_api" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="540" y="105" width="1" height="990" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_db" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="790" y="105" width="1" height="990" as="geometry" />
+        </mxCell>
+
+        <mxCell id="line_verifier" value="" style="line;strokeWidth=2;html=1;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="1040" y="105" width="1" height="990" as="geometry" />
+        </mxCell>
+
+        <!-- Messages -->
+        <mxCell id="msg1" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="150" as="sourcePoint" />
+            <mxPoint x="290" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg1_label" value="1. Buka /login" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg2" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="200" as="sourcePoint" />
+            <mxPoint x="290" y="200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg2_label" value="2. Pilih 'Collection Mode'" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg2">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg3" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="250" as="sourcePoint" />
+            <mxPoint x="290" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg3_label" value="3. Input Username + ENTER" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg3">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg4" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="300" as="sourcePoint" />
+            <mxPoint x="540" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg4_label" value="4. POST /api/check_username" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg4">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg5" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="340" as="sourcePoint" />
+            <mxPoint x="790" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg5_label" value="5. Check Enrollment & Email Status" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg5">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg6" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="790" y="380" as="sourcePoint" />
+            <mxPoint x="540" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg6_label" value="6. {enrollment: 20, verified: true}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg6">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg7" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="420" as="sourcePoint" />
+            <mxPoint x="290" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg7_label" value="7. Auto-start Collection Mode" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg7">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg8" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="460" as="sourcePoint" />
+            <mxPoint x="90" y="460" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_label" value="8. Show 'Ketik password 10x (tekan ENTER)'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg8">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Loop Box -->
+        <mxCell id="loop_box" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="500" width="1050" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="loop_label" value="[LOOP] Repeat for 10 samples" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="505" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg9" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="90" y="540" as="sourcePoint" />
+            <mxPoint x="290" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg9_label" value="9. Ketik Password + ENTER" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg9">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="capture_box" value="10. Capture Keystroke" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff4cc;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="570" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg11" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="630" as="sourcePoint" />
+            <mxPoint x="540" y="630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg11_label" value="11. POST /api/pre_verify_password" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg11">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg12" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="670" as="sourcePoint" />
+            <mxPoint x="790" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg12_label" value="12. get_password_hash()" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg12">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="verify_box" value="13. Verify Hash + Keystroke&#10;Threshold: 0.3 (normal)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="470" y="710" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg14" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="780" as="sourcePoint" />
+            <mxPoint x="1040" y="780" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg14_label" value="14. verify_user(features, threshold=0.3)" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg14">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg15" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1040" y="820" as="sourcePoint" />
+            <mxPoint x="540" y="820" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg15_label" value="15. {valid: true, score: 0.25}" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg15">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT: Valid -->
+        <mxCell id="alt_valid" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="470" y="850" width="640" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_valid_label" value="[ALT] Pre-verification PASS" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="855" width="160" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg16" value="" style="html=1;verticalAlign=bottom;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="885" as="sourcePoint" />
+            <mxPoint x="790" y="885" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg16_label" value="16. save_login_sample()" style="edgeLabel;html=1;align=left;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg16">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg17" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="790" y="920" as="sourcePoint" />
+            <mxPoint x="540" y="920" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg17_label" value="17. Sample X/10 saved" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg17">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ALT: Invalid -->
+        <mxCell id="alt_invalid" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="470" y="950" width="420" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="alt_invalid_label" value="[ELSE] Pre-verification FAIL" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="955" width="150" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="msg18" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="985" as="sourcePoint" />
+            <mxPoint x="290" y="985" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg18_label" value="18. '❌ Password/Ritme salah'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg18">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="msg19" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="1020" as="sourcePoint" />
+            <mxPoint x="90" y="1020" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg19_label" value="19. Show Progress or Error" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg19">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- End Loop -->
+
+        <mxCell id="msg20" value="" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="1070" as="sourcePoint" />
+            <mxPoint x="90" y="1070" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg20_label" value="20. '✅ 10 samples terkumpul!'" style="edgeLabel;html=1;align=right;verticalAlign=bottom;fontSize=10;" vertex="1" connectable="0" parent="msg20">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-5" y="-5" as="offset" /></mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
