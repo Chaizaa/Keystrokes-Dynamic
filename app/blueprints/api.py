@@ -412,7 +412,7 @@ def login():
         password_verified = auth_service.verify_password(user, real_password) if real_password else False
         
         if not password_verified:
-            db_manager.log_failed_login(username, 'wrong_password_hash', ip_address, user_agent, score=1.0)
+            db_manager.log_failed_login(username, 'wrong_password_hash', ip_address, user_agent, verification_score=1.0)
             return jsonify({
                 'success': False,
                 'message': 'Password salah',
@@ -570,6 +570,7 @@ def get_user_info():
     Get current user information
     Uses BiometricService to get enrollment status
     """
+    print(f"[DEBUG] get_user_info called for user: {current_user.username if current_user.is_authenticated else 'Anonymous'}")
     try:
         username = current_user.username  # Use Flask-Login current_user
         user_data = db_manager.get_user_by_username(username)

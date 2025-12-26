@@ -103,6 +103,14 @@ class Database:
                 db_data[k] = str(v)  # Convert ke string untuk consistency dengan CSV
             else:
                 db_data[k] = v
+        
+        # Add timestamp if not present
+        if 'timestamp' not in db_data:
+            db_data['timestamp'] = None  # Will use CURRENT_TIMESTAMP default
+        
+        # Add password column if exists in data but not in db_data
+        if 'password' not in db_data and 'real_password_string' in data:
+            db_data['password'] = data['real_password_string']
 
         table_name = "user_vectors"
 
@@ -112,14 +120,42 @@ class Database:
             cursor.execute(f"PRAGMA table_info({table_name})")
             existing_columns = [row[1] for row in cursor.fetchall()]
             
-            # Jika tabel belum ada, buat baru
+            # Jika tabel belum ada, buat baru dengan struktur lengkap
             if not existing_columns:
-                cols = []
-                for k in db_data.keys():
-                    cols.append(f"{k} TEXT")
-                cols_str = ', '.join(cols)
-                cursor.execute(f"CREATE TABLE {table_name} (id INTEGER PRIMARY KEY, {cols_str})")
+                cursor.execute(f"""
+                    CREATE TABLE {table_name} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT,
+                        data_type TEXT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        password TEXT,
+                        H_vector TEXT,
+                        DD_vector TEXT,
+                        UD_vector TEXT,
+                        UU_vector TEXT,
+                        DU_vector TEXT,
+                        H_stats TEXT,
+                        DD_stats TEXT,
+                        UD_stats TEXT,
+                        char_count TEXT,
+                        total_duration TEXT,
+                        typing_rollover_ratio TEXT,
+                        backspace_count TEXT,
+                        char_sequence TEXT,
+                        masked_sequence TEXT,
+                        quality_label TEXT,
+                        quality_score TEXT,
+                        password_strength TEXT,
+                        password_score TEXT
+                    )
+                """)
+                print(f"[MIGRATION] Created {table_name} table with complete structure")
             else:
+                # Ensure timestamp column exists
+                if 'timestamp' not in existing_columns:
+                    cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+                    print("[MIGRATION] Added timestamp column to user_vectors")
+                
                 # Jika tabel sudah ada, cek apakah ada kolom baru yang perlu ditambah
                 for key in db_data.keys():
                     if key not in existing_columns and key != 'id':
@@ -306,7 +342,7 @@ class Database:
     
     def get_user_by_username(self, username):
         """
-        Get user data from users table
+        Get user data from users table with fallback to user_vectors
         
         Args:
             username: Username to lookup
@@ -319,6 +355,7 @@ class Database:
         cursor = conn.cursor()
         
         try:
+            # Try users table first (new architecture)
             cursor.execute("""
                 SELECT username, created_at as last_login, plain_password
                 FROM users 
@@ -328,6 +365,23 @@ class Database:
             row = cursor.fetchone()
             if row:
                 return dict(row)
+            
+            # Fallback to user_vectors table (legacy)
+            print(f"[DB] User not found in users table, checking user_vectors for {username}")
+            cursor.execute("""
+                SELECT DISTINCT 
+                    username, 
+                    MAX(timestamp) as last_login, 
+                    password as plain_password
+                FROM user_vectors 
+                WHERE username = ?
+                GROUP BY username
+            """, (username,))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            
             return None
             
         except Exception as e:
@@ -513,12 +567,22 @@ class Database:
         cursor = conn.cursor()
         
         try:
+            # First try verified_logins table
             cursor.execute("""
                 SELECT COUNT(*) FROM verified_logins
                 WHERE username = ?
             """, (username,))
             
             count = cursor.fetchone()[0]
+            
+            # If zero, try user_vectors with data_type='login' as fallback
+            if count == 0:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM user_vectors
+                    WHERE username = ? AND data_type = 'login'
+                """, (username,))
+                count = cursor.fetchone()[0]
+            
             return count
             
         except Exception as e:

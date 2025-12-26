@@ -635,7 +635,7 @@ Data access abstraction (in progress):
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/Chaizaa/Keystrokes-Dynamic.git
+git clone --branch apis https://github.com/Chaizaa/Keystrokes-Dynamic.git
 cd Keystrokes-Dynamic
 ```
 
@@ -644,11 +644,8 @@ cd Keystrokes-Dynamic
 ```bash
 # Windows
 python -m venv venv
-venv\Scripts\activate
+.venv\Scripts\activate.ps1
 
-# Linux/macOS
-python3 -m venv venv
-source venv/bin/activate
 ```
 
 #### 3. Install Dependencies
