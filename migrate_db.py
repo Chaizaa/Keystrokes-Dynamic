@@ -1,6 +1,12 @@
 import sqlite3
+import os
 
-conn = sqlite3.connect('biometric_auth.db')
+# Ensure data directory exists
+if not os.path.exists('data'):
+    os.makedirs('data')
+    print("Created data directory")
+
+conn = sqlite3.connect('data/biometric_auth.db')
 cursor = conn.cursor()
 
 try:
