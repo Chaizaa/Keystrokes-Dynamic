@@ -4,32 +4,65 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.pyc
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual Environment
 venv/
-env/
 ENV/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# CSV Data (optional - uncomment if you don't want to track collected data)
-# biometric_auth.csv
-
-# Backup files
-*_backup_*.csv
-*_backup_*.db
-FINAL_CORRUPT_backup.*
-corrupted_backup_*
+env/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/*.db-journal
+
+# Data files
+data/*.csv
+data/*.log
+data/*.pid
+
+# Logs
+*.log
+logs/
+data/logs/
+
+# Test artifacts
+tests/__pycache__/
+tests/.pytest_cache/
+.pytest_cache/
+
+# Backups
+backups/*
+
+# Scripts temp files
+scripts/__pycache__/
 
 # OS
 .DS_Store
@@ -39,5 +72,11 @@ Thumbs.db
 instance/
 .webassets-cache
 
-# Logs
-*.log
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Backup
+*.bak
+backup/

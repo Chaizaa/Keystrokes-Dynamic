@@ -1,0 +1,517 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account | SecureAuth{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-container bg-gradient">
+<div class="auth-box">
+    <div class="logo">
+        <div class="logo-text">SecureAuth</div>
+    </div>
+    <h2>Create Account</h2>
+    <p class="subtitle">Biometric Enrollment System</p>
+    
+    <div class="info-box">
+        Already have an account? <a href="/login">Sign in here</a>
+    </div>
+    
+    <!-- Step 1: Credentials -->
+    <div class="section">
+        <div class="section-title">Step 1: Account Credentials</div>
+        
+        <div class="form-group">
+            <label for="regUsername">Username</label>
+            <input 
+                type="text" 
+                id="regUsername" 
+                placeholder="Choose your username" 
+                autocomplete="off">
+            <div id="usernameStatus" class="status-indicator hidden"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="mainPassword">Master Password</label>
+            <div class="input-wrapper">
+                <input 
+                    type="password" 
+                    id="mainPassword" 
+                    placeholder="Create a secure password" 
+                    disabled>
+                <span class="toggle-password" onclick="togglePass('mainPassword', this)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
+            <p class="hint-text">This password will be used for biometric enrollment</p>
+        </div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <!-- Step 2: Enrollment -->
+    <div id="enrollmentSection" class="section disabled">
+        <div class="section-title">Step 2: Biometric Enrollment</div>
+        <p class="hint-text" style="margin-bottom: 20px;">Type your password naturally 20 times to train the system</p>
+        
+        <div class="progress-card">
+            <div class="progress-header">
+                <span class="progress-label">Enrollment Progress</span>
+                <span class="progress-count"><span id="countDisplay">0</span>/20</span>
+            </div>
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <p class="progress-message" id="motivationalMsg">Take your time, type naturally</p>
+        </div>
+        
+        <div class="typing-timer" id="typingTimer">
+            <div class="label">Typing Rhythm</div>
+            <div class="time">
+                <span id="timerDisplay">0.000</span><span class="unit">s</span>
+            </div>
+            <small>Recording keystroke pattern...</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="typingField">Type Password & Press Enter</label>
+            <div class="input-wrapper">
+                <input 
+                    type="password" 
+                    id="typingField" 
+                    placeholder="Type your password here" 
+                    disabled>
+                <span class="toggle-password" onclick="togglePass('typingField', this)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
+            <p id="status" class="hint-text"></p>
+        </div>
+    </div>
+    
+    <!-- Completion -->
+    <div id="finishSection" class="completion-section hidden">
+        <div class="completion-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        <h3>Registration Complete</h3>
+        <p>Account successfully created</p>
+        <a href="/login" class="btn">Continue to Login</a>
+    </div>
+</div>
+
+<script>
+    // Toggle Password Visibility
+    function togglePass(inputId, iconSpan) {
+        const input = document.getElementById(inputId);
+        const svgVisible = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+        const svgHidden = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            iconSpan.innerHTML = svgHidden;
+        } else {
+            input.type = 'password';
+            iconSpan.innerHTML = svgVisible;
+        }
+    }
+
+    // Global Variables
+    let sampleCount = 0;
+    const targetSamples = 20;
+    let rawEvents = [];
+    let activeKeys = {};
+    let usernameAvailable = false;
+    let typingStartTime = null;
+    let timerInterval = null;
+    let isFirstKeystroke = true;
+    let passwordMismatchCount = 0; // Track consecutive password mismatches
+    
+    const usernameInput = document.getElementById('regUsername');
+    const mainPassInput = document.getElementById('mainPassword');
+    const typingInput = document.getElementById('typingField');
+    const statusEl = document.getElementById('status');
+    const countDisplay = document.getElementById('countDisplay');
+    const usernameStatusEl = document.getElementById('usernameStatus');
+    const enrollmentSection = document.getElementById('enrollmentSection');
+    const typingTimerEl = document.getElementById('typingTimer');
+    const timerDisplayEl = document.getElementById('timerDisplay');
+    
+    // Timer Functions
+    function startTimer() {
+        if (!typingStartTime) {
+            typingStartTime = performance.now();
+            typingTimerEl.style.display = 'block';
+            timerInterval = setInterval(() => {
+                if (typingStartTime) {
+                    const elapsed = (performance.now() - typingStartTime) / 1000;
+                    timerDisplayEl.textContent = elapsed.toFixed(3);
+                }
+            }, 50);
+        }
+    }
+    
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        typingStartTime = null;
+        typingTimerEl.style.display = 'none';
+        timerDisplayEl.textContent = '0.000';
+    }
+    
+    function resetTimer() {
+        stopTimer();
+        isFirstKeystroke = true;
+    }
+
+    // Username Validation
+    let usernameCheckTimeout = null;
+    
+    usernameInput.addEventListener('input', () => {
+        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+        if (usernameStatusEl.textContent !== '') usernameStatusEl.classList.add('hidden');
+        usernameAvailable = false;
+        
+        const username = usernameInput.value.trim();
+        if (!username || username.length < 3) {
+            disableEnrollment();
+            return;
+        }
+        
+        usernameCheckTimeout = setTimeout(async () => {
+            await checkUsername();
+        }, 500);
+    });
+    
+    usernameInput.addEventListener('blur', async () => {
+        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+        await checkUsername();
+    });
+    
+    usernameInput.addEventListener('keypress', async (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+            await checkUsername();
+            if (usernameAvailable) mainPassInput.focus();
+        }
+    });
+    
+    async function checkUsername() {
+        const username = usernameInput.value.trim();
+        usernameAvailable = false;
+        
+        if (!username) {
+            showUsernameStatus('error', 'Username required');
+            disableEnrollment();
+            return;
+        }
+        
+        if (username.length < 3) {
+            showUsernameStatus('error', 'Minimum 3 characters');
+            disableEnrollment();
+            return;
+        }
+        
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            showUsernameStatus('error', 'Alphanumeric only');
+            disableEnrollment();
+            return;
+        }
+        
+        usernameStatusEl.className = 'status-indicator checking';
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = 'Checking availability...';
+        
+        try {
+            const response = await fetch('/api/check_username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'taken') {
+                const detail = result.detail ? ' ' + result.detail : '';
+                showUsernameStatus('error', result.message + detail);
+                disableEnrollment();
+                usernameInput.focus();
+                usernameInput.select();
+            } else if (result.status === 'available') {
+                usernameAvailable = true;
+                
+                if (result.is_retry) {
+                showUsernameStatus('info', 'Continue enrollment to complete registration');
+                    countDisplay.textContent = sampleCount;
+                } else {
+                    showUsernameStatus('success', result.message);
+                    sampleCount = 0;
+                    countDisplay.textContent = 0;
+                }
+                
+                enableEnrollment();
+            }
+        } catch (error) {
+            console.error('Error checking username:', error);
+            showUsernameStatus('error', '❌ Connection error');
+            disableEnrollment();
+        }
+    }
+    
+    function showUsernameStatus(type, message) {
+        usernameStatusEl.className = `status-indicator ${type}`;
+        usernameStatusEl.classList.remove('hidden');
+        usernameStatusEl.textContent = message;
+    }
+    
+    function enableEnrollment() {
+        enrollmentSection.classList.remove('disabled');
+        mainPassInput.disabled = false;
+        typingInput.disabled = false;
+    }
+    
+    function disableEnrollment() {
+        enrollmentSection.classList.add('disabled');
+        mainPassInput.disabled = true;
+        mainPassInput.value = '';
+        typingInput.disabled = true;
+        typingInput.value = '';
+        rawEvents = [];
+        statusEl.textContent = '';
+    }
+
+    // Auto-repeat protection
+    mainPassInput.addEventListener('keydown', (event) => {
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+        if (event.repeat && !isModifier) {
+            event.preventDefault();
+        }
+    });
+
+    // Keystroke Capture
+    typingInput.addEventListener('keydown', (event) => {
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+        
+        if (event.key === 'Enter') return;
+        
+        if (event.repeat && !isModifier) {
+            statusEl.textContent = "Key held down (timing recorded)";
+            event.preventDefault();
+            rawEvents.push({
+                key: event.key,
+                code: event.code,
+                evt: 'd',
+                t: performance.now(),
+                isRepeat: true
+            });
+            return;
+        } else {
+            if (statusEl.textContent.includes('held')) statusEl.textContent = "";
+        }
+
+        if (!isModifier) {
+            activeKeys[event.code] = performance.now();
+            if (isFirstKeystroke) {
+                startTimer();
+                isFirstKeystroke = false;
+            }
+            rawEvents.push({
+                key: event.key,
+                code: event.code,
+                evt: 'd',
+                t: performance.now(),
+                isRepeat: false
+            });
+        }
+    });
+
+    typingInput.addEventListener('keyup', (event) => {
+        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+        
+        if (activeKeys[event.code]) delete activeKeys[event.code];
+        if (event.key === 'Enter') {
+            handleEnterPress();
+            return;
+        }
+        
+        if (!isModifier) {
+            rawEvents.push({
+                key: event.key,
+                code: event.code,
+                evt: 'u',
+                t: performance.now()
+            });
+        }
+    });
+
+    async function handleEnterPress() {
+        const username = usernameInput.value.trim();
+        const mainPass = mainPassInput.value;
+        const typedPass = typingInput.value;
+
+        if (!usernameAvailable) {
+            statusEl.textContent = "Username not validated";
+            usernameInput.focus();
+            return;
+        }
+
+        if (!usernameAvailable) {
+            statusEl.textContent = "Username not validated";
+            usernameInput.focus();
+            return;
+        }
+
+        if (!username || !mainPass) {
+            statusEl.textContent = "Fill credentials first";
+            return;
+        }
+        
+        // Keystroke biometric: no password length requirement
+        // Security comes from typing pattern, not password complexity
+        
+        if (typedPass !== mainPass) {
+            stopTimer();
+            passwordMismatchCount++;
+            
+            // Show error message with attempt counter
+            let errorMsg = `Password incorrect (Attempt ${passwordMismatchCount})`;
+            if (passwordMismatchCount >= 3) {
+                errorMsg += " - Check caps lock";
+            }
+            if (passwordMismatchCount >= 5) {
+                errorMsg = "Too many failed attempts. Use the eye icon to verify password";
+            }
+            
+            statusEl.textContent = errorMsg;
+            statusEl.style.color = '#ef4444'; // Red color for error
+            
+            typingInput.value = '';
+            rawEvents = [];
+            resetTimer();
+            
+            // Auto-clear error message after 3 seconds
+            setTimeout(() => {
+                if (statusEl.textContent.includes('salah') || statusEl.textContent.includes('kesalahan')) {
+                    statusEl.textContent = '';
+                    statusEl.style.color = ''; // Reset color
+                }
+            }, 3000);
+            return;
+        }
+        
+        // Reset mismatch counter on successful password match
+        passwordMismatchCount = 0;
+
+        statusEl.textContent = "Saving sample...";
+        try {
+            const response = await fetch('/api/register_sample', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    events: rawEvents,
+                    sample_count: sampleCount + 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                stopTimer();
+                sampleCount++;
+                countDisplay.textContent = sampleCount;
+                typingInput.value = '';
+                rawEvents = [];
+                resetTimer();
+                statusEl.textContent = "✓ Sample saved";
+                statusEl.style.color = '#10b981'; // Green color for success
+                passwordMismatchCount = 0; // Reset mismatch counter on successful save
+
+                if (sampleCount >= targetSamples) {
+                    finishRegistration();
+                } else {
+                    updateProgress();
+                }
+            } else {
+                stopTimer();
+                
+                // Handle PASSWORD_MISMATCH error specifically
+                if (result.error_code === 'PASSWORD_MISMATCH') {
+                    passwordMismatchCount++;
+                    statusEl.textContent = `❌ ${result.message}`;
+                    statusEl.style.color = '#ef4444';
+                    
+                    // Show hint after multiple failures
+                    if (passwordMismatchCount >= 3) {
+                        statusEl.textContent += " (Lihat password: klik ikon mata 👁️)";
+                    }
+                }
+                // Handle WEAK_PASSWORD error
+                else if (result.error_code === 'WEAK_PASSWORD') {
+                    statusEl.textContent = `❌ Password terlalu lemah. Gunakan kombinasi huruf, angka & simbol`;
+                    statusEl.style.color = '#ef4444';
+                }
+                // Handle USERNAME_TAKEN error
+                else if (result.error_code === 'USERNAME_TAKEN') {
+                    statusEl.textContent = `❌ Username sudah dipakai`;
+                    statusEl.style.color = '#ef4444';
+                } else {
+                    statusEl.textContent = "❌ " + result.message;
+                    statusEl.style.color = '#ef4444';
+                }
+                
+                typingInput.value = '';
+                rawEvents = [];
+                resetTimer();
+                
+                // Auto-clear error after 4 seconds
+                setTimeout(() => {
+                    if (statusEl.textContent.includes('❌')) {
+                        statusEl.textContent = '';
+                        statusEl.style.color = '';
+                    }
+                }, 4000);
+            }
+        } catch (error) {
+            console.error(error);
+            statusEl.textContent = "❌ Server error";
+        }
+    }
+    
+    function updateProgress() {
+        const percentage = (sampleCount / targetSamples) * 100;
+        document.getElementById('progressBar').style.width = percentage + '%';
+        
+        const msgEl = document.getElementById('motivationalMsg');
+        if (sampleCount <= 10) {
+            msgEl.textContent = "Progress: " + sampleCount + "/20 samples recorded";
+        } else if (sampleCount < 20) {
+            msgEl.textContent = sampleCount + "/20 samples - " + (20 - sampleCount) + " remaining";
+        }
+    }
+
+    function finishRegistration() {
+        stopTimer();
+        typingInput.disabled = true;
+        statusEl.textContent = "";
+        document.getElementById('finishSection').classList.remove('hidden');
+        enrollmentSection.style.display = 'none';
+        document.getElementById('motivationalMsg').textContent = "20/20 samples collected";
+    }
+</script>
+</div>
+{% endblock %}

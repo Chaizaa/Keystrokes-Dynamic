@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}SecureAuth{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block body %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+    <script>
+        // Global CSRF token configuration for fetch API
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        
+        // Override fetch to automatically include CSRF token
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            // Only add CSRF for same-origin requests
+            if (!url.startsWith('http') || url.startsWith(window.location.origin)) {
+                options.headers = options.headers || {};
+                if (options.method && options.method.toUpperCase() !== 'GET') {
+                    options.headers['X-CSRFToken'] = csrfToken;
+                }
+            }
+            return originalFetch(url, options);
+        };
+    </script>
+</body>
+</html>
