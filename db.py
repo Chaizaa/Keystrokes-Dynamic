@@ -4,7 +4,13 @@ import os
 import json
 
 class Database:
-    def __init__(self, db_name="biometric_auth.db", csv_name="biometric_auth.csv"):
+    def __init__(self, db_name="data/biometric_auth.db", csv_name="data/biometric_auth.csv"):
+        # Ensure data directory exists
+        data_dir = os.path.dirname(db_name)
+        if data_dir and not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+            print(f"[INFO] Created directory: {data_dir}")
+        
         self.db_path = os.path.abspath(db_name)
         self.csv_path = os.path.abspath(csv_name)
         
