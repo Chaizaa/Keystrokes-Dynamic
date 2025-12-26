@@ -1200,4 +1200,4 @@ If you find this project useful, please consider giving it a star! ⭐
 **Last Updated**: December 24, 2024  
 **Status**: Production Ready ✅
 
-## Anjay Kren
+## Anjay Krenn
