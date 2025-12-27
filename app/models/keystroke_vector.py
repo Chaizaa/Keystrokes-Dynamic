@@ -135,7 +135,70 @@ class KeystrokeVector(db.Model):
     def set_raw_events(self, events):
         """Set raw events as JSON"""
         self.raw_events = json.dumps(events) if events else None
-    
+
+    def __init__(self, **kwargs):
+        # Accept legacy keys and map them to current attribute names
+        if 'data_type' in kwargs and 'event_type' not in kwargs:
+            kwargs['event_type'] = kwargs.pop('data_type')
+        # Accept lower-case vector keys used in tests
+        if 'h_vector' in kwargs:
+            kwargs['H_vector'] = kwargs.pop('h_vector')
+        if 'dd_vector' in kwargs:
+            kwargs['DD_vector'] = kwargs.pop('dd_vector')
+        if 'ud_vector' in kwargs:
+            kwargs['UD_vector'] = kwargs.pop('ud_vector')
+        if 'uu_vector' in kwargs:
+            kwargs['UU_vector'] = kwargs.pop('uu_vector')
+        if 'du_vector' in kwargs:
+            kwargs['DU_vector'] = kwargs.pop('du_vector')
+
+        # Auto-populate username when only user_id is provided to support tests
+        if 'username' not in kwargs and 'user_id' in kwargs:
+            try:
+                from .user import User
+                user_id = kwargs.get('user_id')
+                # Use session.get if available, otherwise fallback to a safe query (avoid deprecated Query.get)
+                try:
+                    user = db.session.get(User, user_id)
+                except Exception:
+                    try:
+                        from sqlalchemy import select
+                        user = db.session.execute(select(User).where(User.id == user_id)).scalars().one_or_none()
+                    except Exception:
+                        user = None
+                if user:
+                    kwargs['username'] = user.username
+            except Exception:
+                # Best effort; if lookup fails, leave username unset and ORM may raise on commit
+                pass
+
+        super().__init__(**kwargs)
+
+    # Backwards-compatible properties (accept lower-case names in tests)
+    @property
+    def h_vector(self):
+        return self.get_H_vector()
+
+    @h_vector.setter
+    def h_vector(self, value):
+        self.set_H_vector(value)
+
+    @property
+    def dd_vector(self):
+        return json.loads(self.DD_vector) if self.DD_vector else []
+
+    @dd_vector.setter
+    def dd_vector(self, value):
+        self.DD_vector = json.dumps(value) if value else None
+
+    @property
+    def ud_vector(self):
+        return json.loads(self.UD_vector) if self.UD_vector else []
+
+    @ud_vector.setter
+    def ud_vector(self, value):
+        self.UD_vector = json.dumps(value) if value else None
+
     def to_dict(self):
         """Convert to dictionary for API responses"""
         return {

@@ -21,7 +21,7 @@ class AuthService:
         """Initialize authentication service with database connection"""
         self.db = Database()  # Legacy database manager
         
-        # Password requirements
+        # Password requirements (keystroke-based: allow short passwords)
         self.MIN_PASSWORD_LENGTH = 1
         self.MAX_PASSWORD_LENGTH = 128
         self.MIN_USERNAME_LENGTH = 3
@@ -66,10 +66,10 @@ class AuthService:
             return {'valid': False, 'message': "Password cannot be empty"}
         
         if len(password) < self.MIN_PASSWORD_LENGTH:
-            return {'valid': False, 'message': f"Password must be at least {self.MIN_PASSWORD_LENGTH} character"}
+            return {'valid': False, 'message': f"Password must be at least {self.MIN_PASSWORD_LENGTH} characters (minimum length)"}
         
         if len(password) > self.MAX_PASSWORD_LENGTH:
-            return {'valid': False, 'message': f"Password must be at most {self.MAX_PASSWORD_LENGTH} characters"}
+            return {'valid': False, 'message': f"Password must be at most {self.MAX_PASSWORD_LENGTH} characters (maximum length)"}
         
         return {'valid': True, 'message': "Password is valid"}
     
@@ -93,11 +93,26 @@ class AuthService:
                 'message': validation['message']
             }
         
-        # Check if user exists
-        user = User.query.filter_by(username=username).first()
+        # Check if user exists (use session-based select to avoid legacy Query)
+        from sqlalchemy import select
+        from sqlalchemy.exc import OperationalError
+        try:
+            # Select only minimal columns to avoid referencing optional columns that may be missing in older DBs
+            row = sqlalchemy_db.session.execute(select(User.id).where(User.username == username)).first()
+        except OperationalError as e:
+            # Database schema mismatch (e.g., migrations not applied); fail safe and report inability to verify
+            print(f"[WARNING] AuthService.check_username_availability DB error: {e}")
+            return {
+                'available': False,
+                'exists': False,
+                'reason': 'db_error',
+                'enrollment_count': 0,
+                'message': 'Unable to verify username availability (database schema mismatch)'
+            }
+
         enrollment_count = self.db.get_enrollment_count(username)
-        
-        if user:
+
+        if row is not None:
             return {
                 'available': False,
                 'exists': True,
@@ -105,17 +120,18 @@ class AuthService:
                 'enrollment_count': enrollment_count,
                 'message': f"Username '{username}' is already taken"
             }
-        
+
         # Check if there are enrollment samples (partial registration)
         if enrollment_count > 0:
+            # Treat resumable registrations as NOT available for new sign-up (frontend should show resume flow)
             return {
-                'available': True,
+                'available': False,
                 'exists': False,
                 'reason': 'resumable',
                 'enrollment_count': enrollment_count,
                 'message': f"Resume enrollment ({enrollment_count} samples collected)"
             }
-        
+
         return {
             'available': True,
             'exists': False,
@@ -141,18 +157,23 @@ class AuthService:
             >>>     print(f"Found user: {user.username}")
         """
         try:
-            return User.query.filter_by(username=username).first()
+            # Use SQLA 2.0 style select to avoid legacy Query usage
+            from sqlalchemy import select
+            stmt = select(User).where(User.username == username)
+            result = sqlalchemy_db.session.execute(stmt).scalars().first()
+            return result
         except Exception as e:
             print(f"[ERROR] AuthService.get_user_by_username: {e}")
             return None
     
-    def create_user(self, username: str, password: str) -> Dict:
+    def create_user(self, username: str, password: str, email: str = None) -> Dict:
         """
         Create a new user account
         
         Args:
             username: User's username
             password: User's password
+            email: Optional email address to associate with the account
             
         Returns:
             Dict with 'success' (bool), 'user' (User object or None), and 'message' (str)
@@ -167,41 +188,92 @@ class AuthService:
             return {'success': False, 'user': None, 'message': password_validation['message']}
         
         # Check if user already exists
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
-            return {'success': False, 'user': None, 'message': "Username already exists"}
+        from sqlalchemy import select
+        from sqlalchemy.exc import OperationalError
+        try:
+            existing_row = sqlalchemy_db.session.execute(select(User.id).where(User.username == username)).first()
+        except OperationalError as e:
+            # Schema mismatch (missing columns) — fail safely with actionable message
+            return {'success': False, 'user': None, 'message': 'Unable to create account: database schema out of date (run alembic upgrade)' }
+
+        if existing_row:
+            return {'success': False, 'user': None, 'message': "Username already exists", 'error_code': 'USERNAME_TAKEN'}
         
         try:
-            # Create new user
+            # Build insert dynamically to avoid referencing columns missing from older DB schemas
+            from sqlalchemy import insert, inspect
+            inspector = inspect(sqlalchemy_db.engine)
+            existing_cols = {c['name'] for c in inspector.get_columns(User.__tablename__)}
+
+            insert_values = {
+                'username': username,
+                'password_hash': None,
+                'plain_password': None,
+            }
+
+            # Create password hash locally
             new_user = User(username=username)
-            new_user.set_password(password)  # Hash password with bcrypt
-            
-            # Save to database
-            sqlalchemy_db.session.add(new_user)
+            new_user.set_password(password)
+            insert_values['password_hash'] = new_user.password_hash
+            insert_values['plain_password'] = getattr(new_user, 'plain_password', None)
+
+            # Only include optional fields if the column exists
+            if email and 'email' in existing_cols:
+                insert_values['email'] = email
+                insert_values['email_verified'] = False
+            if 'created_at' in existing_cols:
+                insert_values['created_at'] = new_user.created_at
+            if 'updated_at' in existing_cols:
+                insert_values['updated_at'] = new_user.updated_at
+
+            # Only include columns that exist in the DB and have non-None values to avoid NOT NULL violations
+            clean_values = {k: v for k, v in insert_values.items() if k in existing_cols and v is not None}
+            stmt = insert(User.__table__).values(**clean_values)
+            result = sqlalchemy_db.session.execute(stmt)
             sqlalchemy_db.session.commit()
-            
-            return {'success': True, 'user': new_user, 'message': "User created successfully"}
-            
+
+            # Load user from DB
+            pk = result.inserted_primary_key[0] if result.inserted_primary_key else None
+            if pk:
+                created = sqlalchemy_db.session.get(User, pk)
+                return {'success': True, 'user': created, 'message': "User created successfully"}
+            else:
+                # Fallback: add via ORM
+                sqlalchemy_db.session.add(new_user)
+                sqlalchemy_db.session.commit()
+                return {'success': True, 'user': new_user, 'message': "User created successfully"}
+
+        except OperationalError as e:
+            sqlalchemy_db.session.rollback()
+            return {'success': False, 'user': None, 'message': 'Unable to create account: database schema out of date (run alembic upgrade)'}
         except Exception as e:
             sqlalchemy_db.session.rollback()
             return {'success': False, 'user': None, 'message': f"Failed to create user: {str(e)}"}
     
-    def verify_password(self, user: User, password: str) -> bool:
+    def verify_password(self, user, password: str):
         """
-        Verify user password
-        
-        Args:
-            user: User object to verify
-            password: Password to verify
-            
+        Verify user password. Accepts either a User object or a username string.
+
         Returns:
-            Boolean indicating if password is valid
+            tuple(bool, User|None)
         """
         if not user or not password:
-            return False
-        
-        # Check password (supports both bcrypt hash and legacy plain password)
-        return user.check_password(password)
+            return False, None
+
+        # If a username is provided, look up the user
+        if isinstance(user, str):
+            u = self.get_user_by_username(user)
+        else:
+            u = user
+
+        if not u:
+            return False, None
+
+        try:
+            valid = u.check_password(password)
+            return (valid, u) if valid else (False, None)
+        except Exception:
+            return False, None
     
     def login_user_session(self, user: User, remember: bool = False) -> bool:
         """
@@ -250,33 +322,51 @@ class AuthService:
         new_password: str
     ) -> Tuple[bool, str]:
         """
-        Change user password
-        
-        Args:
-            username: User's username
-            old_password: Current password
-            new_password: New password
-            
-        Returns:
-            Tuple of (success, message)
+        Change a user's password if the old password matches.
         """
         # Verify old password
         is_valid, user = self.verify_password(username, old_password)
         if not is_valid:
             return False, "Current password is incorrect"
-        
+
         # Validate new password
         validation = self.validate_password(new_password)
         if not validation['valid']:
             return False, validation['message']
-        
+
         try:
             # Update password
             user.set_password(new_password)
             sqlalchemy_db.session.commit()
-            
+
             return True, "Password changed successfully"
-            
+
         except Exception as e:
             sqlalchemy_db.session.rollback()
             return False, f"Failed to change password: {str(e)}"
+
+    def set_two_factor_secret(self, username: str, secret: str) -> bool:
+        """Set the two-factor secret for a user."""
+        user = self.get_user_by_username(username)
+        if not user:
+            return False
+        try:
+            user.two_factor_secret = secret
+            user.two_factor_enabled = False
+            db.session.commit()
+            return True
+        except Exception:
+            db.session.rollback()
+            return False
+
+    def verify_two_factor_token(self, username: str, token: str) -> bool:
+        """Verify a TOTP token for the given user."""
+        try:
+            import pyotp
+            user = self.get_user_by_username(username)
+            if not user or not user.two_factor_secret:
+                return False
+            totp = pyotp.TOTP(user.two_factor_secret)
+            return bool(totp.verify(str(token)))
+        except Exception:
+            return False

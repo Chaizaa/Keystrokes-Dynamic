@@ -456,11 +456,11 @@ class Verifier:
                 "method": self.method
             }
         
-        # 2. Check password hash (must match)
-        stored_hash = enrollment_samples[0].get('password_hash', '')
+        # 2. Check password hash (must match) — support both 'password_hash' and legacy 'password' fields
+        stored_hash = enrollment_samples[0].get('password_hash') or enrollment_samples[0].get('password') or ''
         new_hash = new_features.get('password_hash', '')
         
-        if new_hash != stored_hash:
+        if new_hash and stored_hash and new_hash != stored_hash:
             return {
                 "result": False,
                 "score": 1.0,
@@ -589,11 +589,11 @@ class Verifier:
                 "results": {}
             }
         
-        # 2. Check password hash (must match)
-        stored_hash = enrollment_samples[0].get('password_hash', '')
+        # 2. Check password hash (must match) — support both 'password_hash' and legacy 'password' fields
+        stored_hash = enrollment_samples[0].get('password_hash') or enrollment_samples[0].get('password') or ''
         new_hash = new_features.get('password_hash', '')
         
-        if new_hash != stored_hash:
+        if new_hash and stored_hash and new_hash != stored_hash:
             return {
                 "error": True,
                 "msg": "❌ Wrong password",

@@ -106,14 +106,14 @@ The Keystroke-Dynamic system is designed following security-by-design principles
 def validate_password(self, password):
     """
     Password validation rules:
-    - Minimum 8 characters
+    - Minimum 1 character (keystroke-based authentication allows short passwords)
     - At least one uppercase letter
     - At least one lowercase letter
     - At least one digit
     - At least one special character
     """
     if len(password) < 8:
-        return {'valid': False, 'message': 'Password must be at least 8 characters'}
+        return {'valid': False, 'message': 'Password must be at least 1 character'}
     
     if not re.search(r'[A-Z]', password):
         return {'valid': False, 'message': 'Password must contain uppercase letter'}

@@ -37,12 +37,28 @@ class Config:
     MIN_ENROLLMENT_SAMPLES = int(os.environ.get('MIN_ENROLLMENT_SAMPLES', '20'))
     VERIFICATION_THRESHOLD = float(os.environ.get('VERIFICATION_THRESHOLD', '0.7'))
     MAX_LOGIN_ATTEMPTS = int(os.environ.get('MAX_LOGIN_ATTEMPTS', '5'))
+
+    # Email verification expiry (hours)
+    EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('EMAIL_VERIFICATION_EXPIRY_HOURS', '1'))
     
     # Rate Limiting
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'True') == 'True'
     RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '100 per hour')
     RATELIMIT_STORAGE_URL = os.environ.get('RATELIMIT_STORAGE_URL', 'memory://')
+
+    # Development toggles
+    # When True, client-side behavior is lenient (retries on 429/network issues and shorter debounces)
+    DEV_LENIENT_RATELIMIT = os.environ.get('DEV_LENIENT_RATELIMIT', 'False') == 'True'
     
+    # Email (Flask-Mail compatible)
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'localhost')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', '1025'))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'False') == 'True'
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'False') == 'True'
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@localhost')
+
     # Logging
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE', 'app.log')
@@ -57,6 +73,8 @@ class DevelopmentConfig(Config):
     DEBUG = True
     TESTING = False
     SESSION_COOKIE_SECURE = False
+    # In development we default to lenient client-side rate limit behavior
+    DEV_LENIENT_RATELIMIT = True
 
 
 class ProductionConfig(Config):

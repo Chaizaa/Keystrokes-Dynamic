@@ -28,5 +28,105 @@
             return originalFetch(url, options);
         };
     </script>
+
+    <!-- Custom confirm modal (used to replace native confirm()) -->
+    <div id="confirmModal" class="confirm-modal" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="confirm-modal-backdrop"></div>
+        <div class="confirm-modal-panel" role="document" tabindex="-1">
+            <div class="confirm-modal-header">
+                <h3 id="confirmModalTitle">Confirm</h3>
+            </div>
+            <div class="confirm-modal-body" id="confirmModalMessage">Are you sure?</div>
+            <div class="confirm-modal-footer">
+                <button id="confirmCancelBtn" class="btn btn-secondary">Cancel</button>
+                <button id="confirmOkBtn" class="btn btn-danger">Yes, proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirmModalTitle');
+        const msgEl = document.getElementById('confirmModalMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+        let resolveFn = null;
+        let previousActive = null;
+
+        function showConfirmModal(title, message, opts) {
+            opts = opts || {};
+            const confirmText = opts.confirmText || 'OK';
+            const cancelText = opts.cancelText || 'Cancel';
+            const destructive = !!opts.destructive;
+
+            titleEl.textContent = title || 'Confirm';
+            msgEl.textContent = message || '';
+            okBtn.textContent = confirmText;
+            cancelBtn.textContent = cancelText;
+            okBtn.classList.toggle('btn-danger', destructive);
+
+            previousActive = document.activeElement;
+            modal.setAttribute('aria-hidden', 'false');
+            modal.classList.add('active');
+            document.body.classList.add('modal-open');
+
+            // Focus the safer action (Cancel) by default
+            cancelBtn.focus();
+
+            return new Promise((resolve) => { resolveFn = resolve; });
+        }
+
+        function cleanup(result) {
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+            try { if (previousActive) previousActive.focus(); } catch(e) {}
+            if (resolveFn) { resolveFn(result); resolveFn = null; }
+        }
+
+        okBtn.addEventListener('click', () => cleanup(true));
+        cancelBtn.addEventListener('click', () => cleanup(false));
+
+        // Click on backdrop cancels
+        modal.addEventListener('click', function(e) {
+            if (e.target.classList.contains('confirm-modal-backdrop')) {
+                cleanup(false);
+            }
+        });
+
+        // Keyboard handling: Escape to cancel, Tab to trap focus between buttons
+        modal.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { cleanup(false); }
+            if (e.key === 'Tab') {
+                const focusOrder = [cancelBtn, okBtn];
+                const idx = focusOrder.indexOf(document.activeElement);
+                if (e.shiftKey) {
+                    const next = focusOrder[(idx - 1 + focusOrder.length) % focusOrder.length];
+                    next.focus();
+                } else {
+                    const next = focusOrder[(idx + 1) % focusOrder.length];
+                    next.focus();
+                }
+                e.preventDefault();
+            }
+        });
+
+        // Expose globally
+        window.showConfirmModal = showConfirmModal;
+
+        // Safety: ensure modal is not accidentally left open on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const c = document.getElementById('confirmModal');
+                if (c) {
+                    c.classList.remove('active');
+                    c.setAttribute('aria-hidden', 'true');
+                }
+                document.body.classList.remove('modal-open');
+            } catch(e) { console.warn('Confirm modal init error', e); }
+        });
+    })();
+    </script>
 </body>
 </html>

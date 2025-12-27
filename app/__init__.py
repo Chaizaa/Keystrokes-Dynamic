@@ -9,6 +9,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
 from flask_migrate import Migrate
+from flask_caching import Cache
+from flask_socketio import SocketIO
 import secrets
 
 
@@ -21,6 +23,8 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 migrate = Migrate()
+cache = Cache()
+socketio = SocketIO(cors_allowed_origins="*")
 
 
 def create_app(config_name='development'):
@@ -64,6 +68,20 @@ def create_app(config_name='development'):
     db.init_app(app)
     migrate.init_app(app, db)
     
+    # Initialize Email
+    from app.services.email_service import EmailService
+    EmailService.init_mail(app)
+    
+    # Initialize Cache
+    cache.init_app(app, config={
+        'CACHE_TYPE': app.config.get('CACHE_TYPE', 'SimpleCache'),
+        'CACHE_DEFAULT_TIMEOUT': app.config.get('CACHE_DEFAULT_TIMEOUT', 300),
+        'CACHE_REDIS_URL': app.config.get('CACHE_REDIS_URL')
+    })
+    
+    # Initialize SocketIO
+    socketio.init_app(app)
+    
     # Initialize extensions
     CORS(app)
     
@@ -86,7 +104,32 @@ def create_app(config_name='development'):
     csrf.exempt(api_blueprint)
     
     # Rate Limiting
+    # Respect application config to enable/disable rate limiting during tests
+    if not app.config.get('RATELIMIT_ENABLED', True):
+        limiter.enabled = False
+        # Clear default limits so they don't apply
+        try:
+            limiter.default_limits = []
+        except Exception:
+            pass
     limiter.init_app(app)
+    limiter.enabled = app.config.get('RATELIMIT_ENABLED', True)
+
+    # Developer convenience: if DEV_LENIENT_RATELIMIT is enabled, turn off server-side rate limiting
+    if app.config.get('DEV_LENIENT_RATELIMIT', False):
+        print('[INFO] DEV_LENIENT_RATELIMIT is enabled — disabling server-side rate limiter')
+        limiter.enabled = False
+        try:
+            limiter.default_limits = []
+        except Exception:
+            pass
+
+    # Inject development toggles into templates
+    @app.context_processor
+    def inject_dev_flags():
+        return {
+            'DEV_LENIENT_RATELIMIT': app.config.get('DEV_LENIENT_RATELIMIT', False)
+        }
     
     # Security Headers (only in production)
     if config_name == 'production':
@@ -104,10 +147,18 @@ def create_app(config_name='development'):
     from app.blueprints.main import main_bp
     from app.blueprints.auth import auth_bp
     from app.blueprints.api import api_bp
+    from app.blueprints.admin import admin_bp
+    from app.blueprints.health import health_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
+    # Health endpoints for admins/ops
+    app.register_blueprint(health_bp, url_prefix='/health')
+    
+    # Exempt admin API from CSRF (for AJAX requests)
+    csrf.exempt(admin_bp)
     
     # Create database tables
     with app.app_context():

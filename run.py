@@ -3,56 +3,53 @@ Application entry point using Factory Pattern
 """
 import os
 import shutil
+import logging
 from pathlib import Path
 from app import create_app
 
+# Configure basic logging for the entrypoint
+logging.basicConfig(level=logging.INFO)
+
 def clean_cache():
     """Remove Python cache files and directories"""
-    print("Cleaning Python cache...")
-    cache_dirs = [
-        '__pycache__',
-        'app/__pycache__',
-        'app/blueprints/__pycache__',
-        'app/models/__pycache__',
-        'app/services/__pycache__',
-        'app/utils/__pycache__',
-        'tests/__pycache__'
-    ]
-    
+    logger = logging.getLogger(__name__)
+    logger.info("Cleaning Python cache...")
+
     cleaned = 0
-    for cache_dir in cache_dirs:
-        cache_path = Path(cache_dir)
-        if cache_path.exists():
-            try:
-                shutil.rmtree(cache_path)
-                print(f"  Removed: {cache_dir}")
-                cleaned += 1
-            except Exception as e:
-                print(f"  Failed to remove {cache_dir}: {e}")
-    
-    # Also remove .pyc files
+
+    # Remove any __pycache__ directories recursively
+    for cache_path in Path('.').rglob('__pycache__'):
+        try:
+            shutil.rmtree(cache_path)
+            logger.info(f"  Removed: {cache_path}")
+            cleaned += 1
+        except Exception as e:
+            logger.warning(f"  Failed to remove {cache_path}: {e}")
+
+    # Also remove standalone .pyc files
     for pyc_file in Path('.').rglob('*.pyc'):
         try:
             pyc_file.unlink()
             cleaned += 1
-        except Exception:
-            pass
-    
+        except Exception as e:
+            logger.warning(f"  Failed to remove {pyc_file}: {e}")
+
     if cleaned > 0:
-        print(f"Cache cleaned: {cleaned} items removed\n")
+        logger.info(f"Cache cleaned: {cleaned} items removed")
     else:
-        print("No cache found\n")
+        logger.info("No cache found")
 
 # Get configuration from environment variable or default to development
 config_name = os.getenv('FLASK_ENV', 'development')
-
-# Clean cache before starting
-clean_cache()
 
 # Create application instance
 app = create_app(config_name)
 
 if __name__ == '__main__':
+    # Optionally clean cache (default enabled). Set CLEAN_CACHE=0 to disable.
+    if os.getenv('CLEAN_CACHE', '1') == '1':
+        clean_cache()
+
     # Get port from environment or default to 5000
     port = int(os.getenv('PORT', 5000))
     

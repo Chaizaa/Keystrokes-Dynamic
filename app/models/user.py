@@ -24,10 +24,22 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)  # Nullable for migration
-    plain_password = db.Column(db.String(255), nullable=True)  # Legacy, will be deprecated
+    # Role: 'user' or 'admin'
+    role = db.Column(db.String(10), nullable=False, server_default='user')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
+    # Email verification fields (stateless tokens: no token column)
+    email = db.Column(db.String(255), nullable=True, index=True)
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    email_verification_sent_at = db.Column(db.DateTime, nullable=True)
+    # Hashed short code (6-digit) used for verification when short-code flow is enabled
+    email_verification_code_hash = db.Column(db.String(128), nullable=True)
+
+    # Two-Factor Authentication fields (keep for now)
+    two_factor_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    two_factor_secret = db.Column(db.String(255), nullable=True)
+
     # Relationships
     keystroke_vectors = db.relationship('KeystrokeVector', backref='user', lazy='dynamic',
                                        cascade='all, delete-orphan')
@@ -45,8 +57,6 @@ class User(UserMixin, db.Model):
             password: Plain text password
         """
         self.password_hash = generate_password_hash(password)
-        # Keep plain_password for backward compatibility during migration
-        self.plain_password = password
     
     def check_password(self, password):
         """
@@ -58,14 +68,8 @@ class User(UserMixin, db.Model):
         Returns:
             bool: True if password matches
         """
-        # Try modern hash first
         if self.password_hash:
             return check_password_hash(self.password_hash, password)
-        
-        # Fallback to plain password (legacy)
-        if self.plain_password:
-            return self.plain_password == password
-        
         return False
     
     def get_enrollment_count(self):
@@ -92,6 +96,10 @@ class User(UserMixin, db.Model):
             is_successful=True
         ).all()
     
+    def is_admin(self) -> bool:
+        """Return True if user is an admin. Default: False (can be overridden later)."""
+        return False
+
     def to_dict(self):
         """
         Convert user to dictionary (for API responses)
@@ -102,7 +110,10 @@ class User(UserMixin, db.Model):
         return {
             'id': self.id,
             'username': self.username,
+            'email': self.email,
+            'email_verified': bool(self.email_verified),
+            'role': self.role,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'enrollment_count': self.get_enrollment_count(),
-            'has_password': bool(self.password_hash or self.plain_password)
+            'has_password': bool(self.password_hash)
         }

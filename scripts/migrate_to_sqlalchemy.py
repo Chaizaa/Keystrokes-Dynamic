@@ -42,7 +42,8 @@ def migrate_data():
         user_count = cursor.fetchone()[0]
         print(f"   Found {user_count} users in database")
         
-        existing_users = User.query.count()
+        from sqlalchemy import select, func
+        existing_users = int(db.session.execute(select(func.count()).select_from(User)).scalar_one())
         print(f"   SQLAlchemy User model has {existing_users} users")
         
         if existing_users == 0 and user_count > 0:
@@ -78,7 +79,7 @@ def migrate_data():
             count = cursor.fetchone()[0]
             print(f"   Found {count} keystroke vectors")
             
-            existing_vectors = KeystrokeVector.query.count()
+            existing_vectors = int(db.session.execute(select(func.count()).select_from(KeystrokeVector)).scalar_one())
             print(f"   SQLAlchemy KeystrokeVector model has {existing_vectors} vectors")
             
             if existing_vectors == 0 and count > 0:
@@ -165,7 +166,7 @@ def migrate_data():
             count = cursor.fetchone()[0]
             print(f"   Found {count} login attempts")
             
-            existing_attempts = LoginAttempt.query.count()
+            existing_attempts = int(db.session.execute(select(func.count()).select_from(LoginAttempt)).scalar_one())
             print(f"   SQLAlchemy LoginAttempt model has {existing_attempts} attempts")
             
             if existing_attempts == 0 and count > 0:
@@ -217,9 +218,9 @@ def migrate_data():
         
         # 4. Verify migration
         print("\n4️⃣  Verification:")
-        user_count = User.query.count()
-        vector_count = KeystrokeVector.query.count()
-        attempt_count = LoginAttempt.query.count()
+        user_count = int(db.session.execute(select(func.count()).select_from(User)).scalar_one())
+        vector_count = int(db.session.execute(select(func.count()).select_from(KeystrokeVector)).scalar_one())
+        attempt_count = int(db.session.execute(select(func.count()).select_from(LoginAttempt)).scalar_one())
         
         print(f"   Users: {user_count}")
         print(f"   Keystroke Vectors: {vector_count}")
@@ -227,7 +228,7 @@ def migrate_data():
         
         # Show sample
         if user_count > 0:
-            sample_user = User.query.first()
+            sample_user = db.session.execute(select(User)).scalars().first()
             print(f"\n   Sample User: {sample_user.username} (ID: {sample_user.id})")
             print(f"   - Enrollment samples: {sample_user.get_enrollment_count()}")
         
