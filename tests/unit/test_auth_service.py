@@ -13,6 +13,7 @@ import pytest
 from flask import session
 from app.services.auth_service import AuthService
 from app.models import User
+from sqlalchemy import select
 
 
 class TestAuthServiceValidation:
@@ -65,7 +66,8 @@ class TestAuthServiceValidation:
     def test_validate_password_valid(self, auth_service):
         """Test valid passwords pass validation"""
         valid_passwords = [
-            'Pass1234',      # 8 chars minimum
+            'Pass1234',
+            'Pass1',         # shorter passwords allowed (keystroke auth)
             'TestPassword!', # With special char
             'a' * 128,       # Maximum 128 chars
             'MyP@ssw0rd123'  # Mix of all
@@ -79,7 +81,6 @@ class TestAuthServiceValidation:
         """Test passwords with invalid length"""
         invalid_passwords = [
             '',          # Empty
-            'Pass1',     # Too short (< 8)
             'a' * 129,   # Too long (> 128)
         ]
         
@@ -104,7 +105,8 @@ class TestAuthServiceUserManagement:
         assert result['user'].password_hash != 'NewPass123!'  # Should be hashed
         
         # Verify user exists in database
-        user = User.query.filter_by(username='newuser').first()
+        from app.models import db
+        user = db.session.execute(select(User).where(User.username == 'newuser')).scalars().first()
         assert user is not None
         assert user.username == 'newuser'
     
@@ -117,8 +119,9 @@ class TestAuthServiceUserManagement:
         assert 'username' in result['message'].lower()
     
     def test_create_user_invalid_password(self, auth_service, db_session):
-        """Test user creation with invalid password"""
-        result = auth_service.create_user('validuser', 'short')  # Too short
+        """Test user creation with invalid password (empty or too long)"""
+        # Use empty password to trigger validation failure
+        result = auth_service.create_user('validuser', '')
         
         assert result['success'] is False
         assert 'message' in result
@@ -146,6 +149,16 @@ class TestAuthServiceUserManagement:
         assert result['available'] is False
         assert result['exists'] is True
         assert 'taken' in result['message'].lower() or 'exists' in result['message'].lower()
+
+    def test_check_username_availability_resumable(self, auth_service, db_session, monkeypatch):
+        """When enrollment samples exist but user isn't created, mark as resumable and NOT available"""
+        # Simulate enrollment samples present
+        monkeypatch.setattr(auth_service.db, 'get_enrollment_count', lambda u: 5)
+        result = auth_service.check_username_availability('partialuser')
+        assert result['available'] is False
+        assert result['exists'] is False
+        assert result['reason'] == 'resumable'
+        assert result['enrollment_count'] == 5
     
     def test_check_username_availability_invalid(self, auth_service):
         """Test checking availability with invalid username format"""
@@ -242,11 +255,11 @@ class TestAuthServicePasswordChange:
         """Test password change with invalid new password"""
         original_hash = sample_user.password_hash
         
-        # Try to change with short password (< 8 chars)
-        success, message = auth_service.change_password(sample_user.username, 'TestPass123!', 'short')
+        # Try to change with an empty password (invalid)
+        success, message = auth_service.change_password(sample_user.username, 'TestPass123!', '')
         
         assert success is False
-        assert any(word in message.lower() for word in ['length', 'characters', 'must'])
+        assert any(word in message.lower() for word in ['length', 'characters', 'must', 'empty'])
         
         # Verify password was NOT changed
         db_session.refresh(sample_user)

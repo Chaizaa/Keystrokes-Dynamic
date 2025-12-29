@@ -88,11 +88,14 @@ class LoginAttempt(db.Model):
         from datetime import timedelta
         threshold = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         
-        return cls.query.filter(
-            cls.username == username,
-            cls.success == False,
-            cls.timestamp >= threshold
-        ).count()
+        from sqlalchemy import select, func
+        return int(db.session.execute(
+            select(func.count()).select_from(cls).where(
+                cls.username == username,
+                cls.success == False,
+                cls.timestamp >= threshold
+            )
+        ).scalar_one())
     
     @classmethod
     def log_attempt(cls, username, success, **kwargs):

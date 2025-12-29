@@ -219,3 +219,65 @@ label {
         font-size: 15px;
     }
 }
+
+/* Design tokens: shared palette for glassmorphism across pages */
+:root {
+    --bg-1: #0f0c29;
+    --bg-2: #302b63;
+    --bg-3: #24243e;
+    --glass-bg: rgba(255,255,255,0.035);
+    --card-border: rgba(255,255,255,0.12);
+    --accent: #6b9fff;
+    --accent-weak: rgba(107,159,255,0.15);
+    --danger: #ef4444;
+    --glass-blur: 20px;
+}
+
+/* Confirm modal default styles (moved from base.html)
+   Ensures the global confirm modal is hidden and inert until explicitly activated */
+.confirm-modal { display: none; position: fixed; inset: 0; z-index: 120; align-items: center; justify-content: center; pointer-events: none; }
+.confirm-modal.active { display: flex !important; pointer-events: auto; }
+.confirm-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+.confirm-modal-panel { position: relative; z-index: 121; width: 94%; max-width: 480px; background: #111; border-radius: 12px; padding: 22px 20px; box-shadow: 0 30px 80px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.04); color: #fff; }
+
+/* Confirm modal - button spacing & sizing tweaks for consistent visual balance */
+.confirm-modal-footer { display: flex; justify-content: flex-end; gap: 14px; margin-top: 18px; }
+.confirm-modal-footer .btn {
+    padding: 10px 20px;
+    min-width: 110px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+.confirm-modal-footer .btn-secondary {
+    background: rgba(255,255,255,0.06);
+    color: #e6eef9;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.confirm-modal-footer .btn-danger {
+    background: #ffffff;
+    color: #111;
+    border: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+/* Small screens: reduce button width while maintaining spacing */
+@media (max-width: 480px) {
+    .confirm-modal-footer .btn { min-width: 90px; padding: 8px 14px; font-size: 13px; }
+    .modal-footer .btn { min-width: 80px; padding: 8px 12px; font-size: 13px; }
+}
+
+/* Modal footer to match confirm modal */
+.modal-footer { display: flex; justify-content: flex-end; gap: 14px; margin-top: 18px; }
+.modal-footer .btn { padding: 10px 20px; min-width: 110px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.modal-footer .btn-secondary { background: rgba(255,255,255,0.06); color: #e6eef9; border: 1px solid rgba(255,255,255,0.06); }
+.modal-footer .btn-primary { background: #ffffff; color: #111; border: none; box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+
+/* Reset modal specific: dark panel like confirm modal */
+.modal.reset-modal .modal-content { background: linear-gradient(180deg, rgba(25,28,33,0.98), rgba(18,20,23,0.98)); color: #fff; border: 1px solid rgba(255,255,255,0.04); box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+.modal.reset-modal { background: rgba(0,0,0,0.75); }
+.modal.reset-modal .form-group input { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #fff; }
+
+

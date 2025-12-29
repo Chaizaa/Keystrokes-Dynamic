@@ -76,11 +76,11 @@ function checkPasswordStrength(password) {
     let strength = 0;
     const feedback = [];
     
-    // Length check
-    if (password.length >= 8) {
+    // Length check: allow any non-empty password (minimum 1 character)
+    if (password.length >= 1) {
         strength += 1;
     } else {
-        feedback.push('Use at least 8 characters');
+        // Do not add length feedback to keep UX passive; empty passwords will show other feedback when applicable
     }
     
     // Contains lowercase

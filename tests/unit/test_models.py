@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 from app.models.user import User
 from app.models.keystroke_vector import KeystrokeVector
 from app.models.login_attempt import LoginAttempt
+from sqlalchemy import select, func
 
 
 class TestUserModel:
@@ -166,10 +167,12 @@ class TestKeystrokeVectorModel:
         db_session.commit()
         
         # Query by event type
-        enrollments = KeystrokeVector.query.filter_by(
-            user_id=user.id,
-            event_type='enrollment'
-        ).all()
+        enrollments = db_session.execute(
+            select(KeystrokeVector).where(
+                KeystrokeVector.user_id == user.id,
+                KeystrokeVector.event_type == 'enrollment'
+            )
+        ).scalars().all()
         
         assert len(enrollments) == 1
         assert enrollments[0].event_type == 'enrollment'
@@ -284,16 +287,20 @@ class TestLoginAttemptModel:
         db_session.commit()
         
         # Query successful attempts
-        successful = LoginAttempt.query.filter_by(
-            username='testuser',
-            success=True
-        ).count()
+        successful = int(db_session.execute(
+            select(func.count()).select_from(LoginAttempt).where(
+                LoginAttempt.username == 'testuser',
+                LoginAttempt.success == True
+            )
+        ).scalar_one())
         
         # Query failed attempts
-        failed = LoginAttempt.query.filter_by(
-            username='testuser',
-            success=False
-        ).count()
+        failed = int(db_session.execute(
+            select(func.count()).select_from(LoginAttempt).where(
+                LoginAttempt.username == 'testuser',
+                LoginAttempt.success == False
+            )
+        ).scalar_one())
         
         assert successful == 1
         assert failed == 1
@@ -471,7 +478,9 @@ class TestModelRelationships:
         db_session.commit()
         
         # Query vectors by user_id
-        vectors = KeystrokeVector.query.filter_by(user_id=user.id).all()
+        vectors = db_session.execute(
+            select(KeystrokeVector).where(KeystrokeVector.user_id == user.id)
+        ).scalars().all()
         assert len(vectors) == 3
     
     def test_user_login_attempts_relationship(self, db_session):
@@ -491,14 +500,18 @@ class TestModelRelationships:
         db_session.commit()
         
         # Query attempts by user_id
-        attempts = LoginAttempt.query.filter_by(user_id=user.id).all()
+        attempts = db_session.execute(
+            select(LoginAttempt).where(LoginAttempt.user_id == user.id)
+        ).scalars().all()
         assert len(attempts) == 5
         
         # Count successful attempts
-        successful = LoginAttempt.query.filter_by(
-            user_id=user.id,
-            success=True
-        ).count()
+        successful = int(db_session.execute(
+            select(func.count()).select_from(LoginAttempt).where(
+                LoginAttempt.user_id == user.id,
+                LoginAttempt.success == True
+            )
+        ).scalar_one())
         assert successful == 3
 
 

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Email | SecureAuth{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="auth-container bg-gradient">
+    <div class="auth-box">
+        <h2>Verify Your Email</h2>
+        <p class="subtitle">Enter the verification code sent to your email to complete registration.</p>
+
+        <div class="form-group">
+            <label for="vcUsername">Username</label>
+            <input id="vcUsername" type="text" readonly>
+        </div>
+        <div class="form-group">
+            <label for="vcCode">Verification Code</label>
+            <input id="vcCode" type="text" placeholder="Enter verification code" required>
+            <small id="verifyHint" class="hint-text">Enter the 6-digit code or paste the token from the email</small>
+        </div>
+        <div id="verifyAlert" class="alert"></div>
+        <div class="verify-actions">
+            <button id="verifyBtn" class="btn btn-primary" disabled>
+                <span id="verifySpinner" class="spinner hidden" aria-hidden="true"></span>
+                <span id="verifyBtnText">Verify Email</span>
+            </button>
+            <button id="resendBtn" class="btn btn-secondary">Resend Code</button>
+            <a href="/register" class="btn btn-secondary verify-back">Back to Register</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Prefill username from server-side context (if provided) or from query param
+    const serverProvided = "{{ username|default('') }}".trim();
+    const params = new URLSearchParams(window.location.search);
+    const username = serverProvided || params.get('username') || '';
+    document.getElementById('vcUsername').value = username;
+
+    const vcCode = document.getElementById('vcCode');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const verifySpinner = document.getElementById('verifySpinner');
+    const verifyBtnText = document.getElementById('verifyBtnText');
+    const verifyAlert = document.getElementById('verifyAlert');
+    const resendBtn = document.getElementById('resendBtn');
+
+    function showAlert(msg, cls) {
+        verifyAlert.className = 'alert';
+        verifyAlert.textContent = msg;
+        verifyAlert.classList.add('active', cls);
+    }
+
+    vcCode.addEventListener('input', () => {
+        verifyBtn.disabled = !vcCode.value.trim();
+    });
+
+    async function setResendCooldown(seconds) {
+        resendBtn.disabled = true;
+        let t = seconds;
+        const orig = resendBtn.textContent;
+        const iv = setInterval(() => {
+            resendBtn.textContent = `Resend (${t}s)`;
+            t -= 1;
+            if (t < 0) {
+                clearInterval(iv);
+                resendBtn.textContent = orig;
+                resendBtn.disabled = false;
+            }
+        }, 1000);
+    }
+
+    verifyBtn.addEventListener('click', async function () {
+        // Clean token input: remove whitespace/newlines that may be added when copying from emails
+        let code = vcCode.value.trim();
+        code = code.replace(/\s+/g, '');
+        verifyAlert.className = 'alert';
+        if (!code) {
+            showAlert('Please enter the verification code', 'error');
+            return;
+        }
+        // Allow both short 6-digit codes and long signed tokens; best-effort: strip whitespace and proceed
+        // (Previously we blocked long pasted tokens; restoring acceptance so server-side verification can handle either form)
+        try {
+            verifyBtn.disabled = true;
+            verifySpinner.classList.remove('hidden');
+            verifyBtnText.textContent = 'Verifying...';
+
+            const resp = await fetch('/api/verify_email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, token: code })
+            });
+            const j = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                showAlert('Email verified! Redirecting to login...', 'success');
+                setTimeout(() => { window.location.href = '/login'; }, 1100);
+            } else {
+                if (j.error_code === 'expired_token') {
+                    showAlert('Token expired. Please request a new code.', 'error');
+                } else if (j.error_code === 'invalid_token') {
+                    showAlert('Invalid code. Please try again.', 'error');
+                } else {
+                    showAlert(j.message || 'Verification failed', 'error');
+                }
+            }
+        } catch (e) {
+            showAlert('Network error', 'error');
+        } finally {
+            verifyBtn.disabled = false;
+            verifySpinner.classList.add('hidden');
+            verifyBtnText.textContent = 'Verify Email';
+        }
+    });
+
+    resendBtn.addEventListener('click', async () => {
+        try {
+            resendBtn.disabled = true;
+            const resp = await fetch('/api/resend_verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            });
+            const j = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                showAlert('Verification code resent. Check your inbox.', 'success');
+                setResendCooldown(60);
+            } else {
+                if (j.error_code === 'no_email') {
+                    showAlert('No email set on account. Please contact support.', 'error');
+                } else if (resp.status === 429) {
+                    showAlert('Too many resend requests. Try again later.', 'error');
+                } else {
+                    showAlert(j.message || 'Failed to resend verification.', 'error');
+                }
+                resendBtn.disabled = false;
+            }
+        } catch (e) {
+            showAlert('Network error', 'error');
+            resendBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

@@ -4,17 +4,19 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
-    </style>
 {% endblock %}
 
 {% block body %}
-<div class="auth-container bg-gradient">
+<div id="registerRoot" class="auth-container bg-gradient" data-dev-lenient="{{ DEV_LENIENT_RATELIMIT | tojson }}">
 <div class="auth-box">
     <div class="logo">
         <div class="logo-text">SecureAuth</div>
     </div>
     <h2>Create Account</h2>
     <p class="subtitle">Biometric Enrollment System</p>
+
+    <!-- Non-blocking toast for transient notifications (rate limits, sync messages) -->
+    <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     
     <div class="info-box">
         Already have an account? <a href="/login">Sign in here</a>
@@ -35,6 +37,16 @@
         </div>
         
         <div class="form-group">
+            <label for="regEmail">Email Address <span style="color: #6b9fff; font-size: 12px;">(Optional)</span></label>
+            <input 
+                type="email" 
+                id="regEmail" 
+                placeholder="your.email@example.com" 
+                autocomplete="email">
+            <p class="hint-text">Used for password recovery and security notifications</p>
+        </div>
+        
+        <div class="form-group">
             <label for="mainPassword">Master Password</label>
             <div class="input-wrapper">
                 <input 
@@ -50,6 +62,7 @@
                 </span>
             </div>
             <p class="hint-text">This password will be used for biometric enrollment</p>
+            <p id="passwordEventMsg" class="hint-text hidden" role="status" aria-live="polite" style="color:#0ea5e9;">Password was set for your existing account. You can continue enrollment.</p>
         </div>
     </div>
     
@@ -112,6 +125,18 @@
 </div>
 
 <script>
+    // Respect development toggle: DEV_LENIENT_RATELIMIT injected by Flask via data attribute
+    const DEV_LENIENT = (function() {
+        try {
+            const el = document.getElementById('registerRoot');
+            if (!el) return false;
+            // dataset values are strings, compare explicitly
+            return el.dataset.devLenient === 'true';
+        } catch (e) {
+            return false;
+        }
+    })();
+
     // Toggle Password Visibility
     function togglePass(inputId, iconSpan) {
         const input = document.getElementById(inputId);
@@ -137,6 +162,8 @@
     let timerInterval = null;
     let isFirstKeystroke = true;
     let passwordMismatchCount = 0; // Track consecutive password mismatches
+    // Flag: true when user has completed enrollment (20/20)
+    let registrationComplete = false;
     
     const usernameInput = document.getElementById('regUsername');
     const mainPassInput = document.getElementById('mainPassword');
@@ -147,6 +174,37 @@
     const enrollmentSection = document.getElementById('enrollmentSection');
     const typingTimerEl = document.getElementById('typingTimer');
     const timerDisplayEl = document.getElementById('timerDisplay');
+    const emailInput = document.getElementById('regEmail');
+
+    // If user fills or autofills email after username is available, enable enrollment
+    try {
+        emailInput.addEventListener('input', () => {
+            try {
+                const emailVal = (emailInput.value || '').trim();
+                if (emailVal && usernameAvailable) {
+                    console.debug('[register] email input detected and usernameAvailable -> enabling enrollment');
+                    enableEnrollment();
+                }
+            } catch (e) { console.warn('[register] email input handler error', e); }
+        });
+
+        emailInput.addEventListener('change', () => {
+            try {
+                const emailVal = (emailInput.value || '').trim();
+                if (emailVal && usernameAvailable) {
+                    console.debug('[register] email changed and usernameAvailable -> enabling enrollment');
+                    enableEnrollment();
+                }
+            } catch (e) { console.warn('[register] email change handler error', e); }
+        });
+    } catch (e) {
+        // If regEmail is missing for some reason, ignore
+        console.warn('[register] could not attach email listeners', e);
+    }
+
+    // Timings that differ between development lenient mode and strict mode
+    const USERNAME_DEBOUNCE = DEV_LENIENT ? 200 : 500;
+    const SCHEDULED_REFRESH_AFTER_SAVE = DEV_LENIENT ? 400 : 1200;
     
     // Timer Functions
     function startTimer() {
@@ -179,6 +237,10 @@
 
     // Username Validation
     let usernameCheckTimeout = null;
+    // Adaptive debounce: increase delay on first pause, shorten as user continues typing
+    let usernameTypingStreak = 0; // how many consecutive input events without a manual confirm
+    // Debounced scheduler used to refresh username status after saving samples (avoids hitting rate limit)
+    let checkUsernameScheduled = null;
     
     usernameInput.addEventListener('input', () => {
         if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
@@ -193,7 +255,25 @@
         
         usernameCheckTimeout = setTimeout(async () => {
             await checkUsername();
-        }, 500);
+        }, USERNAME_DEBOUNCE);
+    });
+
+    // If user blurs, perform an immediate check and reset typing streak
+    usernameInput.addEventListener('blur', async () => {
+        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+        usernameTypingStreak = 0;
+        await checkUsername();
+    });
+
+    // If user presses Enter, immediately check and reset streak
+    usernameInput.addEventListener('keydown', async (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+            usernameTypingStreak = 0;
+            await checkUsername();
+            if (usernameAvailable) mainPassInput.focus();
+        }
     });
     
     usernameInput.addEventListener('blur', async () => {
@@ -201,7 +281,7 @@
         await checkUsername();
     });
     
-    usernameInput.addEventListener('keypress', async (event) => {
+    usernameInput.addEventListener('keydown', async (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
@@ -211,6 +291,8 @@
     });
     
     async function checkUsername() {
+        // Do not perform username checks after registration completes
+        if (registrationComplete) return;
         const username = usernameInput.value.trim();
         usernameAvailable = false;
         
@@ -232,7 +314,7 @@
             return;
         }
         
-        usernameStatusEl.className = 'status-indicator checking';
+        usernameStatusEl.classList.add('status-indicator', 'checking');
         usernameStatusEl.classList.remove('hidden');
         usernameStatusEl.textContent = 'Checking availability...';
         
@@ -242,43 +324,200 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username })
             });
-            
-            const result = await response.json();
-            
-            if (result.status === 'taken') {
-                const detail = result.detail ? ' ' + result.detail : '';
-                showUsernameStatus('error', result.message + detail);
-                disableEnrollment();
-                usernameInput.focus();
-                usernameInput.select();
-            } else if (result.status === 'available') {
-                usernameAvailable = true;
-                
-                if (result.is_retry) {
-                showUsernameStatus('info', 'Continue enrollment to complete registration');
-                    countDisplay.textContent = sampleCount;
+
+            // Handle non-OK responses explicitly and avoid aggressive disabling on transient errors
+            if (!response.ok) {
+                if (response.status === 429) {
+                    if (DEV_LENIENT) {
+                        // Rate-limited: lenient in development — show a gentle info and retry shortly without blocking enrollment
+                        showUsernameStatus('info', 'Rate-limited — retrying…');
+                        setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, 300);
+                    } else {
+                        // Production: inform user and treat as an error
+                        showUsernameStatus('error', 'Too many requests — please wait a moment');
+                        showToast('Please wait a moment — syncing status…', 'warn', 3000);
+                    }
+                    return;
+                }
+
+                if (DEV_LENIENT) {
+                    showUsernameStatus('info', 'Connection issue — will retry');
+                    // Do not disable enrollment for transient server/network issues; retry shortly
+                    setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, 800);
                 } else {
-                    showUsernameStatus('success', result.message);
+                    // Production fallback: allow offline continuation (safer UX) while showing an informative message
+                    showUsernameStatus('info', 'Cannot validate username — continuing in offline mode');
+                    showToast('Could not validate username; continuing in offline mode', 'warn', 4000);
+                    usernameAvailable = true;
+                    enableEnrollment();
+                }
+
+                return;
+            }
+
+            let result;
+            try {
+                result = await response.json();
+            } catch (e) {
+                // Non-JSON (rate limiter HTML or something unexpected)
+                showUsernameStatus('error', 'Server returned invalid response');
+                return;
+            }
+
+            // Normalize result shapes from server (support older and newer formats)
+            const enrollmentCount = result.enrollment_count ?? result.count ?? 0;
+            const isRetry = Boolean(result.is_retry) || enrollmentCount > 0;
+            const isTaken = result.status === 'taken' || result.available === false || result.exists === true;
+            const isAvailable = result.status === 'available' || result.available === true || (!isTaken);
+            const message = result.message || result.msg || '';
+
+            // If username is taken and NOT resumable -> decide based on enrollment count
+            if (isTaken && result.status !== 'resumable') {
+                const detail = result.detail ? ' ' + result.detail : '';
+
+                // If there are zero enrollment samples, treat as resumable: allow continuing enrollment
+                if (enrollmentCount === 0) {
+                    // Allow the user to continue enrollment for an existing account with 0 samples
+                    usernameAvailable = true;
                     sampleCount = 0;
                     countDisplay.textContent = 0;
+                    showUsernameStatus('info', 'Existing account found (0 samples) — continue enrollment');
+                    enableEnrollment();
+                    // Focus the password input so the user can proceed
+                    mainPassInput.disabled = false;
+                    typingInput.disabled = false;
+                    mainPassInput.focus();
+                } else {
+                    // Non-zero samples but not resumable means some edge case — block and inform the user
+                    showUsernameStatus('error', 'Username registered');
+                    disableEnrollment();
+                    usernameInput.focus();
+                    usernameInput.select();
                 }
-                
+            }
+            // Resumable (partial registration) OR available usernames should allow continuing enrollment
+            else if (result.status === 'resumable' || isRetry || isAvailable) {
+                usernameAvailable = true;
+
+                // Use the enrollment_count from server so progress continues where it left off
+                sampleCount = enrollmentCount;
+                countDisplay.textContent = sampleCount;
+                updateProgress();
+
+                if (enrollmentCount > 0) {
+                    // Explicit message for partially-registered users
+                    // Include CTA buttons: Resume registration and Log in
+                    usernameStatusEl.classList.remove('hidden');
+                    usernameStatusEl.classList.add('status-indicator', 'info');
+                    usernameStatusEl.innerHTML = `
+                        <div class="status-cta" role="region" aria-live="polite">
+                            <div class="status-cta-text">User not completed register, please continue below</div>
+                            <div class="status-cta-actions">
+                                <a href="#" id="resumeCTA" class="resume-link" role="button" aria-label="Resume registration">Resume registration</a>
+                                <a href="/login" id="loginCTA" class="login-link" aria-label="Log in to your account">Log in if this is your account</a>
+                            </div>
+                        </div>`;
+
+                    // Accent the progress message
+                    const msgEl = document.getElementById('motivationalMsg');
+                    msgEl.textContent = `Continue enrollment: ${sampleCount}/20 completed`;
+
+                    // Attach click + keyboard handler to Resume CTA for accessibility
+                    setTimeout(() => {
+                        const resumeBtn = document.getElementById('resumeCTA');
+                        if (resumeBtn) {
+                            resumeBtn.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                // Enable enrollment and focus password input to continue
+                                enableEnrollment();
+                                mainPassInput.disabled = false;
+                                typingInput.disabled = false;
+                                typingInput.focus();
+                                // Keep the existing sampleCount and progress
+                                updateProgress();
+                            });
+
+                            // Support activating the CTA via keyboard (Enter/Space)
+                            resumeBtn.addEventListener('keydown', (ev) => {
+                                if (ev.key === 'Enter' || ev.key === ' ') {
+                                    ev.preventDefault();
+                                    resumeBtn.click();
+                                }
+                            });
+                        }
+                    }, 10);
+                } else {
+                    showUsernameStatus('success', message || 'Username available');
+                    sampleCount = 0;
+                    countDisplay.textContent = 0;
+                    updateProgress();
+                }
+
                 enableEnrollment();
+            }
+
+            // Safety net: ensure enrollment is enabled whenever usernameAvailable is true
+            try {
+                if (usernameAvailable) {
+                    enableEnrollment();
+                }
+            } catch (e) {
+                console.warn('[register] enableEnrollment safety call failed', e);
             }
         } catch (error) {
             console.error('Error checking username:', error);
-            showUsernameStatus('error', '❌ Connection error');
-            disableEnrollment();
+            if (DEV_LENIENT) {
+                showUsernameStatus('info', 'Connection issue — retrying…');
+                // In dev, be lenient and retry instead of disabling enrollment
+                setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, 800);
+            } else {
+                // Production fallback: allow offline continuation (safer UX) while showing an informative message
+                showUsernameStatus('info', 'Cannot validate username — continuing in offline mode');
+                showToast('Could not validate username; continuing in offline mode', 'warn', 4000);
+                usernameAvailable = true;
+                enableEnrollment();
+            }
         }
     }
     
     function showUsernameStatus(type, message) {
-        usernameStatusEl.className = `status-indicator ${type}`;
+        // Remove previous status classes but preserve any unrelated classes
+        usernameStatusEl.classList.remove('checking', 'error', 'success', 'info');
+        usernameStatusEl.classList.add('status-indicator', type);
         usernameStatusEl.classList.remove('hidden');
         usernameStatusEl.textContent = message;
     }
+
+    // Toast utilities (non-blocking transient messages)
+    let toastTimer = null;
+    const toastEl = document.getElementById('toast');
+
+    function showToast(message, tone = 'info', timeout = 2500) {
+        if (!toastEl) return;
+        toastEl.textContent = message;
+        toastEl.classList.remove('hidden');
+        toastEl.classList.add('show');
+        // Optional tone classes
+        toastEl.classList.remove('toast-info', 'toast-warn', 'toast-error');
+        toastEl.classList.add(tone === 'warn' ? 'toast-warn' : (tone === 'error' ? 'toast-error' : 'toast-info'));
+        // Reset timer
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(hideToast, timeout);
+    }
+
+    function hideToast() {
+        if (!toastEl) return;
+        toastEl.classList.remove('show');
+        toastEl.classList.add('hidden');
+        if (toastTimer) {
+            clearTimeout(toastTimer);
+            toastTimer = null;
+        }
+    }
     
     function enableEnrollment() {
+        if (registrationComplete) return; // don't re-enable after completion
+        // Allow enrollment to start even if email is not set — email is only required once samples complete
         enrollmentSection.classList.remove('disabled');
         mainPassInput.disabled = false;
         typingInput.disabled = false;
@@ -369,12 +608,6 @@
             return;
         }
 
-        if (!usernameAvailable) {
-            statusEl.textContent = "Username not validated";
-            usernameInput.focus();
-            return;
-        }
-
         if (!username || !mainPass) {
             statusEl.textContent = "Fill credentials first";
             return;
@@ -417,60 +650,178 @@
         passwordMismatchCount = 0;
 
         statusEl.textContent = "Saving sample...";
+        // Prevent duplicate submissions
+        typingInput.disabled = true;
         try {
+            const rawEmail = document.getElementById('regEmail').value;
+            const email = (typeof rawEmail === 'string' && rawEmail.trim()) ? rawEmail.trim() : null;
+            
             const response = await fetch('/api/register_sample', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     username: username,
+                    email: email,
                     events: rawEvents,
                     sample_count: sampleCount + 1
                 })
             });
 
             const result = await response.json();
+            const ok = result.status === 'success' || result.success === true;
 
-            if (result.status === 'success') {
+            if (ok) {
                 stopTimer();
                 sampleCount++;
                 countDisplay.textContent = sampleCount;
                 typingInput.value = '';
                 rawEvents = [];
                 resetTimer();
-                statusEl.textContent = "✓ Sample saved";
+                statusEl.textContent = "Sample saved";
+                statusEl.classList.remove('error');
+                statusEl.classList.add('success');
                 statusEl.style.color = '#10b981'; // Green color for success
                 passwordMismatchCount = 0; // Reset mismatch counter on successful save
 
+                // If server set a password for an existing user, show a friendly toast
+                if (result.password_event === 'PASSWORD_SET_ON_EXISTING') {
+                    // Non-blocking toast
+                    showToast('Password set for existing account — continuing enrollment', 'info', 4000);
+                    // Show inline helper near Master Password input for clarity
+                    try {
+                        const pwdMsg = document.getElementById('passwordEventMsg');
+                        if (pwdMsg) {
+                            pwdMsg.classList.remove('hidden');
+                            // auto-hide after a short duration (6s)
+                            setTimeout(() => { pwdMsg.classList.add('hidden'); }, 6000);
+                        }
+                    } catch (e) {
+                        console.warn('Could not show password event message', e);
+                    }
+                }
+
+                // Debounced refresh to avoid hitting /api/check_username rate limits when saving many samples fast
+                if (checkUsernameScheduled) clearTimeout(checkUsernameScheduled);
+                checkUsernameScheduled = setTimeout(() => {
+                    checkUsername().catch(e => console.warn('Could not refresh username status after sample save', e)).finally(() => { checkUsernameScheduled = null; });
+                }, SCHEDULED_REFRESH_AFTER_SAVE);
+
+                // Ensure master password input stays enabled so user can continue
+                mainPassInput.disabled = false;
+
                 if (sampleCount >= targetSamples) {
-                    finishRegistration();
+                    // On completion, require email and send verification then redirect to verification page
+                    const emailVal = (document.getElementById('regEmail').value || '').trim();
+                    if (!emailVal) {
+                        // Email is optional — finish registration without sending verification
+                        try { showToast('Pendaftaran selesai tanpa email — Anda dapat menambahkan email nanti', 'info', 4000); } catch(e){}
+                        window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
+                        return;
+                    }
+
+                    // Send verification email and redirect to verification page
+                    try {
+                        const resp = await fetch('/api/send_verification', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: username, email: emailVal })
+                        });
+
+                        if (!resp.ok) {
+                            const j = await resp.json().catch(() => ({}));
+                            const msg = j.message || 'Gagal mengirim email verifikasi';
+                            showToast(msg, 'error', 4000);
+                            typingInput.disabled = false;
+                            return;
+                        }
+
+                        // Redirect to login so user can sign in and continue to dashboard
+                        try {
+                            showToast('Pendaftaran selesai — silakan masuk untuk melanjutkan', 'info', 3500);
+                        } catch (e) { /* ignore if toast not available */ }
+                        window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
+                        return;
+                    } catch (e) {
+                        console.warn('Failed to request verification email', e);
+                        showToast('Failed to send verification email — try again', 'error', 4000);
+                        typingInput.disabled = false;
+                        return;
+                    }
                 } else {
                     updateProgress();
+                    // Keep typing enabled for next sample
+                    typingInput.disabled = false;
+                    typingInput.focus();
                 }
             } else {
                 stopTimer();
+                typingInput.disabled = false;
                 
+                // Normalize error handling
+                const code = result.error_code || result.code || null;
+                const serverMsg = (result.message || result.msg || 'Error').toString();
+                // Map internal/migration messages to a user-friendly text
+                const migrationPattern = /alembic|schema|database schema|run alembic|no (?:such )?column|has no column/i;
+                let displayMsg = serverMsg;
+                if (migrationPattern.test(serverMsg)) {
+                    displayMsg = 'Registration temporarily unavailable. Please try again later.';
+                }
+
                 // Handle PASSWORD_MISMATCH error specifically
-                if (result.error_code === 'PASSWORD_MISMATCH') {
+                if (code === 'PASSWORD_MISMATCH' || serverMsg.toLowerCase().includes('password')) {
                     passwordMismatchCount++;
-                    statusEl.textContent = `❌ ${result.message}`;
+                    statusEl.textContent = displayMsg;
+                    statusEl.classList.add('error');
                     statusEl.style.color = '#ef4444';
                     
                     // Show hint after multiple failures
-                    if (passwordMismatchCount >= 3) {
-                        statusEl.textContent += " (Lihat password: klik ikon mata 👁️)";
+                    if (passwordMismatchCount >= 3 && !migrationPattern.test(serverMsg)) {
+                        statusEl.textContent += " (Use the eye icon to reveal your typed password)";
                     }
                 }
                 // Handle WEAK_PASSWORD error
-                else if (result.error_code === 'WEAK_PASSWORD') {
-                    statusEl.textContent = `❌ Password terlalu lemah. Gunakan kombinasi huruf, angka & simbol`;
+                else if (code === 'WEAK_PASSWORD') {
+                    statusEl.textContent = 'Password terlalu lemah. Gunakan kombinasi huruf, angka & simbol';
+                    statusEl.classList.add('error');
                     statusEl.style.color = '#ef4444';
                 }
-                // Handle USERNAME_TAKEN error
-                else if (result.error_code === 'USERNAME_TAKEN') {
-                    statusEl.textContent = `❌ Username sudah dipakai`;
-                    statusEl.style.color = '#ef4444';
+                // Handle USERNAME_TAKEN error: make it explicit and direct the user to fix username
+                else if (code === 'USERNAME_TAKEN') {
+                    // If we think this username has 0 samples locally, allow retry and show a neutral hint
+                    if (sampleCount === 0) {
+                        showUsernameStatus('info', 'Existing account found — please retry saving your first sample');
+                        statusEl.textContent = 'Please try again to save your sample';
+                        statusEl.classList.remove('error');
+                        statusEl.style.color = '';
+
+                        // Re-enable typing so the user can retry immediately
+                        typingInput.disabled = false;
+                        typingInput.focus();
+                    } else {
+                        // Otherwise, block and show the earlier blocking behaviour
+                        showUsernameStatus('error', 'Username already taken. If this is your account, please log in; otherwise choose a different username.');
+                        disableEnrollment();
+                        try {
+                            usernameInput.focus();
+                            // Place caret at end instead of selecting the entire input so user can continue typing
+                            const len = usernameInput.value ? usernameInput.value.length : 0;
+                            usernameInput.setSelectionRange(len, len);
+                        } catch (e) {
+                            try { usernameInput.focus(); } catch (e) {}
+                        }
+
+                        statusEl.textContent = 'Username already exists — enrollment blocked';
+                        statusEl.classList.add('error');
+                        statusEl.style.color = '#ef4444';
+
+                        // Clear typing buffer
+                        typingInput.value = '';
+                        rawEvents = [];
+                        resetTimer();
+                    }
                 } else {
-                    statusEl.textContent = "❌ " + result.message;
+                    statusEl.textContent = displayMsg;
+                    statusEl.classList.add('error');
                     statusEl.style.color = '#ef4444';
                 }
                 
@@ -480,15 +831,21 @@
                 
                 // Auto-clear error after 4 seconds
                 setTimeout(() => {
-                    if (statusEl.textContent.includes('❌')) {
+                    if (statusEl.classList.contains('error')) {
                         statusEl.textContent = '';
+                        statusEl.classList.remove('error');
                         statusEl.style.color = '';
                     }
                 }, 4000);
             }
         } catch (error) {
             console.error(error);
-            statusEl.textContent = "❌ Server error";
+            statusEl.textContent = "Server error";
+            statusEl.classList.add('error');
+            typingInput.disabled = false;
+        } finally {
+            // Ensure typing field is enabled if not finished
+            if (sampleCount < targetSamples) typingInput.disabled = false;
         }
     }
     
@@ -508,10 +865,113 @@
         stopTimer();
         typingInput.disabled = true;
         statusEl.textContent = "";
+
+        // Mark registration complete and cancel any scheduled username checks
+        registrationComplete = true;
+        if (checkUsernameScheduled) {
+            clearTimeout(checkUsernameScheduled);
+            checkUsernameScheduled = null;
+        }
+
+        // Clear username status and disable inputs (prevent further changes)
+        try {
+            usernameStatusEl.classList.add('hidden');
+            usernameStatusEl.textContent = '';
+            usernameStatusEl.classList.remove('status-indicator','error','success','info','checking');
+
+            usernameInput.disabled = true;
+            usernameInput.setAttribute('aria-disabled', 'true');
+            const emailInput = document.getElementById('regEmail');
+            if (emailInput) emailInput.disabled = true;
+            mainPassInput.disabled = true;
+            mainPassInput.value = '';
+        } catch (e) {
+            // ignore if element not available
+        }
+
+        // Hide transient toast if visible
+        try {
+            hideToast();
+        } catch (e) {}
+
         document.getElementById('finishSection').classList.remove('hidden');
         enrollmentSection.style.display = 'none';
         document.getElementById('motivationalMsg').textContent = "20/20 samples collected";
+
+        // Move focus to Continue button for keyboard users
+        try {
+            const cont = document.querySelector('#finishSection .btn');
+            if (cont) cont.focus();
+        } catch(e) {}
+
+        // Add dim overlay on the form to visually indicate completion
+        try {
+            const box = document.querySelector('.auth-box');
+            if (box) box.classList.add('dimmed');
+        } catch(e) {}
+
+        // Make the dim overlay dismissible (re-open registration for recovery)
+        try {
+            const box = document.querySelector('.auth-box');
+            if (box) {
+                box.addEventListener('click', function unlockHandler(e) {
+                    // Allow clicks inside completion panel (like the Continue link) to proceed normally
+                    if (e.target && (e.target.closest('.completion-section') || e.target.closest('a[href="/login"]'))) {
+                        return; // do not intercept navigation or interactions coming from completion controls
+                    }
+
+                    if (!box.classList.contains('dimmed')) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const confirmMsg = 'Re-open registration to make changes? This will allow modification of inputs and may reset progress.';
+
+                    // Use the custom modal instead of native confirm
+                    showConfirmModal('Re-open registration', confirmMsg, {confirmText: 'Re-open', cancelText: 'Keep Locked', destructive: false})
+                    .then(confirmed => {
+                        if (!confirmed) return;
+
+                        // Undo completion UI
+                        registrationComplete = false;
+                        box.classList.remove('dimmed');
+                        try { document.getElementById('finishSection').classList.add('hidden'); } catch(e) {}
+                        enrollmentSection.style.display = 'block';
+
+                        // Re-enable inputs for recovery and allow re-trying
+                        usernameInput.disabled = false;
+                        const emailInput = document.getElementById('regEmail'); if (emailInput) emailInput.disabled = false;
+                        mainPassInput.disabled = false;
+                        enableEnrollment();
+                        showToast('Registration unlocked — you can edit and continue', 'info', 4000);
+
+                        // Remove this handler after use
+                        box.removeEventListener('click', unlockHandler);
+                    })
+                    .catch(err => { console.warn('Confirm modal error', err); });
+                });
+            }
+        } catch(e) {}
     }
+
+    // Auto-run username validation on page load / when navigating back (handles browser autofill)
+    (function initUsernameCheckOnLoad(){
+        try {
+            const val = usernameInput.value && usernameInput.value.trim();
+            if (val && val.length >= 3) {
+                console.debug('[register] Initial username detected, validating...');
+                // small timeout to allow autofill to finish
+                setTimeout(() => { checkUsername().catch(e => console.warn('[register] initial check failed', e)); }, 150);
+            }
+
+            // Handle bfcache/pageshow (back/forward navigation)
+            window.addEventListener('pageshow', (e) => {
+                const v = usernameInput.value && usernameInput.value.trim();
+                if (v && v.length >= 3) {
+                    console.debug('[register] pageshow username detected, validating...');
+                    setTimeout(() => { checkUsername().catch(e => console.warn('[register] pageshow check failed', e)); }, 150);
+                }
+            });
+        } catch (e) { console.warn('[register] init error', e); }
+    })();
 </script>
 </div>
 {% endblock %}

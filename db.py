@@ -311,14 +311,27 @@ class Database:
                 # Table doesn't exist, fallback to old table
                 pass
             
-            # Fallback to old table (user_vectors)
-            cursor.execute("""
-                SELECT COUNT(*) FROM user_vectors 
-                WHERE username = ? AND data_type = 'enrollment'
-            """, (username,))
-            count = cursor.fetchone()[0]
-            print(f"[DB] Enrollment count from user_vectors: {count}")
-            return count
+            # Fallback to old table (user_vectors) - support both event_type and legacy data_type
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM user_vectors 
+                    WHERE username = ? AND (event_type = 'enrollment' OR data_type = 'enrollment')
+                """, (username,))
+                count = cursor.fetchone()[0]
+                print(f"[DB] Enrollment count from user_vectors: {count}")
+                return count
+            except sqlite3.OperationalError:
+                # Column doesn't exist in legacy schema, try legacy column name
+                try:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM user_vectors 
+                        WHERE username = ? AND data_type = 'enrollment'
+                    """, (username,))
+                    count = cursor.fetchone()[0]
+                    print(f"[DB] Enrollment count (legacy data_type) from user_vectors: {count}")
+                    return count
+                except Exception:
+                    return 0
             
         except Exception as e:
             print(f"[DB ERROR] Get Enrollment Count: {e}")
@@ -333,13 +346,27 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         try:
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM user_vectors 
-                WHERE username = ? AND data_type = 'login'
-            """, (username,))
-            count = cursor.fetchone()[0]
-            return count
+            # Prefer event_type if present
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM user_vectors 
+                    WHERE username = ? AND (event_type = 'login' OR data_type = 'login')
+                """, (username,))
+                count = cursor.fetchone()[0]
+                return count
+            except sqlite3.OperationalError:
+                # Fallback to legacy data_type column
+                try:
+                    cursor.execute("""
+                        SELECT COUNT(*) 
+                        FROM user_vectors 
+                        WHERE username = ? AND data_type = 'login'
+                    """, (username,))
+                    count = cursor.fetchone()[0]
+                    return count
+                except Exception:
+                    return 0
         except Exception as e:
             print(f"[DB ERROR] Get Login Count: {e}")
             return 0

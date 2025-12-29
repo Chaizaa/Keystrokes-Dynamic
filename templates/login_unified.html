@@ -66,9 +66,35 @@
     </form>
     
     <div id="resultBox"></div>
+    <!-- Dev-only debug panel: visible when DEV_LENIENT is enabled -->
+    <div id="debugPanel" class="hidden" style="margin-top: 12px; font-size:13px; color:#b8c5d6;">
+        <label><input type="checkbox" id="debugToggle"> Request debug info from server</label>
+        <pre id="debugOutput" class="hidden" style="margin-top:8px; background: rgba(0,0,0,0.15); padding:8px; border-radius:6px; white-space:pre-wrap; color:#fff; max-height:200px; overflow:auto;"></pre>
+    </div>
 </div>
 
 <script>
+    // If redirected from registration, prefill username and show a friendly toast
+    (function prefillFromQuery() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const preUser = params.get('username');
+            const from = params.get('from');
+            if (preUser) {
+                const el = document.getElementById('username');
+                if (el) {
+                    el.value = decodeURIComponent(preUser);
+                    try { el.focus(); } catch (e) {}
+                }
+            }
+            if (from === 'register') {
+                try { showToast('Account created — please sign in', 'info', 4000); } catch(e){}
+            }
+        } catch (e) {
+            console.warn('Prefill query parsing failed', e);
+        }
+    })();
+
     // ============================================================================
     // KEYSTROKE CAPTURE
     // ============================================================================
@@ -248,12 +274,29 @@
     // ============================================================================
     // FORM SUBMISSION
     // ============================================================================
+    // DEV toggle: read injected flag from DOM (injected via context processor)
+    const LOGIN_DEV_LENIENT = (function() {
+        try {
+            const root = document.getElementById('registerRoot');
+            return root ? root.dataset.devLenient === 'true' : false;
+        } catch (e) { return false; }
+    })();
+    
+    // Show debug panel when in dev
+    try {
+        if (LOGIN_DEV_LENIENT) {
+            const dbg = document.getElementById('debugPanel');
+            if (dbg) dbg.classList.remove('hidden');
+        }
+    } catch(e){}
+
     function handleLogin(event) {
         event.preventDefault();
         
         if (isSubmitting) return false;
         
         const username = usernameField.value.trim();
+        const debugRequest = document.getElementById('debugToggle') ? document.getElementById('debugToggle').checked : false;
         
         if (!username) {
             showResult('Please enter username', 'error');
@@ -283,7 +326,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 username: username,
-                events: rawEvents
+                events: rawEvents,
+                debug: debugRequest || LOGIN_DEV_LENIENT
             })
         })
         .then(r => r.json().then(data => ({status: r.status, body: data})))
@@ -307,10 +351,21 @@
                     message += '<br><small>Type with the same rhythm as during enrollment</small>';
                 } else if (body.reason === 'no_enrollment') {
                     message += '<br><small><a href="/register" style="color: #6b9fff;">Register first</a></small>';
+                } else if (body.reason === 'PASSWORD_MISMATCH' || body.reason === 'hash_mismatch') {
+                    message = 'Password salah. Pastikan Anda mengetik kata sandi yang sama saat pendaftaran.';
                 }
                 
                 showResult(message, 'error');
-                
+
+                // Show debug output if present
+                try {
+                    const dbgOut = document.getElementById('debugOutput');
+                    if (body.debug && dbgOut) {
+                        dbgOut.classList.remove('hidden');
+                        dbgOut.textContent = JSON.stringify(body.debug, null, 2);
+                    }
+                } catch(e) { console.warn('Could not show debug output', e); }
+
                 // Re-enable form
                 setTimeout(() => {
                     resetForm();

@@ -657,6 +657,34 @@ pip install -r requirements.txt
 
 #### 4. Configure Environment
 
+> SMTP Email (Gmail example)
+>
+> This project uses Flask-Mail for SMTP deliveries. For Gmail you should use an App Password (requires 2-Step Verification):
+>
+> 1. Enable 2-Step Verification in your Google account.
+> 2. Create an App Password (Mail) in your Google Account > Security > App passwords.
+> 3. Set the following values in your `.env` file (copy `.env.example`):
+>
+> ```env
+> MAIL_SERVER=smtp.gmail.com
+> MAIL_PORT=587
+> MAIL_USE_TLS=True
+> MAIL_USE_SSL=False
+> MAIL_USERNAME=your@gmail.com
+> MAIL_PASSWORD=your-app-password
+> MAIL_DEFAULT_SENDER="SecureAuth <your@gmail.com>"
+> ```
+>
+> After configuring, verify by running the helper script:
+>
+> ```bash
+> python scripts/send_smtp_test.py --to you@example.com
+> ```
+>
+Note: For production you may prefer a transactional provider (SendGrid/Mailgun/SES) for better deliverability and features.
+
+#### 4. Configure Environment
+
 ```bash
 # Copy example environment file
 cp .env.example .env

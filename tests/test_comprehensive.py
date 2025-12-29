@@ -5,6 +5,7 @@ Run this to verify all components are working correctly
 
 import sys
 import os
+import pytest
 
 # Add webV2 to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'webV2'))
@@ -19,33 +20,28 @@ def test_verifier_imports():
         import numpy as np
         print("✅ numpy imported successfully")
     except ImportError as e:
-        print(f"❌ numpy import failed: {e}")
-        return False
+        pytest.fail(f"numpy import failed: {e}")
     
     try:
         from scipy.stats import skew, kurtosis, trim_mean
         print("✅ scipy.stats imported successfully")
     except ImportError as e:
-        print(f"❌ scipy.stats import failed: {e}")
-        return False
+        pytest.fail(f"scipy.stats import failed: {e}")
     
     try:
         from sklearn.ensemble import IsolationForest
         from sklearn.covariance import MinCovDet
         print("✅ scikit-learn imported successfully")
     except ImportError as e:
-        print(f"❌ scikit-learn import failed: {e}")
-        print("⚠️  Run: pip install scikit-learn")
-        return False
+        pytest.fail(f"scikit-learn import failed: {e}. Run: pip install scikit-learn")
     
     try:
         from verifier import Verifier
         print("✅ Verifier class imported successfully")
     except ImportError as e:
-        print(f"❌ Verifier import failed: {e}")
-        return False
+        pytest.fail(f"Verifier import failed: {e}")
     
-    return True
+    assert True
 
 def test_verifier_initialization():
     """Test verifier initialization with new parameters"""
@@ -72,10 +68,9 @@ def test_verifier_initialization():
         v4 = Verifier(adaptive_threshold=True)
         print("✅ Adaptive threshold: OK")
         
-        return True
+        assert True
     except Exception as e:
-        print(f"❌ Initialization failed: {e}")
-        return False
+        pytest.fail(f"Initialization failed: {e}")
 
 def test_outlier_methods():
     """Test outlier detection methods"""
@@ -108,12 +103,11 @@ def test_outlier_methods():
         clean_iforest = verifier._remove_outliers_iforest(test_data)
         print(f"✅ Isolation Forest: {len(test_data)} → {len(clean_iforest)} samples")
         
-        return True
+        assert True
     except Exception as e:
-        print(f"❌ Outlier detection failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Outlier detection failed: {e}")
 
 def test_comprehensive_verification():
     """Test comprehensive verification with mock data"""
@@ -150,8 +144,7 @@ def test_comprehensive_verification():
         result = verifier.verify_user_comprehensive(test_sample, enrollment_samples)
         
         if result.get('error'):
-            print(f"❌ Verification error: {result['msg']}")
-            return False
+            pytest.fail(f"Verification error: {result.get('msg', 'unknown')}")
         
         print(f"\n✅ Comprehensive verification completed!")
         print(f"   Final decision: {'ACCEPT' if result['final_decision'] else 'REJECT'}")
@@ -172,13 +165,12 @@ def test_comprehensive_verification():
             else:
                 print(f"   ✗ {method}: NOT FOUND")
         
-        return True
+        assert True
         
     except Exception as e:
-        print(f"❌ Comprehensive verification failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Comprehensive verification failed: {e}")
 
 def main():
     """Run all tests"""

@@ -262,6 +262,8 @@ flask shell
 >>> db.engine.table_names()
 ```
 
+> **Important:** After deploying new code that includes schema changes, **always** run the migrations in your target environment. You can run `alembic upgrade head` or `flask db upgrade`. Failure to run migrations may cause runtime errors (e.g., missing user columns for email/2FA). Consider adding an uptime check to poll `/health/migrations` and alert on a non-200 response (503 indicates migrations are out-of-date or the DB is unreachable).
+
 ### Database Backup Script
 
 Create `/usr/local/bin/backup-keystroke-db.sh`:
@@ -810,6 +812,8 @@ def health_check():
             'error': str(e)
         }), 500
 ```
+
+**Monitoring tip:** Add `/health/migrations` as an uptime check to verify that required DB migrations are applied. Alert when this endpoint returns a non-200 (it returns 503 when required user columns are missing or when the DB cannot be inspected). Optionally, poll `/admin/diagnostics` for richer information (alembic revision, available migration files, and user columns) and restrict access to that endpoint to trusted admin networks.
 
 ---
 

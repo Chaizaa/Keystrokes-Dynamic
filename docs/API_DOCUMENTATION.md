@@ -141,7 +141,7 @@ console.log('Available:', data.available);
 
 **Parameters**:
 - `username` (string, required): Unique username (3-50 chars)
-- `password` (string, required): Strong password (8-128 chars)
+- `password` (string, required): Password (1-128 chars). Keystroke authentication supports very short passwords.
 
 #### Response
 
@@ -159,7 +159,7 @@ console.log('Available:', data.available);
 ```json
 {
   "success": false,
-  "error": "Password must be at least 8 characters"
+  "error": "Password must be at least 1 character"
 }
 ```
 
@@ -539,7 +539,7 @@ curl -X GET http://localhost:5000/api/user/info \
 ```json
 {
   "success": false,
-  "error": "Password must be at least 8 characters"
+  "error": "Password must be at least 1 character"
 }
 ```
 

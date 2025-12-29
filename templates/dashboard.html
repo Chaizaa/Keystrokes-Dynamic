@@ -3,325 +3,7 @@
 {% block title %}Dashboard - Keystroke Biometric{% endblock %}
 
 {% block extra_css %}
-<style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-            min-height: 100vh;
-            padding: 30px 20px;
-        }
-        
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(20px);
-            padding: 28px 36px;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-            margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .header h1 {
-            color: #ffffff;
-            font-size: 26px;
-            font-weight: 600;
-        }
-        
-        .header .user-badge {
-            background: rgba(107, 159, 255, 0.15);
-            border: 1px solid rgba(107, 159, 255, 0.3);
-            color: #6b9fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            letter-spacing: 0.3px;
-        }
-        
-        .card {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(20px);
-            padding: 36px;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-            margin-bottom: 24px;
-        }
-        
-        .card h2 {
-            color: #ffffff;
-            margin-bottom: 24px;
-            font-size: 20px;
-            font-weight: 600;
-        }
-        
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 18px;
-            margin-bottom: 0;
-        }
-        
-        .info-item {
-            background: linear-gradient(135deg, rgba(45, 108, 223, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%);
-            border: 1px solid rgba(107, 159, 255, 0.2);
-            padding: 20px;
-            border-radius: 12px;
-        }
-        
-        .info-item .label {
-            color: #a0a0a0;
-            font-size: 12px;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-        
-        .info-item .value {
-            color: #ffffff;
-            font-size: 18px;
-            font-weight: 600;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-        }
-        
-        .stat-box {
-            background: linear-gradient(135deg, rgba(45, 108, 223, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
-            border: 1px solid rgba(107, 159, 255, 0.25);
-            padding: 28px;
-            border-radius: 12px;
-            text-align: center;
-        }
-        
-        .stat-box .number {
-            font-size: 42px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #6b9fff;
-        }
-        
-        .stat-box .label {
-            font-size: 13px;
-            color: #b8c5d6;
-            font-weight: 500;
-        }
-        
-        .btn {
-            display: inline-block;
-            padding: 13px 26px;
-            border-radius: 8px;
-            font-weight: 600;
-            text-decoration: none;
-            cursor: pointer;
-            border: none;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            margin-right: 12px;
-            margin-bottom: 12px;
-        }
-        
-        .btn:active {
-            transform: translateY(1px);
-        }
-        
-        .btn-primary {
-            background: rgba(107, 159, 255, 0.15);
-            border: 1px solid rgba(107, 159, 255, 0.3);
-            color: #6b9fff;
-        }
-        
-        .btn-primary:hover {
-            background: rgba(107, 159, 255, 0.25);
-            border-color: rgba(107, 159, 255, 0.4);
-        }
-        
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #ef4444;
-        }
-        
-        .btn-danger:hover {
-            background: rgba(239, 68, 68, 0.25);
-            border-color: rgba(239, 68, 68, 0.4);
-        }
-        
-        .btn-secondary {
-            background: rgba(160, 160, 160, 0.12);
-            border: 1px solid rgba(160, 160, 160, 0.25);
-            color: #a0a0a0;
-        }
-        
-        .btn-secondary:hover {
-            background: rgba(160, 160, 160, 0.2);
-            border-color: rgba(160, 160, 160, 0.35);
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(20px);
-            padding: 36px;
-            border-radius: 16px;
-            max-width: 480px;
-            width: 90%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        }
-        
-        .modal-content h3 {
-            margin-bottom: 24px;
-            color: #ffffff;
-            font-size: 20px;
-            font-weight: 600;
-        }
-        
-        .form-group {
-            margin-bottom: 22px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 10px;
-            color: #ffffff;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 14px 18px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 8px;
-            font-size: 15px;
-            color: #ffffff;
-            transition: all 0.3s ease;
-        }
-        
-        .form-group input::placeholder {
-            color: #707070;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: rgba(107, 159, 255, 0.5);
-            background: rgba(255, 255, 255, 0.08);
-        }
-        
-        .alert {
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            font-size: 14px;
-        }
-        
-        .alert.success {
-            background: rgba(34, 197, 94, 0.15);
-            color: #4ade80;
-            border: 1px solid rgba(34, 197, 94, 0.3);
-        }
-        
-        .alert.error {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        
-        .alert.active {
-            display: block;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 30px;
-            color: #a0a0a0;
-        }
-        
-        .spinner {
-            border: 3px solid rgba(107, 159, 255, 0.2);
-            border-top: 3px solid #6b9fff;
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 18px;
-        }
-        
-        .warning-text {
-            color: #ef4444;
-            margin-bottom: 18px;
-            font-size: 13px;
-            line-height: 1.6;
-            background: rgba(239, 68, 68, 0.1);
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 768px) {
-            body {
-                padding: 20px 15px;
-            }
-            
-            .header {
-                flex-direction: column;
-                gap: 16px;
-                text-align: center;
-                padding: 24px 28px;
-            }
-            
-            .info-grid, .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .card {
-                padding: 28px 24px;
-            }
-        }
-    </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
 {% block body %}
@@ -353,12 +35,12 @@
                     <div class="value" id="email">-</div>
                 </div>
                 <div class="info-item">
-                    <div class="label">Last Login</div>
-                    <div class="value" id="lastLogin">-</div>
+                    <div class="label">Account Created</div>
+                    <div class="value" id="createdAt">-</div>
                 </div>
                 <div class="info-item">
-                    <div class="label">Session Start</div>
-                    <div class="value" id="sessionStart">-</div>
+                    <div class="label">Email Verified</div>
+                    <div class="value" id="emailVerified">-</div>
                 </div>
             </div>
         </div>
@@ -372,8 +54,8 @@
                     <div class="label">Enrollment Samples</div>
                 </div>
                 <div class="stat-box">
-                    <div class="number" id="verifiedLogins">0</div>
-                    <div class="label">Verified Logins</div>
+                    <div class="number" id="hasPassword">-</div>
+                    <div class="label">Has Password</div>
                 </div>
             </div>
         </div>
@@ -411,8 +93,10 @@
             <p class="warning-text">
                 Warning: Resetting password will delete all enrollment data. You'll need to register again.
             </p>
-            <button type="submit" class="btn btn-primary">Reset Password</button>
-            <button type="button" class="btn btn-secondary" onclick="closeResetModal()">Cancel</button>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+                <button type="button" class="btn btn-secondary" onclick="closeResetModal()">Cancel</button>
+            </div>
         </form>
     </div>
 </div>
@@ -442,11 +126,12 @@
             // Populate profile
             document.getElementById('headerUsername').textContent = data.username;
             document.getElementById('username').textContent = data.username;
-            document.getElementById('email').textContent = data.email;
-            document.getElementById('lastLogin').textContent = formatDateTime(data.last_login);
-            document.getElementById('sessionStart').textContent = formatDateTime(data.session_start);
-            document.getElementById('enrollmentCount').textContent = data.enrollment_count;
-            document.getElementById('verifiedLogins').textContent = data.verified_logins;
+            document.getElementById('email').textContent = data.email || '-';
+            document.getElementById('createdAt').textContent = formatDateTime(data.created_at);
+            document.getElementById('emailVerified').textContent = (data.email_verified ? 'Yes' : 'No');
+            document.getElementById('enrollmentCount').textContent = (typeof data.enrollment_count !== 'undefined') ? data.enrollment_count : 0;
+            // has_password is provided by the API (bool)
+            document.getElementById('hasPassword').textContent = (data.has_password ? 'Yes' : 'No');
             
             // Show content
             document.getElementById('loadingSection').style.display = 'none';
@@ -471,13 +156,26 @@
     }
     
     function openResetModal() {
-        document.getElementById('resetModal').classList.add('active');
+        const m = document.getElementById('resetModal');
+        m.classList.add('active');
+        m.classList.add('reset-modal');
+        m.setAttribute('aria-hidden', 'false');
         document.getElementById('resetForm').reset();
         document.getElementById('modalAlert').classList.remove('active');
+        // Dim background and prevent scrolling like confirm modal
+        document.body.classList.add('modal-open');
+        // Focus safer action (Cancel)
+        try { m.querySelector('.btn-secondary').focus(); } catch(e) {}
     }
     
     function closeResetModal() {
-        document.getElementById('resetModal').classList.remove('active');
+        const m = document.getElementById('resetModal');
+        m.classList.remove('active');
+        m.classList.remove('reset-modal');
+        m.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+        // Return focus to Reset Password button in the page
+        try { document.querySelector('.btn.btn-primary[onclick="openResetModal()"]')?.focus(); } catch(e) {}
     }
     
     async function handleReset(event) {
@@ -493,9 +191,9 @@
             return false;
         }
         
-        if (!confirm('Are you sure? This will delete all your enrollment data and you will need to register again.')) {
-            return false;
-        }
+        // Removed extra confirmation for Reset: proceed directly to reset to simplify UX for normal users.
+        // If you want a confirmation in the future, re-add a modal check here.
+        // (Previously prompted the user; now we allow direct reset.)
         
         try {
             const response = await fetch('/api/user/reset_password', {
@@ -524,9 +222,9 @@
     }
     
     function logout() {
-        if (confirm('Are you sure you want to logout?')) {
-            window.location.href = '/logout';
-        }
+        // Ask for confirmation before logout to avoid accidental sign out
+        showConfirmModal('Logout', 'Are you sure you want to logout?', {confirmText: 'Logout', cancelText: 'Cancel', destructive: false})
+        .then(ok => { if (ok) window.location.href = '/logout'; });
     }
     
     // Close modal on outside click
