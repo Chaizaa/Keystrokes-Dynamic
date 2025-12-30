@@ -62,6 +62,15 @@
                 </span>
             </div>
             <p class="hint-text">This password will be used for biometric enrollment</p>
+
+            <!-- Password strength meter (client-side guidance only) -->
+            <div id="pwStrength" class="pw-strength hidden" aria-live="polite">
+                <div class="strength-bar" style="height:8px; background:#e5e7eb; border-radius:6px; overflow:hidden; margin:8px 0;">
+                    <div id="strengthBarFill" style="height:100%; width:0%; background:#ef4444; transition: width 150ms ease;"></div>
+                </div>
+                <div id="pwStrengthLabel" class="hint-text" style="margin-top:4px; font-size:13px; color:#374151;">Strength: Unknown</div>
+            </div>
+
             <p id="passwordEventMsg" class="hint-text hidden" role="status" aria-live="polite" style="color:#0ea5e9;">Password was set for your existing account. You can continue enrollment.</p>
         </div>
     </div>
@@ -235,12 +244,66 @@
         isFirstKeystroke = true;
     }
 
+    // Client-side password strength helper (mirrors server-side logic)
+    function calculateClientPasswordScore(password) {
+        if (!password) return { score: 0.0, strength: 'very weak' };
+        const score = Math.min(1.0, Math.max(0.0, password.length / 12.0));
+        let strength = 'very weak';
+        if (score >= 0.8) strength = 'strong';
+        else if (score >= 0.5) strength = 'medium';
+        else if (score >= 0.2) strength = 'weak';
+        return { score: score, strength: strength };
+    }
+
+    function updatePasswordStrengthUI() {
+        try {
+            const pw = (mainPassInput.value || '');
+            const result = calculateClientPasswordScore(pw);
+            const bar = document.getElementById('strengthBarFill');
+            const label = document.getElementById('pwStrengthLabel');
+            const container = document.getElementById('pwStrength');
+            if (!container || !bar || !label) return;
+            container.classList.remove('hidden');
+            const pct = Math.round(result.score * 100);
+            bar.style.width = pct + '%';
+            // Color mapping: red <50, amber 50-80, green >80
+            if (result.score < 0.5) bar.style.background = '#ef4444';
+            else if (result.score < 0.8) bar.style.background = '#f59e0b';
+            else bar.style.background = '#10b981';
+            label.textContent = `Strength: ${result.strength} (${pct}%)`;
+
+            // If password is too weak for initial enrollment, show hint
+            const weakHintId = 'pwWeakHint';
+            let weakHint = document.getElementById(weakHintId);
+            if (result.score < 0.5) {
+                if (!weakHint) {
+                    weakHint = document.createElement('p');
+                    weakHint.id = weakHintId;
+                    weakHint.className = 'hint-text';
+                    weakHint.style.color = '#b91c1c';
+                    weakHint.style.marginTop = '6px';
+                    weakHint.textContent = 'Password terlalu lemah — gunakan minimal 12 karakter atau tambahkan simbol dan angka.';
+                    mainPassInput.parentNode.appendChild(weakHint);
+                }
+            } else {
+                if (weakHint) weakHint.remove();
+            }
+        } catch (e) { console.warn('Failed to update password strength UI', e); }
+    }
+
+    // Attach listener to main password (it may be disabled until username validated)
+    try {
+        mainPassInput.addEventListener('input', () => updatePasswordStrengthUI());
+    } catch (e) { console.warn('Could not attach password strength listener', e); }
+
     // Username Validation
     let usernameCheckTimeout = null;
     // Adaptive debounce: increase delay on first pause, shorten as user continues typing
     let usernameTypingStreak = 0; // how many consecutive input events without a manual confirm
     // Debounced scheduler used to refresh username status after saving samples (avoids hitting rate limit)
     let checkUsernameScheduled = null;
+    // Backoff state when server returns 429
+    let checkRetryBackoff = 0; // ms (0 means no backoff)
     
     usernameInput.addEventListener('input', () => {
         if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
@@ -253,9 +316,11 @@
             return;
         }
         
+        // Apply exponential backoff if server suggested 429 recently
+        const effectiveDebounce = USERNAME_DEBOUNCE + (checkRetryBackoff || 0);
         usernameCheckTimeout = setTimeout(async () => {
             await checkUsername();
-        }, USERNAME_DEBOUNCE);
+        }, effectiveDebounce);
     });
 
     // If user blurs, perform an immediate check and reset typing streak
@@ -328,24 +393,31 @@
             // Handle non-OK responses explicitly and avoid aggressive disabling on transient errors
             if (!response.ok) {
                 if (response.status === 429) {
+                    // Apply small exponential backoff (avoid hammering the rate limiter)
+                    checkRetryBackoff = Math.min((checkRetryBackoff || 300) * 2, 5000);
+                    // Non-blocking info message
+                    showUsernameStatus('info', 'Server busy — retrying shortly');
                     if (DEV_LENIENT) {
-                        // Rate-limited: lenient in development — show a gentle info and retry shortly without blocking enrollment
-                        showUsernameStatus('info', 'Rate-limited — retrying…');
                         setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, 300);
                     } else {
-                        // Production: inform user and treat as an error
-                        showUsernameStatus('error', 'Too many requests — please wait a moment');
-                        showToast('Please wait a moment — syncing status…', 'warn', 3000);
+                        setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, checkRetryBackoff);
                     }
                     return;
                 }
 
+                // Non-OK non-429 responses: be tolerant
+                try {
+                    // If the server returned HTML (e.g., rate-limit page) or non-JSON body, avoid blocking the user
+                    const txt = await response.text().catch(() => '');
+                    console.warn('Non-OK response during username check', response.status, txt.slice(0, 200));
+                } catch (e) {
+                    console.warn('Failed to read non-OK response body', e);
+                }
+
                 if (DEV_LENIENT) {
                     showUsernameStatus('info', 'Connection issue — will retry');
-                    // Do not disable enrollment for transient server/network issues; retry shortly
                     setTimeout(() => { checkUsername().catch(e => console.warn('Retry failed', e)); }, 800);
                 } else {
-                    // Production fallback: allow offline continuation (safer UX) while showing an informative message
                     showUsernameStatus('info', 'Cannot validate username — continuing in offline mode');
                     showToast('Could not validate username; continuing in offline mode', 'warn', 4000);
                     usernameAvailable = true;

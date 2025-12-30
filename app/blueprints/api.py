@@ -497,6 +497,12 @@ def register_sample():
 
                         # Send verification email if email is provided
                         user = user_result.get('user')
+                        if user:
+                            # Ensure future DB writers can map this enrollment to user
+                            try:
+                                features['user_id'] = int(user.id)
+                            except Exception:
+                                pass
                         if user and user.email and email and '@' in email:
                             # Use Session.get to fetch any latest DB state for user
                             user = db.session.get(User, user.id)
@@ -529,6 +535,8 @@ def register_sample():
                         uid = getattr(existing, 'id', None)
 
                 if uid is not None:
+                    # Expose resolved user id to fallback writers and for auditing
+                    features['user_id'] = int(uid)
                     from app.models import EnrollmentVector, FeatureVector, db as sqlalchemy_db
 
                     ev = EnrollmentVector(
