@@ -95,8 +95,9 @@
             });
             const j = await resp.json().catch(() => ({}));
             if (resp.ok) {
-                showAlert('Email verified! Redirecting to login...', 'success');
-                setTimeout(() => { window.location.href = '/login'; }, 1100);
+                showAlert('Email verified! Redirecting to registration...', 'success');
+                // Return to registration and enable password/enrollment step
+                setTimeout(() => { window.location.href = `/register?verified=1&username=${encodeURIComponent(username)}`; }, 1100);
             } else {
                 if (j.error_code === 'expired_token') {
                     showAlert('Token expired. Please request a new code.', 'error');

@@ -22,17 +22,85 @@ class EmailService:
             EmailService.mail = Mail(app)
             EmailService.app = app
             logger.debug("EmailService: Flask-Mail initialized")
+            # Perform a lightweight SMTP credentials check to provide actionable logs
+            try:
+                EmailService._test_smtp_credentials(app)
+            except Exception:
+                # _test_smtp_credentials logs details on failure
+                pass
         except Exception as e:
             EmailService.mail = None
             EmailService.app = app
             logger.debug(f"EmailService: Flask-Mail not available or failed to init: {e}")
 
     @staticmethod
+    def _test_smtp_credentials(app) -> bool:
+        """Attempt to connect/login to configured SMTP server and log helpful diagnostics.
+
+        This does not send any messages. Returns True if login succeeded, False otherwise.
+        """
+        try:
+            server = app.config.get('MAIL_SERVER')
+            port = int(app.config.get('MAIL_PORT', 0) or 0)
+            use_tls = bool(app.config.get('MAIL_USE_TLS', False))
+            use_ssl = bool(app.config.get('MAIL_USE_SSL', False))
+            username = app.config.get('MAIL_USERNAME')
+            password = app.config.get('MAIL_PASSWORD')
+
+            if not server or not port:
+                logger.debug('EmailService: MAIL_SERVER or MAIL_PORT not configured; skipping SMTP test')
+                return False
+
+            if not username or not password:
+                logger.warning('EmailService: MAIL_USERNAME or MAIL_PASSWORD not set; email will likely fail')
+                return False
+
+            import smtplib
+            timeout = 10
+            if use_ssl:
+                conn = smtplib.SMTP_SSL(server, port, timeout=timeout)
+            else:
+                conn = smtplib.SMTP(server, port, timeout=timeout)
+            try:
+                conn.ehlo()
+                if use_tls and not use_ssl:
+                    conn.starttls()
+                    conn.ehlo()
+                # Try login
+                conn.login(username, password)
+                logger.info('EmailService: SMTP credential test succeeded for %s:%s', server, port)
+                return True
+            finally:
+                try:
+                    conn.quit()
+                except Exception:
+                    pass
+        except Exception as e:
+            # Provide actionable guidance for common Gmail errors
+            msg = str(e)
+            logger.warning('EmailService: SMTP credential test failed (%s)', msg)
+            if '535' in msg or 'Username and Password' in msg or 'BadCredentials' in msg:
+                logger.warning('EmailService: SMTP auth failed. If using Gmail, enable 2FA and use an App Password (https://support.google.com/mail/?p=InvalidSecondFactor or https://support.google.com/accounts/answer/185833).')
+            if 'STARTTLS' in msg or 'TLS' in msg:
+                logger.debug('EmailService: Check MAIL_USE_TLS / MAIL_USE_SSL and MAIL_PORT (587 for TLS, 465 for SSL).')
+            return False
+
+    @staticmethod
     def send_email(subject: str, recipients: list, html_body: str = "", text_body: str = "") -> bool:
         """Try to send email; return True if sent otherwise False."""
         if not EmailService.mail:
             logger.debug("EmailService.send_email called but mail is not configured")
-            return False
+            # Try SMTP fallback using app config (useful for Gmail)
+            try:
+                from flask import current_app
+                app = EmailService.app or current_app
+            except Exception:
+                app = EmailService.app
+            try:
+                return EmailService._send_via_smtplib(app, subject, recipients, html_body, text_body)
+            except Exception as e:
+                logger.exception('SMTP fallback send failed')
+                return False
         try:
             from flask_mail import Message
             # Ensure a sender is present; prefer configured default
@@ -43,10 +111,90 @@ class EmailService:
                 default_sender = None
             sender = default_sender or 'noreply@localhost'
             msg = Message(subject=subject, recipients=recipients, body=text_body, html=html_body, sender=sender)
-            EmailService.mail.send(msg)
-            return True
+            try:
+                EmailService.mail.send(msg)
+                return True
+            except Exception as e:
+                # If Flask-Mail fails (authentication or other SMTP issues), try SMTP fallback
+                logger.exception("Flask-Mail send failed, attempting SMTP fallback")
+                try:
+                    from flask import current_app
+                    app = EmailService.app or current_app
+                except Exception:
+                    app = EmailService.app
+                try:
+                    sent = EmailService._send_via_smtplib(app, subject, recipients, html_body, text_body)
+                    if sent:
+                        return True
+                except Exception:
+                    logger.exception('SMTP fallback after Flask-Mail failure also failed')
+                return False
         except Exception as e:
             logger.exception("Failed to send email")
+            return False
+
+    @staticmethod
+    def _send_via_smtplib(app, subject: str, recipients: list, html_body: str = "", text_body: str = "") -> bool:
+        """Fallback sender using smtplib. Respects typical Flask-Mail config keys.
+
+        Recommended config for Gmail (use app password):
+        MAIL_SERVER = 'smtp.gmail.com'
+        MAIL_PORT = 587
+        MAIL_USE_TLS = True
+        MAIL_USERNAME = 'your@gmail.com'
+        MAIL_PASSWORD = 'your-app-password'
+        MAIL_DEFAULT_SENDER = 'noreply@example.com'
+        """
+        try:
+            if not app:
+                logger.debug('No Flask app available for SMTP fallback')
+                return False
+            server = app.config.get('MAIL_SERVER', 'smtp.gmail.com')
+            port = int(app.config.get('MAIL_PORT', 587))
+            use_tls = bool(app.config.get('MAIL_USE_TLS', True))
+            use_ssl = bool(app.config.get('MAIL_USE_SSL', False))
+            username = app.config.get('MAIL_USERNAME')
+            password = app.config.get('MAIL_PASSWORD')
+            sender = app.config.get('MAIL_DEFAULT_SENDER', username or 'noreply@localhost')
+
+            if not username or not password:
+                logger.debug('SMTP fallback requires MAIL_USERNAME and MAIL_PASSWORD in config')
+                return False
+
+            # Build message
+            from email.message import EmailMessage
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = sender
+            msg['To'] = ', '.join(recipients)
+            if text_body:
+                msg.set_content(text_body)
+            else:
+                msg.set_content('')
+            if html_body:
+                msg.add_alternative(html_body, subtype='html')
+
+            import smtplib
+            if use_ssl:
+                smtp = smtplib.SMTP_SSL(server, port, timeout=10)
+            else:
+                smtp = smtplib.SMTP(server, port, timeout=10)
+            try:
+                smtp.ehlo()
+                if use_tls and not use_ssl:
+                    smtp.starttls()
+                    smtp.ehlo()
+                smtp.login(username, password)
+                smtp.send_message(msg)
+                logger.debug('SMTP fallback: email sent via %s:%s', server, port)
+                return True
+            finally:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
+        except Exception:
+            logger.exception('SMTP fallback failed to send email')
             return False
 
     @staticmethod

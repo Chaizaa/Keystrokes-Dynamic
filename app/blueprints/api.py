@@ -120,19 +120,32 @@ def send_verification():
         email = data.get('email')
         if not username or not email:
             return jsonify({'success': False, 'message': 'Data tidak lengkap'}), 400
-        # Resolve user
+        # Resolve user; if not found, create a provisional user record so we can send verification
         from sqlalchemy import select
         user = db.session.execute(select(User).where(User.username == username)).scalars().first()
+        created_new = False
         if not user:
-            return jsonify({'success': False, 'message': 'User tidak ditemukan'}), 404
+            try:
+                # Create a user row without password (will be set later during enrollment)
+                user = User(username=username, email=email, email_verified=False)
+                db.session.add(user)
+                db.session.commit()
+                created_new = True
+            except Exception as e:
+                db.session.rollback()
+                print(f"[ERROR] Failed to create provisional user for verification: {e}")
+                return jsonify({'success': False, 'message': 'Failed to create user for verification'}), 500
+
         # Ensure email matches or set it
-        if user.email and user.email != email:
+        if user.email and email and user.email != email:
             return jsonify({'success': False, 'message': 'Email mismatch with account'}), 400
-        # Save timestamp and send stateless token
+        if not user.email and email:
+            user.email = email
+
+        # Save timestamp and send stateless token (or short code)
         try:
             sent_at = datetime.now(timezone.utc)
             user.email_verification_sent_at = sent_at
-            user.email = email
             # Generate a 6-digit numeric code and store its hash
             import secrets
             from werkzeug.security import generate_password_hash
@@ -142,7 +155,7 @@ def send_verification():
             # Send the short code in the email body
             email_service.send_verification_email(user, code)
             print(f"[INFO] Verification email sent to {user.email}")
-            return jsonify({'success': True, 'message': 'Verification email sent'}), 200
+            return jsonify({'success': True, 'message': 'Verification email sent', 'created': created_new}), 200
         except Exception as e:
             db.session.rollback()
             print(f"[ERROR] Failed to send verification email: {e}")

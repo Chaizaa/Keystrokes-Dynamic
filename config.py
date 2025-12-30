@@ -59,6 +59,25 @@ class Config:
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@localhost')
 
+    # Example Gmail configuration (recommended: use App Password if your account has 2FA)
+    # For TLS (recommended):
+    # MAIL_SERVER = 'smtp.gmail.com'
+    # MAIL_PORT = 587
+    # MAIL_USE_TLS = True
+    # MAIL_USE_SSL = False
+    # MAIL_USERNAME = 'your@gmail.com'
+    # MAIL_PASSWORD = 'your-app-password'
+    # MAIL_DEFAULT_SENDER = 'noreply@yourdomain.com'
+    # For SSL (alternate):
+    # MAIL_SERVER = 'smtp.gmail.com'
+    # MAIL_PORT = 465
+    # MAIL_USE_TLS = False
+    # MAIL_USE_SSL = True
+    # MAIL_USERNAME = 'your@gmail.com'
+    # MAIL_PASSWORD = 'your-app-password'
+    # Note: Google may block plain username/password SMTP. Create an App Password at
+    # https://myaccount.google.com/security -> App passwords and use it as MAIL_PASSWORD.
+
     # Logging
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE', 'app.log')

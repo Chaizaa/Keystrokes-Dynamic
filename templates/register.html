@@ -38,11 +38,14 @@
         
         <div class="form-group">
             <label for="regEmail">Email Address <span style="color: #6b9fff; font-size: 12px;">(Optional)</span></label>
-            <input 
-                type="email" 
-                id="regEmail" 
-                placeholder="your.email@example.com" 
-                autocomplete="email">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <input 
+                    type="email" 
+                    id="regEmail" 
+                    placeholder="your.email@example.com" 
+                    autocomplete="email" style="flex:1;">
+                <button id="sendVerifyBtn" class="btn btn-secondary" type="button">Send verification</button>
+            </div>
             <p class="hint-text">Used for password recovery and security notifications</p>
         </div>
         
@@ -185,30 +188,38 @@
     const timerDisplayEl = document.getElementById('timerDisplay');
     const emailInput = document.getElementById('regEmail');
 
-    // If user fills or autofills email after username is available, enable enrollment
+    // Send verification button: requires username + email
     try {
-        emailInput.addEventListener('input', () => {
+        const sendVerifyBtn = document.getElementById('sendVerifyBtn');
+        async function sendVerification() {
+            const username = usernameInput.value.trim();
+            const email = (emailInput.value || '').trim();
+            if (!username) { showToast('Masukkan username terlebih dahulu', 'warn'); usernameInput.focus(); return; }
+            if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Masukkan email yang valid', 'warn'); emailInput.focus(); return; }
+            sendVerifyBtn.disabled = true;
             try {
-                const emailVal = (emailInput.value || '').trim();
-                if (emailVal && usernameAvailable) {
-                    console.debug('[register] email input detected and usernameAvailable -> enabling enrollment');
-                    enableEnrollment();
+                const resp = await fetch('/api/send_verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, email: email })
+                });
+                const j = await resp.json().catch(() => ({}));
+                if (resp.ok) {
+                    showToast('Kode verifikasi dikirim. Buka inbox Anda.', 'info');
+                    // Redirect to verify page where user can paste code
+                    setTimeout(() => { window.location.href = `/verify?username=${encodeURIComponent(username)}`; }, 600);
+                } else {
+                    showToast(j.message || 'Gagal mengirim kode verifikasi', 'error');
+                    sendVerifyBtn.disabled = false;
                 }
-            } catch (e) { console.warn('[register] email input handler error', e); }
-        });
-
-        emailInput.addEventListener('change', () => {
-            try {
-                const emailVal = (emailInput.value || '').trim();
-                if (emailVal && usernameAvailable) {
-                    console.debug('[register] email changed and usernameAvailable -> enabling enrollment');
-                    enableEnrollment();
-                }
-            } catch (e) { console.warn('[register] email change handler error', e); }
-        });
+            } catch (e) {
+                showToast('Network error saat mengirim verifikasi', 'error');
+                sendVerifyBtn.disabled = false;
+            }
+        }
+        sendVerifyBtn.addEventListener('click', sendVerification);
     } catch (e) {
-        // If regEmail is missing for some reason, ignore
-        console.warn('[register] could not attach email listeners', e);
+        console.warn('[register] could not attach sendVerifyBtn', e);
     }
 
     // Timings that differ between development lenient mode and strict mode
@@ -587,9 +598,70 @@
         }
     }
     
+    // Only enable enrollment after email verification (or in dev lenient mode)
+    const params = new URLSearchParams(window.location.search);
+    const emailVerifiedParam = params.get('verified');
+    const emailVerifiedUser = emailVerifiedParam === '1';
+
+    // If username provided in query (from verification redirect), prefill and validate it
+    const prefillUsername = params.get('username');
+    if (prefillUsername) {
+        usernameInput.value = prefillUsername;
+        // Perform server-side availability/enrollment check and then enable enrollment if verified
+        try {
+            checkUsername().then(() => {
+                if (emailVerifiedUser) {
+                    // After server validated username, allow enrollment without retyping username
+                    enableEnrollment();
+                    // Update UI to show username is accepted
+                    showUsernameStatus('success', 'Username prefilled and email verified');
+                    usernameAvailable = true;
+                    try {
+                        // Lock username/email fields to avoid confusing edits after verification
+                        usernameInput.readOnly = true;
+                        emailInput.readOnly = true;
+                        const sendVerifyBtn = document.getElementById('sendVerifyBtn');
+                        if (sendVerifyBtn) sendVerifyBtn.disabled = true;
+                        // Visually indicate locked state
+                        usernameInput.classList.add('readonly');
+                        emailInput.classList.add('readonly');
+                    } catch (e) {
+                        // ignore UI locking failures
+                    }
+                }
+            }).catch(() => {
+                // ignore
+            });
+        } catch (e) {
+            // If checkUsername isn't available yet, enable enrollment when script continues
+            if (emailVerifiedUser) {
+                enableEnrollment();
+                try {
+                    usernameInput.readOnly = true;
+                    emailInput.readOnly = true;
+                    const sendVerifyBtn = document.getElementById('sendVerifyBtn');
+                    if (sendVerifyBtn) sendVerifyBtn.disabled = true;
+                    usernameInput.classList.add('readonly');
+                    emailInput.classList.add('readonly');
+                } catch (e) {}
+            }
+        }
+    }
+
     function enableEnrollment() {
         if (registrationComplete) return; // don't re-enable after completion
-        // Allow enrollment to start even if email is not set — email is only required once samples complete
+        // Require email verification before enabling full enrollment unless DEV_LENIENT
+        let allow = false;
+        try {
+            const dev = (document.getElementById('registerRoot') && document.getElementById('registerRoot').dataset.devLenient === 'true');
+            allow = dev || emailVerifiedUser;
+        } catch (e) {
+            allow = emailVerifiedUser;
+        }
+        if (!allow) {
+            showToast('Silakan verifikasi email terlebih dahulu', 'warn');
+            return;
+        }
         enrollmentSection.classList.remove('disabled');
         mainPassInput.disabled = false;
         typingInput.disabled = false;
