@@ -1,7 +1,10 @@
 """Quick check of current database data"""
-import sqlite3
 
-db_path = 'data/biometric_auth.db'
+import sqlite3
+import os
+from config import basedir, Config
+
+db_path = os.path.join(basedir, Config.DATABASE_PATH)
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
@@ -20,8 +23,10 @@ for u in users:
 try:
     cursor.execute("SELECT COUNT(*) FROM user_vectors")
     print(f"\nKeystroke Vectors: {cursor.fetchone()[0]}")
-    
-    cursor.execute("SELECT username, event_type, COUNT(*) FROM user_vectors GROUP BY username, event_type")
+
+    cursor.execute(
+        "SELECT username, event_type, COUNT(*) FROM user_vectors GROUP BY username, event_type"
+    )
     for row in cursor.fetchall():
         print(f"  - {row[0]}: {row[1]} ({row[2]} samples)")
 except:

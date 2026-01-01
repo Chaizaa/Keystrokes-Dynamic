@@ -195,7 +195,7 @@ Keystrokes-Dynamic/
 DATABASE_PATH=biometric_auth.db
 
 # After:
-DATABASE_PATH=data/biometric_auth.db
+DATABASE_PATH=biometric_auth.db
 ```
 
 ### 2. .env (Update paths)
@@ -205,7 +205,7 @@ DATABASE_PATH=biometric_auth.db
 LOG_FILE=app.log
 
 # After:
-DATABASE_PATH=data/biometric_auth.db
+DATABASE_PATH=biometric_auth.db
 LOG_FILE=data/app.log
 ```
 

@@ -61,7 +61,7 @@ Endpoint `/api/login` untuk unified login.
 
 **Legacy Compatibility:**
 - `/login` → `login_unified.html` (NEW unified UI)
-- `/login/legacy` → `login.html` (OLD dual-mode UI)
+-- `/login/legacy` → (ARCHIVED) legacy dual-mode UI removed; use `/login` (unified)
 
 ### 4. **webV2/templates/login_unified.html** (NEW - 495 lines)
 Simplified single-mode login UI.
@@ -434,7 +434,7 @@ cp biometric_auth.db.backup_YYYYMMDD_HHMMSS biometric_auth.db
 
 ### Legacy Mode Access
 ```
-http://localhost:5000/login/legacy  # Access old dual-mode UI
+http://localhost:5000/login  # Legacy dual-mode UI archived; use unified login
 ```
 
 ---
@@ -583,7 +583,7 @@ sqlite3 biometric_auth.db "DELETE FROM verified_logins WHERE timestamp < datetim
 - Security: Failed logins no longer store keystroke data
 
 **Deprecated:**
-- Dual-mode UI (Collection + Verification) - still accessible via `/login/legacy`
+- Dual-mode UI (Collection + Verification) - legacy route archived; use `login_unified.html` and unified endpoints
 - `/api/login_attempt` endpoint - replaced by `/api/login`
 
 **Removed:**

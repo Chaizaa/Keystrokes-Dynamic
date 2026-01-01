@@ -55,9 +55,8 @@ webV2/
 #### Templates (Partially Migrated)
 ```
 templates/
-├── login.html                   ⚠️  OLD - Legacy login page
-│                                   → DECISION: Keep for backward compat or remove?
-│                                   → Blueprint uses login_unified.html
+├── login.html                   🗄️  ARCHIVED - Legacy login page (removed from active templates)
+│                                   → DECISION: Archived during cleanup; blueprint uses `login_unified.html`
 │
 ├── home.html                    ❓ MISSING - Not found in directory
 │                                   → DECISION: Was it renamed to dashboard.html?

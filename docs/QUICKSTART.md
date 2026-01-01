@@ -62,7 +62,7 @@ http://localhost:5000/login
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/login` | GET | **NEW** Unified login UI |
-| `/login/legacy` | GET | OLD dual-mode UI |
+| `/login/legacy` | GET | ARCHIVED - legacy dual-mode UI removed |
 | `/api/login` | POST | **NEW** Unified login endpoint |
 | `/api/login_attempt` | POST | LEGACY verification endpoint |
 
@@ -105,7 +105,7 @@ Before:                    After:
 1. **Default login route changed:**
    - Before: `/login` → `login.html` (dual-mode)
    - After: `/login` → `login_unified.html` (single-mode)
-   - Legacy: `/login/legacy` → `login.html` (still available)
+   - Legacy: `/login/legacy` → ARCHIVED (removed); use `/login` (unified)
 
 2. **New database schema:**
    - Run migration script before using

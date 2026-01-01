@@ -15,7 +15,7 @@
 <div id="registerRoot" class="auth-container bg-gradient" data-dev-lenient="true">
 <div class="auth-box">
     <div class="logo">
-        <div class="logo-text">SecureAuth</div>
+        <div class="logo-text"></div>
     </div>
     <h2>Create Account</h2>
     <p class="subtitle">Biometric Enrollment System</p>
@@ -31,15 +31,8 @@
     <div class="section">
         <div class="section-title">Step 1: Account Credentials</div>
         
-        <div class="form-group">
-            <label for="regUsername">Username</label>
-            <input 
-                type="text" 
-                id="regUsername" 
-                placeholder="Choose your username" 
-                autocomplete="off">
-            <div id="usernameStatus" class="status-indicator hidden"></div>
-        </div>
+        <!-- Username removed per UI request (handled server-side or not required) -->
+        <div id="usernameStatus" class="status-indicator hidden" style="display:none;"></div>
         
         <div class="form-group">
             <label for="regEmail">Email Address <span style="color: #6b9fff; font-size: 12px;">(Optional)</span></label>
@@ -125,7 +118,6 @@
         </div>
         <h3>Registration Complete</h3>
         <p>Account successfully created</p>
-        <a href="/login" class="btn">Continue to Login</a>
     </div>
 </div>
 
@@ -218,37 +210,51 @@
     // Debounced scheduler used to refresh username status after saving samples (avoids hitting rate limit)
     let checkUsernameScheduled = null;
     
-    usernameInput.addEventListener('input', () => {
-        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
-        if (usernameStatusEl.textContent !== '') usernameStatusEl.classList.add('hidden');
-        usernameAvailable = false;
+    // Username input may be removed from the simplified UI; only attach listeners if present
+    if (usernameInput) {
+        usernameInput.addEventListener('input', () => {
+            if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+            if (usernameStatusEl.textContent !== '') usernameStatusEl.classList.add('hidden');
+            usernameAvailable = false;
+            
+            const username = usernameInput.value.trim();
+            if (!username || username.length < 3) {
+                disableEnrollment();
+                return;
+            }
+            
+            usernameCheckTimeout = setTimeout(async () => {
+                await checkUsername();
+            }, USERNAME_DEBOUNCE);
+        });
         
-        const username = usernameInput.value.trim();
-        if (!username || username.length < 3) {
-            disableEnrollment();
-            return;
-        }
-        
-        usernameCheckTimeout = setTimeout(async () => {
-            await checkUsername();
-        }, USERNAME_DEBOUNCE);
-    });
-    
-    usernameInput.addEventListener('blur', async () => {
-        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
-        await checkUsername();
-    });
-    
-    usernameInput.addEventListener('keydown', async (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
+        usernameInput.addEventListener('blur', async () => {
             if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
             await checkUsername();
-            if (usernameAvailable) mainPassInput.focus();
-        }
-    });
+        });
+        
+        usernameInput.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+                await checkUsername();
+                if (usernameAvailable) mainPassInput.focus();
+            }
+        });
+    } else {
+        // No username input in this UI variant — enable enrollment immediately
+        usernameAvailable = true;
+        // allow user to start with master password
+        enableEnrollment();
+    }
     
     async function checkUsername() {
+        // If username input was removed from the simplified UI, treat username as already available
+        if (!usernameInput) {
+            usernameAvailable = true;
+            enableEnrollment();
+            return;
+        }
         // Do not perform username checks after registration completes
         if (registrationComplete) return;
         const username = usernameInput.value.trim();
@@ -546,7 +552,7 @@
     });
 
     async function handleEnterPress() {
-        const username = usernameInput.value.trim();
+        const username = (usernameInput && typeof usernameInput.value === 'string') ? usernameInput.value.trim() : '';
         const mainPass = mainPassInput.value;
         const typedPass = typingInput.value;
 
@@ -586,7 +592,7 @@
             
             // Auto-clear error message after 3 seconds
             setTimeout(() => {
-                if (statusEl.textContent.includes('salah') || statusEl.textContent.includes('kesalahan')) {
+                if (statusEl.textContent.includes('incorrect') || statusEl.textContent.includes('error')) {
                     statusEl.textContent = '';
                     statusEl.style.color = ''; // Reset color
                 }
@@ -804,11 +810,14 @@
         enrollmentSection.style.display = 'none';
         document.getElementById('motivationalMsg').textContent = "20/20 samples collected";
 
-        // Move focus to Continue button for keyboard users
+        // Show a brief success popup (checkmark) rather than relying on a CTA button
         try {
-            const cont = document.querySelector('#finishSection .btn');
-            if (cont) cont.focus();
-        } catch(e) {}
+            const popup = document.getElementById('successPopup');
+            if (popup) {
+                popup.classList.remove('hidden');
+                setTimeout(() => { popup.classList.add('hidden'); }, 1800);
+            }
+        } catch (e) {}
 
         // Add dim overlay on the form to visually indicate completion
         try {
@@ -856,6 +865,7 @@
     // Auto-run username validation on page load / when navigating back (handles browser autofill)
     (function initUsernameCheckOnLoad(){
         try {
+            if (!usernameInput) return;
             const val = usernameInput.value && usernameInput.value.trim();
             if (val && val.length >= 3) {
                 console.debug('[register] Initial username detected, validating...');
@@ -908,6 +918,12 @@
                 <button id="confirmOkBtn" class="btn btn-danger">Yes, proceed</button>
             </div>
         </div>
+    </div>
+
+    <!-- Transient success popup (appears briefly on completion) -->
+    <div id="successPopup" class="success-popup hidden" aria-hidden="true" style="position:fixed; right:20px; top:20px; background:rgba(16,185,129,0.95); color:#fff; padding:12px 16px; border-radius:8px; display:flex; align-items:center; gap:10px; box-shadow:0 6px 24px rgba(2,6,23,0.6); z-index:1200;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#fff;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <div>Reset complete</div>
     </div>
 
     <script>

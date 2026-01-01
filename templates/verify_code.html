@@ -28,7 +28,11 @@
                 <span id="verifyBtnText">Verify Email</span>
             </button>
             <button id="resendBtn" class="btn btn-secondary">Resend Code</button>
-            <a href="/register" class="btn btn-secondary verify-back">Back to Register</a>
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('main.home') }}" class="btn btn-secondary verify-back">Back to Dashboard</a>
+            {% else %}
+            <a href="{{ url_for('auth.register_page') }}" class="btn btn-secondary verify-back">Back to Register</a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -36,6 +40,7 @@
 <script>
     // Prefill username from server-side context (if provided) or from query param
     const serverProvided = "{{ username|default('') }}".trim();
+    const serverPurpose = "{{ purpose|default('') }}".trim();
     const params = new URLSearchParams(window.location.search);
     const username = serverProvided || params.get('username') || '';
     document.getElementById('vcUsername').value = username;
@@ -88,16 +93,27 @@
             verifySpinner.classList.remove('hidden');
             verifyBtnText.textContent = 'Verifying...';
 
-            const resp = await fetch('/api/verify_email', {
+            // Decide endpoint based on purpose (reset flows use a different API)
+            const purpose = serverPurpose || params.get('purpose') || '';
+            const endpoint = purpose === 'reset' ? '/api/verify_reset' : '/api/verify_email';
+            const resp = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, token: code })
             });
             const j = await resp.json().catch(() => ({}));
             if (resp.ok) {
-                showAlert('Email verified! Redirecting to registration...', 'success');
-                // Return to registration and enable password/enrollment step
-                setTimeout(() => { window.location.href = `/register?verified=1&username=${encodeURIComponent(username)}`; }, 1100);
+                if (purpose === 'reset') {
+                    // verify_reset returns a signed reset_token we must forward to the reset registration
+                    const resetToken = j.reset_token || '';
+                    showAlert('Verification OK — redirecting to reset enrollment...', 'success');
+                    // Redirect to the dedicated reset completion page instead of reusing /register
+                    setTimeout(() => { window.location.href = `/reset/complete?verified=1&username=${encodeURIComponent(username)}&reset=1&reset_token=${encodeURIComponent(resetToken)}`; }, 900);
+                } else {
+                    showAlert('Email verified! Redirecting to registration...', 'success');
+                    // Return to registration and enable password/enrollment step
+                    setTimeout(() => { window.location.href = `/register?verified=1&username=${encodeURIComponent(username)}`; }, 1100);
+                }
             } else {
                 if (j.error_code === 'expired_token') {
                     showAlert('Token expired. Please request a new code.', 'error');
@@ -119,10 +135,13 @@
     resendBtn.addEventListener('click', async () => {
         try {
             resendBtn.disabled = true;
-            const resp = await fetch('/api/resend_verification', {
+            const purpose = serverPurpose || params.get('purpose') || '';
+            const endpoint = purpose === 'reset' ? '/api/send_reset_verification' : '/api/resend_verification';
+            const body = purpose === 'reset' ? JSON.stringify({ username: username }) : JSON.stringify({ username: username });
+            const resp = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username })
+                body: body
             });
             const j = await resp.json().catch(() => ({}));
             if (resp.ok) {

@@ -103,7 +103,6 @@ python app.py.bak
 - `GET /login` - Login page
 - `GET /register` - Registration page
 - `GET /logout` - Logout & clear session
-- `GET /login/legacy` - Legacy login (backward compat)
 
 ### API Blueprint (/api prefix)
 - `POST /api/check_username` - Username validation

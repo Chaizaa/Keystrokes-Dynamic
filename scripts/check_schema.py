@@ -1,6 +1,9 @@
 import sqlite3
+import os
+from config import basedir, Config
 
-conn = sqlite3.connect('data/biometric_auth.db')
+db_path = os.path.join(basedir, Config.DATABASE_PATH)
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Get all tables
@@ -12,11 +15,11 @@ for table in tables:
     table_name = table[0]
     print(f"\n📋 Table: {table_name}")
     print("=" * 60)
-    
+
     # Get table schema
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = cursor.fetchall()
-    
+
     for col in columns:
         col_id, name, type_, not_null, default, pk = col
         constraints = []
@@ -26,7 +29,7 @@ for table in tables:
             constraints.append("NOT NULL")
         if default:
             constraints.append(f"DEFAULT {default}")
-        
+
         constraint_str = f" ({', '.join(constraints)})" if constraints else ""
         print(f"  - {name}: {type_}{constraint_str}")
 

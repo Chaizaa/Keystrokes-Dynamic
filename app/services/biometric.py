@@ -1,7 +1,12 @@
 """Refactored BiometricService implementation used for tests and application.
 This module provides a clean implementation and avoids issues in the older `biometric_service.py` file.
 """
+
 from typing import Dict, List
+
+import os
+import sqlite3
+from config import basedir, Config
 
 import numpy as np
 
@@ -38,24 +43,41 @@ class BiometricService:
 
     def calculate_statistical_similarity(self, sample: Dict, enrollment_list: List[Dict]) -> Dict:
         import statistics
+
         if not enrollment_list:
-            return {'score': 0.0, 'mean_h_diff': float('nan'), 'std_h_diff': float('nan')}
+            return {
+                "score": 0.0,
+                "mean_h_diff": float("nan"),
+                "std_h_diff": float("nan"),
+            }
         try:
-            sample_h = [float(x) for x in sample.get('H_vector', [])]
+            sample_h = [float(x) for x in sample.get("H_vector", [])]
         except Exception:
-            return {'score': 0.0, 'mean_h_diff': float('nan'), 'std_h_diff': float('nan')}
+            return {
+                "score": 0.0,
+                "mean_h_diff": float("nan"),
+                "std_h_diff": float("nan"),
+            }
         template_rows = []
         for t in enrollment_list:
-            hv = t.get('H_vector') or []
+            hv = t.get("H_vector") or []
             try:
                 template_rows.append([float(x) for x in hv])
             except Exception:
                 continue
         if not sample_h or not template_rows:
-            return {'score': 0.0, 'mean_h_diff': float('nan'), 'std_h_diff': float('nan')}
+            return {
+                "score": 0.0,
+                "mean_h_diff": float("nan"),
+                "std_h_diff": float("nan"),
+            }
         min_len = min(len(sample_h), min(len(r) for r in template_rows))
         if min_len == 0:
-            return {'score': 0.0, 'mean_h_diff': float('nan'), 'std_h_diff': float('nan')}
+            return {
+                "score": 0.0,
+                "mean_h_diff": float("nan"),
+                "std_h_diff": float("nan"),
+            }
         sample_h = sample_h[:min_len]
         trimmed = [[r[i] for i in range(min_len)] for r in template_rows]
         template_means = [statistics.mean(col) for col in zip(*trimmed)]
@@ -64,7 +86,11 @@ class BiometricService:
         std_h_diff = statistics.pstdev(diffs) if len(diffs) > 1 else 0.0
         # Scale mean diff to make score more discriminative for large diffs
         score = 1.0 / (1.0 + (mean_h_diff * 2.0))
-        return {'score': float(score), 'mean_h_diff': float(mean_h_diff), 'std_h_diff': float(std_h_diff)}
+        return {
+            "score": float(score),
+            "mean_h_diff": float(mean_h_diff),
+            "std_h_diff": float(std_h_diff),
+        }
 
     def get_enrollment_status(self, username: str) -> Dict:
         """Return enrollment status for a username.
@@ -79,13 +105,19 @@ class BiometricService:
         # Prefer SQLAlchemy EnrollmentVector (canonical)
         count = 0
         try:
-            from app.models import EnrollmentVector, KeystrokeVector, db as sqlalchemy_db
-            from sqlalchemy import select, func
+            from sqlalchemy import func, select
+
+            from app.models import EnrollmentVector, KeystrokeVector
+            from app.models import db as sqlalchemy_db
 
             # 1) Check EnrollmentVector model (preferred)
             ev_count = 0
             try:
-                stmt = select(func.count()).select_from(EnrollmentVector).where(EnrollmentVector.username == username)
+                stmt = (
+                    select(func.count())
+                    .select_from(EnrollmentVector)
+                    .where(EnrollmentVector.username == username)
+                )
                 ev_count = int(sqlalchemy_db.session.execute(stmt).scalar_one())
                 print(f"[DB] Enrollment count from EnrollmentVector: {ev_count}")
             except Exception:
@@ -95,7 +127,14 @@ class BiometricService:
             kv_event_count = 0
             kv_any_count = 0
             try:
-                stmt2 = select(func.count()).select_from(KeystrokeVector).where(KeystrokeVector.username == username, KeystrokeVector.event_type == 'enrollment')
+                stmt2 = (
+                    select(func.count())
+                    .select_from(KeystrokeVector)
+                    .where(
+                        KeystrokeVector.username == username,
+                        KeystrokeVector.event_type == "enrollment",
+                    )
+                )
                 kv_event_count = int(sqlalchemy_db.session.execute(stmt2).scalar_one())
                 print(f"[DB] Enrollment count from KeystrokeVector (event_type): {kv_event_count}")
             except Exception:
@@ -105,8 +144,11 @@ class BiometricService:
             raw_count = 0
             try:
                 from sqlalchemy import text
-                sql = text("SELECT COUNT(*) FROM user_vectors WHERE username = :u AND (event_type = 'enrollment' OR data_type = 'enrollment')")
-                r = sqlalchemy_db.session.execute(sql, {'u': username}).scalar_one()
+
+                sql = text(
+                    "SELECT COUNT(*) FROM user_vectors WHERE username = :u AND (event_type = 'enrollment' OR data_type = 'enrollment')"
+                )
+                r = sqlalchemy_db.session.execute(sql, {"u": username}).scalar_one()
                 raw_count = int(r) if r is not None else 0
                 print(f"[DB] Enrollment count from user_vectors (raw SQL fallback): {raw_count}")
             except Exception:
@@ -114,7 +156,11 @@ class BiometricService:
 
             # As a last resort, count any KeystrokeVector rows for that username
             try:
-                stmt_any = select(func.count()).select_from(KeystrokeVector).where(KeystrokeVector.username == username)
+                stmt_any = (
+                    select(func.count())
+                    .select_from(KeystrokeVector)
+                    .where(KeystrokeVector.username == username)
+                )
                 kv_any_count = int(sqlalchemy_db.session.execute(stmt_any).scalar_one())
                 print(f"[DB] Enrollment count from KeystrokeVector (any-candidate): {kv_any_count}")
             except Exception:
@@ -128,7 +174,8 @@ class BiometricService:
             # Fallback to legacy checks (feature_vectors/enrollment_vectors in sqlite)
             count = 0
             try:
-                conn = sqlite3.connect('data/biometric_auth.db')
+                db_path = os.path.join(basedir, Config.DATABASE_PATH)
+                conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 # Try feature_vectors (new file-based schema)
                 try:
@@ -139,7 +186,7 @@ class BiometricService:
                         try:
                             cursor.execute(
                                 "SELECT COUNT(*) FROM feature_vectors WHERE user_id = ? AND event_type = 'enrollment'",
-                                (user_id,)
+                                (user_id,),
                             )
                             count = cursor.fetchone()[0]
                             if count > 0:
@@ -147,7 +194,13 @@ class BiometricService:
                                 conn.close()
                                 enrolled = count >= self.MIN_SAMPLES_FOR_VERIFICATION
                                 ready_for_login = count >= self.RECOMMENDED_SAMPLES
-                                return {'count': int(count), 'enrolled': bool(enrolled), 'ready_for_login': bool(ready_for_login), 'minimum_samples': self.MIN_SAMPLES_FOR_VERIFICATION, 'recommended_samples': self.RECOMMENDED_SAMPLES}
+                                return {
+                                    "count": int(count),
+                                    "enrolled": bool(enrolled),
+                                    "ready_for_login": bool(ready_for_login),
+                                    "minimum_samples": self.MIN_SAMPLES_FOR_VERIFICATION,
+                                    "recommended_samples": self.RECOMMENDED_SAMPLES,
+                                }
                         except sqlite3.OperationalError:
                             pass
                 except sqlite3.OperationalError:
@@ -155,7 +208,10 @@ class BiometricService:
 
                 # Try enrollment_vectors (file-based)
                 try:
-                    cursor.execute("SELECT COUNT(*) FROM enrollment_vectors WHERE username = ?", (username,))
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM enrollment_vectors WHERE username = ?",
+                        (username,),
+                    )
                     count = cursor.fetchone()[0]
                     print(f"[DB] Enrollment count from enrollment_vectors: {count}")
                 except sqlite3.OperationalError:
@@ -169,11 +225,11 @@ class BiometricService:
         ready_for_login = count >= self.RECOMMENDED_SAMPLES
 
         return {
-            'count': int(count),
-            'enrolled': bool(enrolled),
-            'ready_for_login': bool(ready_for_login),
-            'minimum_samples': self.MIN_SAMPLES_FOR_VERIFICATION,
-            'recommended_samples': self.RECOMMENDED_SAMPLES
+            "count": int(count),
+            "enrolled": bool(enrolled),
+            "ready_for_login": bool(ready_for_login),
+            "minimum_samples": self.MIN_SAMPLES_FOR_VERIFICATION,
+            "recommended_samples": self.RECOMMENDED_SAMPLES,
         }
 
     def verify_keystroke_sample(self, arg1, arg2=None, use_statistical: bool = True) -> Dict:
@@ -195,21 +251,41 @@ class BiometricService:
 
         # Validate templates
         if not templates or len(templates) < self.MIN_SAMPLES_FOR_VERIFICATION:
-            return {'error': 'insufficient enrollment samples', 'decision': 'impostor'} if not legacy else {'success': False, 'verified': False, 'score': 0.0, 'reason': 'insufficient_samples', 'message': f'Need at least {self.MIN_SAMPLES_FOR_VERIFICATION} enrollment samples'}
+            return (
+                {"error": "insufficient enrollment samples", "decision": "impostor"}
+                if not legacy
+                else {
+                    "success": False,
+                    "verified": False,
+                    "score": 0.0,
+                    "reason": "insufficient_samples",
+                    "message": f"Need at least {self.MIN_SAMPLES_FOR_VERIFICATION} enrollment samples",
+                }
+            )
 
         # Validate vectors
-        login_H = login_sample.get('H_vector', [])
-        login_DD = login_sample.get('DD_vector', [])
+        login_H = login_sample.get("H_vector", [])
+        login_DD = login_sample.get("DD_vector", [])
         if not login_H or not login_DD:
-            return {'error': 'missing required vectors', 'decision': 'impostor'} if not legacy else {'success': False, 'verified': False, 'score': 0.0, 'reason': 'invalid_features', 'message': 'Missing required keystroke features'}
+            return (
+                {"error": "missing required vectors", "decision": "impostor"}
+                if not legacy
+                else {
+                    "success": False,
+                    "verified": False,
+                    "score": 0.0,
+                    "reason": "invalid_features",
+                    "message": "Missing required keystroke features",
+                }
+            )
 
         eu_scores = []
         cos_scores = []
         stat_scores = []
 
         for t in templates:
-            tH = t.get('H_vector', [])
-            tDD = t.get('DD_vector', [])
+            tH = t.get("H_vector", [])
+            tDD = t.get("DD_vector", [])
             if len(tH) != len(login_H) or len(tDD) != len(login_DD):
                 continue
 
@@ -224,10 +300,23 @@ class BiometricService:
             cos_scores.append(cos)
 
             s = self.calculate_statistical_similarity(login_sample, templates)
-            stat_scores.append(s.get('score', 0.0))
+            stat_scores.append(s.get("score", 0.0))
 
         if not eu_scores and not cos_scores and not stat_scores:
-            return {'error': 'no valid template comparisons (length mismatch)', 'decision': 'impostor'} if not legacy else {'success': False, 'verified': False, 'score': 0.0, 'reason': 'password_length_mismatch', 'message': 'Password length does not match enrollment. Please type the same password you registered with'}
+            return (
+                {
+                    "error": "no valid template comparisons (length mismatch)",
+                    "decision": "impostor",
+                }
+                if not legacy
+                else {
+                    "success": False,
+                    "verified": False,
+                    "score": 0.0,
+                    "reason": "password_length_mismatch",
+                    "message": "Password length does not match enrollment. Please type the same password you registered with",
+                }
+            )
 
         eu_score = float(np.mean(eu_scores)) if eu_scores else 0.0
         cos_score = float(np.mean(cos_scores)) if cos_scores else 0.0
@@ -242,22 +331,62 @@ class BiometricService:
 
         if legacy:
             verified = calibrated_confidence >= self.LOW_CONFIDENCE_THRESHOLD
-            confidence_label = 'exact_match' if calibrated_confidence >= self.EXACT_MATCH_THRESHOLD else ('high' if calibrated_confidence >= self.HIGH_CONFIDENCE_THRESHOLD else ('medium' if calibrated_confidence >= self.MEDIUM_CONFIDENCE_THRESHOLD else ('low' if calibrated_confidence >= self.LOW_CONFIDENCE_THRESHOLD else 'failed')))
-            return {'success': True, 'verified': verified, 'score': float(round(calibrated_confidence, 4)), 'avg_score': float(round(np.mean([eu_score, cos_score, statistical_score]), 4)), 'confidence': confidence_label, 'templates_used': len(templates), 'message': 'Biometric verification successful' if verified else 'Biometric verification failed'}
+            confidence_label = (
+                "exact_match"
+                if calibrated_confidence >= self.EXACT_MATCH_THRESHOLD
+                else (
+                    "high"
+                    if calibrated_confidence >= self.HIGH_CONFIDENCE_THRESHOLD
+                    else (
+                        "medium"
+                        if calibrated_confidence >= self.MEDIUM_CONFIDENCE_THRESHOLD
+                        else (
+                            "low"
+                            if calibrated_confidence >= self.LOW_CONFIDENCE_THRESHOLD
+                            else "failed"
+                        )
+                    )
+                )
+            )
+            return {
+                "success": True,
+                "verified": verified,
+                "score": float(round(calibrated_confidence, 4)),
+                "avg_score": float(round(np.mean([eu_score, cos_score, statistical_score]), 4)),
+                "confidence": confidence_label,
+                "templates_used": len(templates),
+                "message": (
+                    "Biometric verification successful"
+                    if verified
+                    else "Biometric verification failed"
+                ),
+            }
 
         confidence_score = calibrated_confidence
-        decision = 'genuine' if confidence_score >= self.MEDIUM_CONFIDENCE_THRESHOLD else 'impostor'
+        decision = "genuine" if confidence_score >= self.MEDIUM_CONFIDENCE_THRESHOLD else "impostor"
         if confidence_score >= self.EXACT_MATCH_THRESHOLD:
-            label = 'Exact Match'
+            label = "Exact Match"
         elif confidence_score >= self.HIGH_CONFIDENCE_THRESHOLD:
-            label = 'High Confidence'
+            label = "High Confidence"
         elif confidence_score >= self.MEDIUM_CONFIDENCE_THRESHOLD:
-            label = 'Medium Confidence'
+            label = "Medium Confidence"
         elif confidence_score >= self.LOW_CONFIDENCE_THRESHOLD:
-            label = 'Low Confidence'
+            label = "Low Confidence"
         else:
-            label = 'Very Low Confidence'
+            label = "Very Low Confidence"
 
-        primary_metric = 'euclidean' if eu_score >= max(cos_score, statistical_score) else ('cosine' if cos_score >= statistical_score else 'statistical')
+        primary_metric = (
+            "euclidean"
+            if eu_score >= max(cos_score, statistical_score)
+            else ("cosine" if cos_score >= statistical_score else "statistical")
+        )
 
-        return {'decision': decision, 'confidence_score': float(round(confidence_score, 4)), 'confidence_label': label, 'euclidean_score': float(round(eu_score, 4)), 'cosine_score': float(round(cos_score, 4)), 'statistical_score': float(round(statistical_score, 4)), 'primary_metric': primary_metric}
+        return {
+            "decision": decision,
+            "confidence_score": float(round(confidence_score, 4)),
+            "confidence_label": label,
+            "euclidean_score": float(round(eu_score, 4)),
+            "cosine_score": float(round(cos_score, 4)),
+            "statistical_score": float(round(statistical_score, 4)),
+            "primary_metric": primary_metric,
+        }

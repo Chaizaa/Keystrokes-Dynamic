@@ -110,7 +110,7 @@ python run.py
 ✅ Registered Blueprints: main, auth, api
 ✅ Total Routes: 15
    - Main: 2 routes (/, /home)
-   - Auth: 4 routes (/login, /register, /logout, /login/legacy)
+   - Auth: 3 routes (/login, /register, /logout) - legacy route `/login/legacy` archived
    - API: 8 routes (check_username, register_sample, etc.)
    - Static: 1 route (/static/<path>)
 

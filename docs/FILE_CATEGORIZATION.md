@@ -178,7 +178,7 @@ Remove-Item webV2 -Recurse -Force -ErrorAction SilentlyContinue
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'biometric_auth.db')
 
 # To:
-DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/biometric_auth.db')
+DATABASE_PATH = os.getenv('DATABASE_PATH', 'biometric_auth.db')
 ```
 
 ### 2. .env (Line 7)
@@ -187,7 +187,7 @@ DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/biometric_auth.db')
 DATABASE_PATH=biometric_auth.db
 
 # To:
-DATABASE_PATH=data/biometric_auth.db
+DATABASE_PATH=biometric_auth.db
 ```
 
 ### 3. tests/__init__.py (CREATE NEW)

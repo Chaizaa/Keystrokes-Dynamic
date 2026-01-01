@@ -26,7 +26,10 @@ from app import create_app
 
 **Auth Blueprint (4 routes):**
 - GET /login - Login page
-- GET /login/legacy - Legacy login
+- GET /register - Registration page
+- GET /logout - Logout
+**Auth Blueprint (4 routes):**
+- GET /login - Login page
 - GET /register - Registration page
 - GET /logout - Logout
 

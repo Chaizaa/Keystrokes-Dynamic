@@ -4,7 +4,7 @@ def test_confirm_modal_hidden_on_dashboard_initial_load(client, db_session, auth
     We check the modal element exists in the HTML, but does not have the `active` class and has `aria-hidden="true"`.
     """
     # `authenticated_client` fixture provides an authenticated client
-    resp = authenticated_client.get('/home')
+    resp = authenticated_client.get("/home")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
 

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Enrollment Removed{% endblock %}
+
+{% block extra_css %}
+<style>
+  .notice-wrap { min-height:60vh; display:flex; align-items:center; justify-content:center; padding:28px }
+  .notice-card { max-width:820px; width:100%; padding:28px; border-radius:14px }
+  .notice-card pre { background: rgba(255,255,255,0.03); padding:12px; border-radius:8px; color:#dbeafe }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="bg-gradient notice-wrap">
+  <div class="card notice-card">
+    <h2 style="color:#fff;margin-bottom:6px">Admin Enrollment Removed</h2>
+    <p class="muted">The interactive <strong>/admin/register</strong> enrollment endpoint has been removed to avoid exposing admin creation publicly.</p>
+
+    <p style="margin-top:12px">To create or promote an admin account, edit and run the developer script <code>scripts/create_admin_manual.py</code> on the server or a trusted dev machine.</p>
+
+    <div style="margin-top:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <a class="btn btn-primary" href="/admin/login">Go to Admin Login</a>
+      <a class="btn btn-secondary" href="/">Return to Site</a>
+      <div style="flex:1"></div>
+    </div>
+
+    <div style="margin-top:16px">
+      <label style="color:#a0b3d8;font-weight:600;display:block;margin-bottom:8px">Create admin (developer)</label>
+      <pre>python scripts/create_admin_manual.py</pre>
+    </div>
+  </div>
+</div>
+{% endblock %}

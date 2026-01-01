@@ -1,14 +1,25 @@
 """
 Database models package
 """
+
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-# Import models for easy access
-from .user import User
+from .feature_vector import EnrollmentVector, FeatureVector
 from .keystroke_vector import KeystrokeVector
 from .login_attempt import LoginAttempt
-from .feature_vector import FeatureVector, EnrollmentVector
 
-__all__ = ['db', 'User', 'KeystrokeVector', 'LoginAttempt', 'FeatureVector', 'EnrollmentVector']
+# Import models for easy access
+from .user import User
+from .admin_audit import AdminAudit
+
+__all__ = [
+    "db",
+    "User",
+    "KeystrokeVector",
+    "LoginAttempt",
+    "FeatureVector",
+    "EnrollmentVector",
+    "AdminAudit",
+]

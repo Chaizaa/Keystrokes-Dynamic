@@ -63,12 +63,10 @@
         <!-- Actions Card -->
         <div class="card">
             <h2>Account Actions</h2>
-            <button class="btn btn-primary" onclick="openResetModal()">
+            <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">
                 Reset Password
             </button>
-            <button class="btn btn-secondary" onclick="window.location.href='/login/legacy'">
-                Switch to Legacy Login
-            </button>
+            <!-- Legacy login removed from UI -->
             <button class="btn btn-danger" onclick="logout()">
                 Logout
             </button>
@@ -76,162 +74,129 @@
     </div>
 </div>
 
-<!-- Reset Password Modal -->
-<div id="resetModal" class="modal">
-    <div class="modal-content">
-        <h3>Reset Password</h3>
-        <div id="modalAlert" class="alert"></div>
-        <form id="resetForm" onsubmit="return handleReset(event)">
-            <div class="form-group">
-                <label for="newPassword">New Password</label>
-                <input type="password" id="newPassword" required minlength="3" placeholder="Enter new password">
-            </div>
-            <div class="form-group">
-                <label for="confirmPassword">Confirm Password</label>
-                <input type="password" id="confirmPassword" required minlength="3" placeholder="Confirm new password">
-            </div>
-            <p class="warning-text">
-                Warning: Resetting password will delete all enrollment data. You'll need to register again.
-            </p>
-            <div class="modal-footer">
-                <button type="submit" class="btn btn-primary">Reset Password</button>
-                <button type="button" class="btn btn-secondary" onclick="closeResetModal()">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
     // Load user info on page load
-    document.addEventListener('DOMContentLoaded', async () => {
-        await loadUserInfo();
-    });
-    
     async function loadUserInfo() {
         try {
-            const response = await fetch('/api/user/info');
-            
+            // Ensure cookies/session are sent with the request
+            const response = await fetch('/api/user/info', { credentials: 'same-origin' });
+
             if (response.status === 401) {
                 window.location.href = '/login';
                 return;
             }
-            
-            const data = await response.json();
-            
-            if (data.error) {
-                alert('Error loading profile: ' + data.error);
+
+            if (!response.ok) {
+                const txt = await response.text().catch(() => '');
+                console.error('Failed to load user info:', response.status, txt);
+                alert('Failed to load profile — please refresh or log in again.');
                 return;
             }
-            
+
+            const data = await response.json().catch(err => {
+                console.error('Invalid JSON from /api/user/info', err);
+                alert('Failed to load profile (invalid response).');
+                return null;
+            });
+            if (!data) return;
+
+            // Helper: format timestamps for display
+            function formatDateTime(dateString) {
+                if (!dateString) return '-';
+                try {
+                    const date = new Date(dateString);
+                    return date.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (e) {
+                    return dateString;
+                }
+            }
+
             // Populate profile
             document.getElementById('headerUsername').textContent = data.username;
             document.getElementById('username').textContent = data.username;
             document.getElementById('email').textContent = data.email || '-';
-            document.getElementById('createdAt').textContent = formatDateTime(data.created_at);
+            document.getElementById('createdAt').textContent = formatDateTime(data.last_login || data.session_start || data.created_at);
             document.getElementById('emailVerified').textContent = (data.email_verified ? 'Yes' : 'No');
             document.getElementById('enrollmentCount').textContent = (typeof data.enrollment_count !== 'undefined') ? data.enrollment_count : 0;
-            // has_password is provided by the API (bool)
             document.getElementById('hasPassword').textContent = (data.has_password ? 'Yes' : 'No');
-            
+
             // Show content
             document.getElementById('loadingSection').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
-            
+
         } catch (error) {
             console.error('Error loading user info:', error);
             alert('Failed to load profile. Please try again.');
         }
     }
-    
-    function formatDateTime(dateString) {
-        if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleString('id-ID', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
-    
-    function openResetModal() {
-        const m = document.getElementById('resetModal');
-        m.classList.add('active');
-        m.classList.add('reset-modal');
-        m.setAttribute('aria-hidden', 'false');
-        document.getElementById('resetForm').reset();
-        document.getElementById('modalAlert').classList.remove('active');
-        // Dim background and prevent scrolling like confirm modal
-        document.body.classList.add('modal-open');
-        // Focus safer action (Cancel)
-        try { m.querySelector('.btn-secondary').focus(); } catch(e) {}
-    }
-    
-    function closeResetModal() {
-        const m = document.getElementById('resetModal');
-        m.classList.remove('active');
-        m.classList.remove('reset-modal');
-        m.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('modal-open');
-        // Return focus to Reset Password button in the page
-        try { document.querySelector('.btn.btn-primary[onclick="openResetModal()"]')?.focus(); } catch(e) {}
-    }
-    
-    async function handleReset(event) {
-        event.preventDefault();
-        
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        const alertBox = document.getElementById('modalAlert');
-        
-        if (newPassword !== confirmPassword) {
-            alertBox.textContent = 'Passwords do not match!';
-            alertBox.className = 'alert error active';
-            return false;
+
+    // Start reset flow: send verification and redirect to verify page
+    async function startResetFlow() {
+        const username = document.getElementById('username').textContent || document.getElementById('headerUsername').textContent || '';
+        const btn = document.getElementById('resetBtn');
+        const originalText = btn ? btn.textContent : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
         }
-        
-        // Removed extra confirmation for Reset: proceed directly to reset to simplify UX for normal users.
-        // If you want a confirmation in the future, re-add a modal check here.
-        // (Previously prompted the user; now we allow direct reset.)
-        
+
+        // Fallback redirect in case email sending blocks for too long
+        const redirectUrl = `/verify?username=${encodeURIComponent(username)}&purpose=reset`;
+        let didNavigate = false;
+        const fallback = setTimeout(() => {
+            if (btn) btn.textContent = originalText || 'Reset Password';
+            didNavigate = true;
+            window.location.href = redirectUrl;
+        }, 5000);
+
         try {
-            const response = await fetch('/api/user/reset_password', {
+            const resp = await fetch('/api/send_reset_verification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ new_password: newPassword })
+                body: JSON.stringify({ username: username }),
+                credentials: 'same-origin'
             });
-            
-            const data = await response.json();
-            
-            if (response.ok) {
-                alert('Password reset successful! Please register again with new keystroke patterns.');
-                window.location.href = '/register';
+            const body = await resp.json().catch(() => ({}));
+            clearTimeout(fallback);
+            if (resp.ok) {
+                didNavigate = true;
+                window.location.href = redirectUrl;
             } else {
-                alertBox.textContent = (data.error || 'Reset failed');
-                alertBox.className = 'alert error active';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText || 'Reset Password';
+                }
+                alert(body.message || 'Failed to send reset verification');
             }
-            
         } catch (error) {
-            console.error('Reset error:', error);
-            alertBox.textContent = 'Network error. Please try again.';
-            alertBox.className = 'alert error active';
+            clearTimeout(fallback);
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText || 'Reset Password';
+            }
+            // Ignore abort errors caused by navigation (fetch abort when page unloads)
+            if (didNavigate) return;
+            if (error && (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('aborted')))) {
+                // likely navigation cancelled the request — do not show a network alert
+                console.debug('Fetch aborted due to navigation; ignoring.');
+                return;
+            }
+            console.error('Reset flow error:', error);
+            alert('Network error. Please try again.');
         }
-        
-        return false;
     }
-    
+
     function logout() {
-        // Ask for confirmation before logout to avoid accidental sign out
         showConfirmModal('Logout', 'Are you sure you want to logout?', {confirmText: 'Logout', cancelText: 'Cancel', destructive: false})
         .then(ok => { if (ok) window.location.href = '/logout'; });
     }
-    
-    // Close modal on outside click
-    document.getElementById('resetModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeResetModal();
-        }
-    });
+
+    document.addEventListener('DOMContentLoaded', loadUserInfo);
 </script>
 {% endblock %}

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Reset Password & Re-enroll | SecureAuth{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="auth-container bg-gradient">
+    <div class="auth-box">
+        <div class="logo">
+            <div class="logo-text"></div>
+        </div>
+        <h2>Set New Master Password</h2>
+        <p class="subtitle">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
+
+        <!-- Username removed from UI; kept hidden element for compatibility with JS -->
+        <div class="form-group" style="display:none;">
+            <label for="rcUsername">Username</label>
+            <input id="rcUsername" type="text" readonly>
+        </div>
+
+        <div class="form-group">
+            <label for="rcPassword">New Master Password</label>
+            <div class="input-wrapper">
+                <input id="rcPassword" type="password" placeholder="Create a secure password">
+                <span class="toggle-password" onclick="togglePass('rcPassword', this)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
+            <p class="hint-text">This password will be used for biometric re-enrollment.</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="enrollmentSection" class="section">
+            <div class="section-title">Biometric Re-enrollment</div>
+            <p class="hint-text">Type your new password naturally 20 times to train the system.</p>
+
+            <div class="progress-card" style="margin-bottom:14px;">
+                <div class="progress-header">
+                    <span class="progress-label">Enrollment Progress</span>
+                    <span class="progress-count"><span id="countDisplay">0</span>/20</span>
+                </div>
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p class="progress-message" id="motivationalMsg">Take your time, type naturally</p>
+            </div>
+
+            <div class="typing-timer" id="typingTimer" style="display:none; margin-bottom:12px;">
+                <div class="label">Typing Rhythm</div>
+                <div class="time">
+                    <span id="timerDisplay">0.000</span><span class="unit">s</span>
+                </div>
+                <small>Recording keystroke pattern...</small>
+            </div>
+
+            <div class="form-group" style="margin-top:14px;">
+                <label for="typingField">Type Password & Press Enter</label>
+                <div class="input-wrapper">
+                    <input type="password" id="typingField" placeholder="Type your password here">
+                    <span class="toggle-password" onclick="togglePass('typingField', this)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </span>
+                </div>
+                <p id="status" class="hint-text"></p>
+            </div>
+        </div>
+
+        <div id="finishSection" class="completion-section hidden">
+            <div class="completion-icon" aria-hidden="true"></div>
+            <h3>Reset Complete</h3>
+            <p>Your password was updated and biometrics re-enrolled.</p>
+            <a href="/login" class="btn">Continue to Login</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Simple helpers
+function togglePass(inputId, iconSpan) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') input.type = 'text'; else input.type = 'password';
+}
+
+// Basic enrollment variables
+let sampleCount = 0;
+const targetSamples = 20;
+let rawEvents = [];
+let activeKeys = {};
+let typingStartTime = null;
+let timerInterval = null;
+let isFirstKeystroke = true;
+
+const countDisplay = document.getElementById('countDisplay');
+const progressBar = document.getElementById('progressBar');
+const typingInput = document.getElementById('typingField');
+const mainPassInput = document.getElementById('rcPassword');
+const usernameEl = document.getElementById('rcUsername');
+const statusEl = document.getElementById('status');
+
+// Prefill username from query or server context
+const params = new URLSearchParams(window.location.search);
+const prefillUsername = params.get('username') || "{{ username|default('') }}";
+if (prefillUsername) usernameEl.value = prefillUsername;
+
+function startTimer() {
+    if (!typingStartTime) {
+        typingStartTime = performance.now();
+        const timerEl = document.getElementById('typingTimer');
+        const disp = document.getElementById('timerDisplay');
+        if (timerEl) timerEl.style.display = 'block';
+        if (disp) disp.textContent = '0.000';
+        timerInterval = setInterval(() => {
+            try {
+                const elapsed = (performance.now() - typingStartTime) / 1000;
+                if (disp) disp.textContent = elapsed.toFixed(3);
+            } catch (e) { /* ignore */ }
+        }, 50);
+    }
+}
+function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    typingStartTime = null;
+    const timerEl = document.getElementById('typingTimer');
+    const disp = document.getElementById('timerDisplay');
+    if (timerEl) timerEl.style.display = 'none';
+    if (disp) disp.textContent = '0.000';
+}
+function resetTimer() { stopTimer(); isFirstKeystroke = true; }
+
+// Keystroke capture
+typingInput.addEventListener('keydown', (event) => {
+    const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+    if (event.key === 'Enter') return;
+    if (event.repeat && !isModifier) {
+        event.preventDefault();
+        rawEvents.push({ key: event.key, code: event.code, evt: 'd', t: performance.now(), isRepeat: true });
+        return;
+    }
+    if (!isModifier) {
+        activeKeys[event.code] = performance.now();
+        if (isFirstKeystroke) { startTimer(); isFirstKeystroke = false; }
+        rawEvents.push({ key: event.key, code: event.code, evt: 'd', t: performance.now(), isRepeat: false });
+    }
+});
+
+// Stopwatch will start on the first actual typed key (handled in keydown)
+
+typingInput.addEventListener('keyup', (event) => {
+    const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+    if (event.key === 'Enter') { handleEnterPress(); return; }
+    if (!isModifier) rawEvents.push({ key: event.key, code: event.code, evt: 'u', t: performance.now() });
+});
+
+async function handleEnterPress() {
+    const newPass = mainPassInput.value || '';
+    const typedPass = typingInput.value || '';
+    if (!newPass) { statusEl.textContent = 'Please enter the new master password.'; return; }
+    if (typedPass !== newPass) {
+        statusEl.textContent = 'Typed password does not match the master password.';
+        typingInput.value = '';
+        rawEvents = [];
+        resetTimer();
+        return;
+    }
+
+    // submit sample to reset endpoint
+    typingInput.disabled = true;
+    statusEl.textContent = 'Saving sample...';
+    try {
+        const resetToken = params.get('reset_token') || '';
+        const response = await fetch('/api/reset_password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: usernameEl.value.trim(), reset_token: resetToken, events: rawEvents, sample_count: sampleCount+1 })
+        });
+        const result = await response.json().catch(() => ({}));
+        const ok = result.status === 'success' || result.success === true;
+        if (ok) {
+            sampleCount++;
+            countDisplay.textContent = sampleCount;
+            updateProgress();
+            typingInput.value = '';
+            rawEvents = [];
+            resetTimer();
+            statusEl.textContent = 'Sample saved';
+            // Re-enable typing field for the next sample and focus it
+            typingInput.disabled = false;
+            try { typingInput.focus(); } catch (e) {}
+
+            if (sampleCount >= targetSamples) {
+                document.getElementById('finishSection').classList.remove('hidden');
+                // redirect to login after a short delay
+                setTimeout(() => { window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&from=reset`; }, 1500);
+                return;
+            }
+        } else {
+            statusEl.textContent = result.message || 'Failed to save sample';
+            typingInput.disabled = false;
+        }
+    } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Network error';
+        typingInput.disabled = false;
+    }
+}
+
+function updateProgress() {
+    const pct = (sampleCount / targetSamples) * 100;
+    progressBar.style.width = pct + '%';
+    const msgEl = document.getElementById('motivationalMsg');
+    if (sampleCount <= 10) msgEl.textContent = `Progress: ${sampleCount}/20 samples recorded`;
+    else if (sampleCount < 20) msgEl.textContent = `${sampleCount}/20 samples - ${20-sampleCount} remaining`;
+}
+
+</script>
+<script src="{{ url_for('static', filename='js/reset_complete.js') }}"></script>
+{% endblock %}

@@ -1,14 +1,16 @@
 """
 Test Blueprint Application - Route Verification
 """
+
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import create_app
 
 # Create application instance
-app = create_app('development')
+app = create_app("development")
 
 print("=" * 60)
 print("Blueprint Application - Route Verification")
@@ -22,22 +24,25 @@ for blueprint_name, blueprint in app.blueprints.items():
 print("\n✅ All Routes:")
 routes = []
 for rule in app.url_map.iter_rules():
-    routes.append({
-        'endpoint': rule.endpoint,
-        'methods': ','.join(rule.methods - {'HEAD', 'OPTIONS'}),
-        'path': str(rule)
-    })
+    routes.append(
+        {
+            "endpoint": rule.endpoint,
+            "methods": ",".join(rule.methods - {"HEAD", "OPTIONS"}),
+            "path": str(rule),
+        }
+    )
 
 # Group by blueprint
 from collections import defaultdict
+
 grouped_routes = defaultdict(list)
 for route in routes:
-    blueprint = route['endpoint'].split('.')[0] if '.' in route['endpoint'] else 'static'
+    blueprint = route["endpoint"].split(".")[0] if "." in route["endpoint"] else "static"
     grouped_routes[blueprint].append(route)
 
 for blueprint, routes in sorted(grouped_routes.items()):
     print(f"\n📁 {blueprint.upper()}:")
-    for route in sorted(routes, key=lambda x: x['path']):
+    for route in sorted(routes, key=lambda x: x["path"]):
         print(f"   {route['methods']:15} {route['path']}")
 
 print("\n" + "=" * 60)

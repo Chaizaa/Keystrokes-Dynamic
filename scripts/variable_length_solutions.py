@@ -8,21 +8,23 @@ Problem: User pakai password berbeda-beda panjangnya
 Solusi: Gunakan algoritma yang bisa handle variable-length input
 """
 
+import json
+
 import numpy as np
 from scipy.spatial.distance import euclidean
-from scipy.stats import skew, kurtosis
-import json
+from scipy.stats import kurtosis, skew
 
 # ============================================================================
 # SOLUTION 1: Statistical Feature Extraction (RECOMMENDED untuk ML)
 # ============================================================================
 # Ide: Convert variable-length vectors → fixed-size statistical features
 
+
 def extract_statistical_features(vectors_dict):
     """
     Extract fixed-size features dari variable-length timing vectors
-    
-    Input: 
+
+    Input:
         vectors_dict = {
             'H_vector': [100, 150, 120, ...],  # length bisa beda-beda
             'DD_vector': [50, 80, 60, ...],
@@ -30,41 +32,42 @@ def extract_statistical_features(vectors_dict):
             'UU_vector': [...],
             'DU_vector': [...]
         }
-    
+
     Output:
         feature_vector = [f1, f2, f3, ..., f35]  # FIXED SIZE: 35 features
     """
     features = []
-    
+
     # Process each timing vector
-    for vector_name in ['H_vector', 'DD_vector', 'UD_vector', 'UU_vector', 'DU_vector']:
+    for vector_name in ["H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"]:
         vec = vectors_dict.get(vector_name, [])
-        
+
         if len(vec) == 0:
             # Empty vector: add zeros
             features.extend([0] * 7)
             continue
-        
+
         vec = np.array(vec)
-        
+
         # Statistical features (7 per vector × 5 vectors = 35 total)
-        features.append(np.mean(vec))       # 1. Mean (rata-rata)
-        features.append(np.std(vec))        # 2. Std deviation (variasi)
-        features.append(np.min(vec))        # 3. Minimum
-        features.append(np.max(vec))        # 4. Maximum
-        features.append(np.median(vec))     # 5. Median
-        features.append(skew(vec))          # 6. Skewness (asimetri)
-        features.append(kurtosis(vec))      # 7. Kurtosis (tail distribution)
-    
+        features.append(np.mean(vec))  # 1. Mean (rata-rata)
+        features.append(np.std(vec))  # 2. Std deviation (variasi)
+        features.append(np.min(vec))  # 3. Minimum
+        features.append(np.max(vec))  # 4. Maximum
+        features.append(np.median(vec))  # 5. Median
+        features.append(skew(vec))  # 6. Skewness (asimetri)
+        features.append(kurtosis(vec))  # 7. Kurtosis (tail distribution)
+
     return np.array(features)  # Fixed size: 35 features
+
 
 # Contoh penggunaan:
 sample_data = {
-    'H_vector': [120, 150, 100, 180, 90, 110, 140],  # 7 elements
-    'DD_vector': [50, 80, 60, 90, 40, 55, 70],       # 7 elements
-    'UD_vector': [30, 40, 35, 45, 28, 32, 38],
-    'UU_vector': [200, 250, 220, 280, 190, 210, 240],
-    'DU_vector': [80, 100, 90, 110, 75, 85, 95]
+    "H_vector": [120, 150, 100, 180, 90, 110, 140],  # 7 elements
+    "DD_vector": [50, 80, 60, 90, 40, 55, 70],  # 7 elements
+    "UD_vector": [30, 40, 35, 45, 28, 32, 38],
+    "UU_vector": [200, 250, 220, 280, 190, 210, 240],
+    "DU_vector": [80, 100, 90, 110, 75, 85, 95],
 }
 
 features1 = extract_statistical_features(sample_data)
@@ -85,14 +88,15 @@ print("   - Feature interpretable (statistik)")
 # ============================================================================
 # Ide: Compare sequences dengan panjang berbeda menggunakan DTW
 
+
 def dtw_distance(seq1, seq2):
     """
     Dynamic Time Warping distance untuk compare 2 sequences dengan length berbeda
-    
+
     Contoh:
         seq1 = [100, 150, 120]        # length 3
         seq2 = [100, 140, 130, 125]   # length 4
-        
+
     DTW akan find optimal alignment:
         seq1: 100 --- 150 --- 120 ---
         seq2: 100 140 130 --- 125 ---
@@ -100,25 +104,26 @@ def dtw_distance(seq1, seq2):
              match warp warp   warp
     """
     n, m = len(seq1), len(seq2)
-    
+
     # Initialize DTW matrix
     dtw_matrix = np.zeros((n + 1, m + 1))
     for i in range(n + 1):
         for j in range(m + 1):
             dtw_matrix[i, j] = np.inf
     dtw_matrix[0, 0] = 0
-    
+
     # Fill DTW matrix
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            cost = abs(seq1[i-1] - seq2[j-1])
+            cost = abs(seq1[i - 1] - seq2[j - 1])
             dtw_matrix[i, j] = cost + min(
-                dtw_matrix[i-1, j],      # insertion
-                dtw_matrix[i, j-1],      # deletion
-                dtw_matrix[i-1, j-1]     # match
+                dtw_matrix[i - 1, j],  # insertion
+                dtw_matrix[i, j - 1],  # deletion
+                dtw_matrix[i - 1, j - 1],  # match
             )
-    
+
     return dtw_matrix[n, m]
+
 
 def verify_with_dtw(enrollment_vectors, login_vectors, threshold=1000):
     """
@@ -126,38 +131,35 @@ def verify_with_dtw(enrollment_vectors, login_vectors, threshold=1000):
     """
     # Compute DTW distance untuk setiap vector type
     distances = []
-    
-    for vector_name in ['H_vector', 'DD_vector', 'UD_vector']:
+
+    for vector_name in ["H_vector", "DD_vector", "UD_vector"]:
         enroll_vec = enrollment_vectors.get(vector_name, [])
         login_vec = login_vectors.get(vector_name, [])
-        
+
         if len(enroll_vec) > 0 and len(login_vec) > 0:
             dist = dtw_distance(enroll_vec, login_vec)
             distances.append(dist)
-    
+
     # Average DTW distance
-    avg_distance = np.mean(distances) if distances else float('inf')
-    
+    avg_distance = np.mean(distances) if distances else float("inf")
+
     # Decision
     is_genuine = avg_distance < threshold
-    
-    return {
-        'is_genuine': is_genuine,
-        'distance': avg_distance,
-        'threshold': threshold
-    }
+
+    return {"is_genuine": is_genuine, "distance": avg_distance, "threshold": threshold}
+
 
 # Contoh penggunaan:
 enrollment = {
-    'H_vector': [120, 150, 100, 180, 90, 110, 140],  # 7 elements
-    'DD_vector': [50, 80, 60, 90, 40, 55, 70],
-    'UD_vector': [30, 40, 35, 45, 28, 32, 38]
+    "H_vector": [120, 150, 100, 180, 90, 110, 140],  # 7 elements
+    "DD_vector": [50, 80, 60, 90, 40, 55, 70],
+    "UD_vector": [30, 40, 35, 45, 28, 32, 38],
 }
 
 login_attempt = {
-    'H_vector': [125, 155, 95, 175, 95],  # 5 elements (DIFFERENT LENGTH!)
-    'DD_vector': [48, 85, 58, 92, 38],
-    'UD_vector': [32, 38, 37, 43, 30]
+    "H_vector": [125, 155, 95, 175, 95],  # 5 elements (DIFFERENT LENGTH!)
+    "DD_vector": [48, 85, 58, 92, 38],
+    "UD_vector": [32, 38, 37, 43, 30],
 }
 
 result = verify_with_dtw(enrollment, login_attempt, threshold=500)
@@ -178,31 +180,33 @@ print("   - Good for verification/authentication")
 # ============================================================================
 # Ide: LSTM/GRU bisa handle variable-length sequences
 
+
 def prepare_for_lstm(vectors_dict, max_length=None):
     """
     Prepare data untuk LSTM/GRU input dengan padding
-    
+
     Tapi BERBEDA dengan simple padding:
     - LSTM bisa di-train dengan "masking" layer
     - Model akan ignore padded values (0s)
     """
     # Concatenate all vectors
     all_vectors = []
-    for vector_name in ['H_vector', 'DD_vector', 'UD_vector', 'UU_vector', 'DU_vector']:
+    for vector_name in ["H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"]:
         vec = vectors_dict.get(vector_name, [])
         all_vectors.extend(vec)
-    
+
     # Determine max_length if not specified
     if max_length is None:
         max_length = len(all_vectors)
-    
+
     # Pad to max_length
     if len(all_vectors) < max_length:
         all_vectors.extend([0] * (max_length - len(all_vectors)))
     else:
         all_vectors = all_vectors[:max_length]
-    
+
     return np.array(all_vectors).reshape(1, -1, 1)  # Shape: (batch, timesteps, features)
+
 
 print("\n\nSOLUTION 3: LSTM/GRU Networks (Keras)")
 print("=" * 70)
@@ -275,12 +279,20 @@ print("   - Used in production systems (FaceID, etc.)")
 print("\n\n" + "=" * 70)
 print("📊 PERBANDINGAN SOLUSI")
 print("=" * 70)
-print(f"{'Method':<25} | {'Variable Len':<12} | {'Speed':<8} | {'Accuracy':<10} | {'Complexity':<10}")
+print(
+    f"{'Method':<25} | {'Variable Len':<12} | {'Speed':<8} | {'Accuracy':<10} | {'Complexity':<10}"
+)
 print("-" * 70)
-print(f"{'1. Statistical Features':<25} | {'✅ Yes':<12} | {'⚡ Fast':<8} | {'⭐⭐⭐':<10} | {'🟢 Easy':<10}")
-print(f"{'2. DTW Distance':<25} | {'✅ Yes':<12} | {'🐌 Slow':<8} | {'⭐⭐⭐⭐':<10} | {'🟡 Medium':<10}")
+print(
+    f"{'1. Statistical Features':<25} | {'✅ Yes':<12} | {'⚡ Fast':<8} | {'⭐⭐⭐':<10} | {'🟢 Easy':<10}"
+)
+print(
+    f"{'2. DTW Distance':<25} | {'✅ Yes':<12} | {'🐌 Slow':<8} | {'⭐⭐⭐⭐':<10} | {'🟡 Medium':<10}"
+)
 print(f"{'3. LSTM/GRU':<25} | {'✅ Yes':<12} | {'⚡ Fast':<8} | {'⭐⭐⭐⭐':<10} | {'🔴 Hard':<10}")
-print(f"{'4. Siamese Networks':<25} | {'✅ Yes':<12} | {'⚡ Fast':<8} | {'⭐⭐⭐⭐⭐':<10} | {'🔴 Hard':<10}")
+print(
+    f"{'4. Siamese Networks':<25} | {'✅ Yes':<12} | {'⚡ Fast':<8} | {'⭐⭐⭐⭐⭐':<10} | {'🔴 Hard':<10}"
+)
 
 print("\n\n🎯 REKOMENDASI untuk Thesis:")
 print("=" * 70)

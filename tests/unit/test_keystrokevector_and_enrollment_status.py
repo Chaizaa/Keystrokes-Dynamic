@@ -1,6 +1,7 @@
 """
 Tests for KeystrokeVector username auto-population and BiometricService enrollment status behavior
 """
+
 import pytest
 
 
@@ -10,10 +11,10 @@ def test_keystrokevector_auto_populates_username(db_session, sample_user):
 
     kv = KeystrokeVector(
         user_id=sample_user.id,
-        h_vector='[0.1, 0.2, 0.3]',
-        dd_vector='[0.05, 0.06, 0.07]',
-        ud_vector='[0.15, 0.16, 0.17]',
-        data_type='enrollment'
+        h_vector="[0.1, 0.2, 0.3]",
+        dd_vector="[0.05, 0.06, 0.07]",
+        ud_vector="[0.15, 0.16, 0.17]",
+        data_type="enrollment",
     )
     db_session.add(kv)
     db_session.commit()
@@ -24,7 +25,9 @@ def test_keystrokevector_auto_populates_username(db_session, sample_user):
     assert fetched.username == sample_user.username
 
 
-def test_get_enrollment_status_counts_with_userid_only_samples(biometric_service, db_session, sample_user):
+def test_get_enrollment_status_counts_with_userid_only_samples(
+    biometric_service, db_session, sample_user
+):
     """Ensure enrollment status counts samples created with only user_id (no username) correctly."""
     from app.models import KeystrokeVector
 
@@ -33,18 +36,18 @@ def test_get_enrollment_status_counts_with_userid_only_samples(biometric_service
         kv = KeystrokeVector(
             user_id=sample_user.id,
             h_vector=f"[0.{i}, 0.2, 0.3]",
-            dd_vector='[0.05, 0.06, 0.07]',
-            ud_vector='[0.15, 0.16, 0.17]',
-            data_type='enrollment'
+            dd_vector="[0.05, 0.06, 0.07]",
+            ud_vector="[0.15, 0.16, 0.17]",
+            data_type="enrollment",
         )
         db_session.add(kv)
     db_session.commit()
 
     status = biometric_service.get_enrollment_status(sample_user.username)
 
-    assert status['count'] == 3
-    assert status['enrolled'] is True
-    assert status['ready_for_login'] is False
+    assert status["count"] == 3
+    assert status["enrolled"] is True
+    assert status["ready_for_login"] is False
 
 
 def test_get_H_vector_parsing_and_invalid(db_session, sample_user):
@@ -54,10 +57,10 @@ def test_get_H_vector_parsing_and_invalid(db_session, sample_user):
     # Case 1: H_vector stored as JSON string
     kv1 = KeystrokeVector(
         user_id=sample_user.id,
-        H_vector='[0.1, 0.2, 0.3]',
-        dd_vector='[0.05, 0.06, 0.07]',
-        ud_vector='[0.15, 0.16, 0.17]',
-        data_type='enrollment'
+        H_vector="[0.1, 0.2, 0.3]",
+        dd_vector="[0.05, 0.06, 0.07]",
+        ud_vector="[0.15, 0.16, 0.17]",
+        data_type="enrollment",
     )
     db_session.add(kv1)
     db_session.commit()
@@ -68,9 +71,9 @@ def test_get_H_vector_parsing_and_invalid(db_session, sample_user):
     # Case 2: set via property with list
     kv2 = KeystrokeVector(
         user_id=sample_user.id,
-        dd_vector='[0.05, 0.06, 0.07]',
-        ud_vector='[0.15, 0.16, 0.17]',
-        data_type='enrollment'
+        dd_vector="[0.05, 0.06, 0.07]",
+        ud_vector="[0.15, 0.16, 0.17]",
+        data_type="enrollment",
     )
     kv2.h_vector = [0.4, 0.5, 0.6]
     db_session.add(kv2)
@@ -82,10 +85,10 @@ def test_get_H_vector_parsing_and_invalid(db_session, sample_user):
     # Case 3: invalid JSON string -> returns empty list
     kv3 = KeystrokeVector(
         user_id=sample_user.id,
-        H_vector='not-a-json',
-        dd_vector='[0.05, 0.06, 0.07]',
-        ud_vector='[0.15, 0.16, 0.17]',
-        data_type='enrollment'
+        H_vector="not-a-json",
+        dd_vector="[0.05, 0.06, 0.07]",
+        ud_vector="[0.15, 0.16, 0.17]",
+        data_type="enrollment",
     )
     db_session.add(kv3)
     db_session.commit()

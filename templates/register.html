@@ -125,11 +125,7 @@
     
     <!-- Completion -->
     <div id="finishSection" class="completion-section hidden">
-        <div class="completion-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        </div>
+        <div class="completion-icon" aria-hidden="true"></div>
         <h3>Registration Complete</h3>
         <p>Account successfully created</p>
         <a href="/login" class="btn">Continue to Login</a>
@@ -194,8 +190,8 @@
         async function sendVerification() {
             const username = usernameInput.value.trim();
             const email = (emailInput.value || '').trim();
-            if (!username) { showToast('Masukkan username terlebih dahulu', 'warn'); usernameInput.focus(); return; }
-            if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Masukkan email yang valid', 'warn'); emailInput.focus(); return; }
+            if (!username) { showToast('Please enter a username first', 'warn'); usernameInput.focus(); return; }
+            if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Please enter a valid email', 'warn'); emailInput.focus(); return; }
             sendVerifyBtn.disabled = true;
             try {
                 const resp = await fetch('/api/send_verification', {
@@ -205,15 +201,15 @@
                 });
                 const j = await resp.json().catch(() => ({}));
                 if (resp.ok) {
-                    showToast('Kode verifikasi dikirim. Buka inbox Anda.', 'info');
+                    showToast('Verification code sent. Check your inbox.', 'info');
                     // Redirect to verify page where user can paste code
                     setTimeout(() => { window.location.href = `/verify?username=${encodeURIComponent(username)}`; }, 600);
                 } else {
-                    showToast(j.message || 'Gagal mengirim kode verifikasi', 'error');
+                    showToast(j.message || 'Failed to send verification code', 'error');
                     sendVerifyBtn.disabled = false;
                 }
             } catch (e) {
-                showToast('Network error saat mengirim verifikasi', 'error');
+                showToast('Network error while sending verification', 'error');
                 sendVerifyBtn.disabled = false;
             }
         }
@@ -659,7 +655,7 @@
             allow = emailVerifiedUser;
         }
         if (!allow) {
-            showToast('Silakan verifikasi email terlebih dahulu', 'warn');
+            showToast('Please verify your email first', 'warn');
             return;
         }
         enrollmentSection.classList.remove('disabled');
@@ -782,7 +778,7 @@
             
             // Auto-clear error message after 3 seconds
             setTimeout(() => {
-                if (statusEl.textContent.includes('salah') || statusEl.textContent.includes('kesalahan')) {
+                if (statusEl.textContent.includes('incorrect') || statusEl.textContent.includes('error')) {
                     statusEl.textContent = '';
                     statusEl.style.color = ''; // Reset color
                 }
@@ -800,15 +796,20 @@
             const rawEmail = document.getElementById('regEmail').value;
             const email = (typeof rawEmail === 'string' && rawEmail.trim()) ? rawEmail.trim() : null;
             
-            const response = await fetch('/api/register_sample', {
+            const params = new URLSearchParams(window.location.search);
+            const isReset = params.get('reset') === '1';
+            const resetToken = params.get('reset_token') || '';
+            const endpoint = isReset ? '/api/reset_password' : '/api/register_sample';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(Object.assign({
                     username: username,
                     email: email,
                     events: rawEvents,
                     sample_count: sampleCount + 1
-                })
+                }, isReset ? { reset_token: resetToken } : {}))
             });
 
             const result = await response.json();
@@ -854,41 +855,50 @@
                 mainPassInput.disabled = false;
 
                 if (sampleCount >= targetSamples) {
-                    // On completion, require email and send verification then redirect to verification page
-                    const emailVal = (document.getElementById('regEmail').value || '').trim();
-                    if (!emailVal) {
-                        // Email is optional — finish registration without sending verification
-                        try { showToast('Pendaftaran selesai tanpa email — Anda dapat menambahkan email nanti', 'info', 4000); } catch(e){}
-                        window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
-                        return;
-                    }
-
-                    // Send verification email and redirect to verification page
-                    try {
-                        const resp = await fetch('/api/send_verification', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username: username, email: emailVal })
-                        });
-
-                        if (!resp.ok) {
-                            const j = await resp.json().catch(() => ({}));
-                            const msg = j.message || 'Gagal mengirim email verifikasi';
-                            showToast(msg, 'error', 4000);
-                            typingInput.disabled = false;
+                    const params = new URLSearchParams(window.location.search);
+                    const isReset = params.get('reset') === '1';
+                    // On completion, for regular registration require email and send verification then redirect
+                    if (!isReset) {
+                        const emailVal = (document.getElementById('regEmail').value || '').trim();
+                        if (!emailVal) {
+                            // Email is optional — finish registration without sending verification
+                            try { showToast('Registration completed without email — you can add it later', 'info', 4000); } catch(e){}
+                            window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
                             return;
                         }
 
-                        // Redirect to login so user can sign in and continue to dashboard
+                        // Send verification email and redirect to verification page
                         try {
-                            showToast('Pendaftaran selesai — silakan masuk untuk melanjutkan', 'info', 3500);
-                        } catch (e) { /* ignore if toast not available */ }
-                        window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
-                        return;
-                    } catch (e) {
-                        console.warn('Failed to request verification email', e);
-                        showToast('Failed to send verification email — try again', 'error', 4000);
-                        typingInput.disabled = false;
+                            const resp = await fetch('/api/send_verification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username: username, email: emailVal })
+                            });
+
+                            if (!resp.ok) {
+                                const j = await resp.json().catch(() => ({}));
+                                const msg = j.message || 'Failed to send verification email';
+                                showToast(msg, 'error', 4000);
+                                typingInput.disabled = false;
+                                return;
+                            }
+
+                            // Redirect to login so user can sign in and continue to dashboard
+                            try {
+                                showToast('Registration complete — please sign in to continue', 'info', 3500);
+                            } catch (e) { /* ignore if toast not available */ }
+                            window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
+                            return;
+                        } catch (e) {
+                            console.warn('Failed to request verification email', e);
+                            showToast('Failed to send verification email — try again', 'error', 4000);
+                            typingInput.disabled = false;
+                            return;
+                        }
+                    } else {
+                        // Reset flow: samples were saved to /api/reset_password on each sample; on completion just redirect to login
+                        try { showToast('Reset complete — please login with your new password', 'info', 3500); } catch(e){}
+                        window.location.href = `/login?username=${encodeURIComponent(username)}&from=reset`;
                         return;
                     }
                 } else {

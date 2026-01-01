@@ -3,11 +3,13 @@
 
 This script can be run as a script or imported (call `migrate()` in tests).
 """
-import sqlite3
+
 import json
+import sqlite3
+
 from app.models import EnrollmentVector, FeatureVector, User, db
 
-DB_PATH = 'data/biometric_auth.db'
+DB_PATH = "data/biometric_auth.db"
 
 
 def migrate(db_path=DB_PATH, limit=None, dry_run=False):
@@ -15,7 +17,9 @@ def migrate(db_path=DB_PATH, limit=None, dry_run=False):
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT id, username, data_type, H_vector, DD_vector, UD_vector, UU_vector, DU_vector, raw_events, timestamp FROM user_vectors WHERE data_type = 'enrollment' ORDER BY id ASC")
+        cursor.execute(
+            "SELECT id, username, data_type, H_vector, DD_vector, UD_vector, UU_vector, DU_vector, raw_events, timestamp FROM user_vectors WHERE data_type = 'enrollment' ORDER BY id ASC"
+        )
         rows = cursor.fetchall()
     except Exception as e:
         print(f"[MIGRATE] No legacy user_vectors/enrollment rows found or error: {e}")
@@ -29,12 +33,14 @@ def migrate(db_path=DB_PATH, limit=None, dry_run=False):
         legacy_id, username, data_type, H, DD, UD, UU, DU, raw_events, timestamp = r
 
         # resolve user
-        user_row = db.session.execute(db.select(User).where(User.username == username)).scalars().first()
+        user_row = (
+            db.session.execute(db.select(User).where(User.username == username)).scalars().first()
+        )
         if not user_row:
             print(f"[MIGRATE] No user found for username={username}, skipping row {legacy_id}")
             continue
 
-        ev = EnrollmentVector(user_id=user_row.id, username=username, event_type='enrollment')
+        ev = EnrollmentVector(user_id=user_row.id, username=username, event_type="enrollment")
         if H:
             try:
                 ev.H_vector = H if isinstance(H, str) else json.dumps(H)
@@ -59,5 +65,5 @@ def migrate(db_path=DB_PATH, limit=None, dry_run=False):
     return migrated
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     migrate()

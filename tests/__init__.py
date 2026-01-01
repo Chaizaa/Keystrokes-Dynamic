@@ -2,6 +2,7 @@
 Test package initialization
 Adds parent directory to Python path for imports
 """
+
 import sys
 from pathlib import Path
 

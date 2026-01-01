@@ -24,7 +24,7 @@
    - `KeystrokeVector` model: Biometric timing features
    - `LoginAttempt` model: Security tracking
    - Relationships: Foreign keys with cascade delete
-   - Database: `data/biometric_auth.db`
+   - Database: `biometric_auth.db`
 
 3. **✅ Flask-Migrate Setup**
    - Alembic migrations initialized
@@ -33,7 +33,7 @@
    - Old migrations archived
 
 4. **✅ Database Backup**
-   - Original database: `data/biometric_auth.db.backup_20251224_030731`
+   - Original database: `biometric_auth.db.backup_20251224_030731`
    - Rollback capability maintained
 
 5. **✅ Initial Migration**
