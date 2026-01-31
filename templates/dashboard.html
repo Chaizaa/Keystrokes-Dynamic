@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Keystroke Biometric{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block body %}
+
+<div class="container">
+    <div class="header">
+        <h1>Dashboard</h1>
+        <div class="user-badge">
+            <span id="headerUsername">Loading...</span>
+        </div>
+    </div>
+    
+    <div id="loadingSection" class="card loading">
+        <div class="spinner"></div>
+        <p>Loading your profile...</p>
+    </div>
+    
+    <div id="mainContent" style="display: none;">
+        <!-- Profile Card -->
+        <div class="card">
+            <h2>Profile Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">Username</div>
+                    <div class="value" id="username">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Email</div>
+                    <div class="value" id="email">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Account Created</div>
+                    <div class="value" id="createdAt">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Email Verified</div>
+                    <div class="value" id="emailVerified">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistics Card -->
+        <div class="card">
+            <h2>Biometric Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="number" id="enrollmentCount">0</div>
+                    <div class="label">Enrollment Samples</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="hasPassword">-</div>
+                    <div class="label">Has Password</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions Card -->
+        <div class="card">
+            <h2>Account Actions</h2>
+            <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">
+                Reset Password
+            </button>
+            <!-- Legacy login removed from UI -->
+            <button class="btn btn-danger" onclick="logout()">
+                Logout
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load user info on page load
+    async function loadUserInfo() {
+        try {
+            // Ensure cookies/session are sent with the request
+            const response = await fetch('/api/user/info', { credentials: 'same-origin' });
+
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (!response.ok) {
+                const txt = await response.text().catch(() => '');
+                console.error('Failed to load user info:', response.status, txt);
+                alert('Failed to load profile — please refresh or log in again.');
+                return;
+            }
+
+            const data = await response.json().catch(err => {
+                console.error('Invalid JSON from /api/user/info', err);
+                alert('Failed to load profile (invalid response).');
+                return null;
+            });
+            if (!data) return;
+
+            // Helper: format timestamps for display
+            function formatDateTime(dateString) {
+                if (!dateString) return '-';
+                try {
+                    const date = new Date(dateString);
+                    return date.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (e) {
+                    return dateString;
+                }
+            }
+
+            // Populate profile
+            document.getElementById('headerUsername').textContent = data.username;
+            document.getElementById('username').textContent = data.username;
+            document.getElementById('email').textContent = data.email || '-';
+            document.getElementById('createdAt').textContent = formatDateTime(data.last_login || data.session_start || data.created_at);
+            document.getElementById('emailVerified').textContent = (data.email_verified ? 'Yes' : 'No');
+            document.getElementById('enrollmentCount').textContent = (typeof data.enrollment_count !== 'undefined') ? data.enrollment_count : 0;
+            document.getElementById('hasPassword').textContent = (data.has_password ? 'Yes' : 'No');
+
+            // Show content
+            document.getElementById('loadingSection').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+
+        } catch (error) {
+            console.error('Error loading user info:', error);
+            alert('Failed to load profile. Please try again.');
+        }
+    }
+
+    // Start reset flow: send verification and redirect to verify page
+    async function startResetFlow() {
+        const username = document.getElementById('username').textContent || document.getElementById('headerUsername').textContent || '';
+        const btn = document.getElementById('resetBtn');
+        const originalText = btn ? btn.textContent : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+        }
+
+        // Fallback redirect in case email sending blocks for too long
+        const redirectUrl = `/verify?username=${encodeURIComponent(username)}&purpose=reset`;
+        let didNavigate = false;
+        const fallback = setTimeout(() => {
+            if (btn) btn.textContent = originalText || 'Reset Password';
+            didNavigate = true;
+            window.location.href = redirectUrl;
+        }, 5000);
+
+        try {
+            const resp = await fetch('/api/send_reset_verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username }),
+                credentials: 'same-origin'
+            });
+            const body = await resp.json().catch(() => ({}));
+            clearTimeout(fallback);
+            if (resp.ok) {
+                didNavigate = true;
+                window.location.href = redirectUrl;
+            } else {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText || 'Reset Password';
+                }
+                alert(body.message || 'Failed to send reset verification');
+            }
+        } catch (error) {
+            clearTimeout(fallback);
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText || 'Reset Password';
+            }
+            // Ignore abort errors caused by navigation (fetch abort when page unloads)
+            if (didNavigate) return;
+            if (error && (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('aborted')))) {
+                // likely navigation cancelled the request — do not show a network alert
+                console.debug('Fetch aborted due to navigation; ignoring.');
+                return;
+            }
+            console.error('Reset flow error:', error);
+            alert('Network error. Please try again.');
+        }
+    }
+
+    function logout() {
+        showConfirmModal('Logout', 'Are you sure you want to logout?', {confirmText: 'Logout', cancelText: 'Cancel', destructive: false})
+        .then(ok => { if (ok) window.location.href = '/logout'; });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadUserInfo);
+</script>
+{% endblock %}

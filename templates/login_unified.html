@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In | SecureAuth{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="auth-container bg-gradient">
+    <div class="auth-box">
+        <div class="logo">
+            <div class="logo-text">SecureAuth</div>
+        </div>
+        <h2>Sign In</h2>
+        <!-- admin badge removed; admin logins are handled at /admin/login -->
+        <p class="subtitle">Biometric Authentication Platform</p>
+        
+        <div class="info-box">
+            New user? <a href="/register">Create an account</a>
+        </div>
+    
+    <form id="loginForm" onsubmit="return handleLogin(event)">
+        <div class="form-group">
+            <label for="username">Username or email</label>
+            <input 
+                type="text" 
+                id="username" 
+                placeholder="Username or email" 
+                autocomplete="off"
+                required>
+            <div id="usernameStatus" class="username-status hidden"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="passwordField">
+                Password
+                <span class="tip-text">Type naturally as you did during enrollment</span>
+            </label>
+            <div class="input-wrapper">
+                <input 
+                    type="password" 
+                    id="passwordField" 
+                    placeholder="Enter your password" 
+                    autocomplete="off"
+                    required>
+                <span class="toggle-password" onclick="togglePassword()" id="toggleIcon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
+        </div>
+        
+        <div id="typingTimer">
+            <div class="label">Typing Rhythm</div>
+            <div class="time">
+                <span id="timerDisplay">0.000</span><span class="unit">s</span>
+            </div>
+            <small>Capturing keystroke pattern...</small>
+        </div>
+        
+        <button type="submit" id="submitBtn">
+            Sign In
+        </button>
+    </form>
+    
+    <div id="resultBox"></div>
+    <!-- Dev-only debug panel: visible when DEV_LENIENT is enabled -->
+    <div id="debugPanel" class="hidden" style="margin-top: 12px; font-size:13px; color:#b8c5d6;">
+        <label><input type="checkbox" id="debugToggle"> Request debug info from server</label>
+        <pre id="debugOutput" class="hidden" style="margin-top:8px; background: rgba(0,0,0,0.15); padding:8px; border-radius:6px; white-space:pre-wrap; color:#fff; max-height:200px; overflow:auto;"></pre>
+    </div>
+</div>
+
+<script>
+    // If redirected from registration, prefill username and show a friendly toast
+    (function prefillFromQuery() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const preUser = params.get('username');
+            const from = params.get('from');
+            if (preUser) {
+                const el = document.getElementById('username');
+                if (el) {
+                    el.value = decodeURIComponent(preUser);
+                    try { el.focus(); } catch (e) {}
+                }
+            }
+            if (from === 'register') {
+                try { showToast('Account created — please sign in', 'info', 4000); } catch(e){}
+            }
+        } catch (e) {
+            console.warn('Prefill query parsing failed', e);
+        }
+    })();
+
+    // ============================================================================
+    // KEYSTROKE CAPTURE
+    // ============================================================================
+    let rawEvents = [];
+    let activeKeys = {};
+    let typingStartTime = null;
+    let timerInterval = null;
+    let isFirstKeystroke = true;
+    let usernameCheckTimeout = null;
+    let isSubmitting = false;
+    
+    const usernameField = document.getElementById('username');
+    const passwordField = document.getElementById('passwordField');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultBox = document.getElementById('resultBox');
+    const usernameStatus = document.getElementById('usernameStatus');
+    const typingTimer = document.getElementById('typingTimer');
+    const timerDisplay = document.getElementById('timerDisplay');
+    
+    // ============================================================================
+    // USERNAME VALIDATION (Live Check)
+    // ============================================================================
+    usernameField.addEventListener('blur', function() {
+        let username = this.value.trim();
+        
+        if (!username) {
+            usernameStatus.classList.add('hidden');
+            return;
+        }
+        
+        // Normalize email identifiers to lowercase for lookup
+        if (username.includes('@')) username = username.toLowerCase();
+
+        // Show checking status
+        usernameStatus.className = 'username-status checking';
+        usernameStatus.textContent = 'Checking...';
+        
+        // Clear previous timeout
+        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
+        
+        // Debounce: wait 300ms before checking
+        usernameCheckTimeout = setTimeout(() => {
+            fetch('/api/check_username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, mode: 'login' })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.exists) {
+                    usernameStatus.className = 'username-status error';
+                    usernameStatus.textContent = 'User not found, please register first';
+                } else if (data.exists && !data.can_login) {
+                    usernameStatus.className = 'username-status error';
+                    usernameStatus.textContent = 'Enrollment incomplete. Complete registration first';
+                } else {
+                    usernameStatus.classList.add('hidden');
+                }
+            })
+            .catch(err => {
+                console.error('Username check error:', err);
+                usernameStatus.className = 'username-status error';
+                usernameStatus.textContent = 'Error checking user';
+            });
+        }, 300);
+    });
+    
+    // ============================================================================
+    // PASSWORD FIELD EVENTS
+    // ============================================================================
+    passwordField.addEventListener('keydown', function(e) {
+        // [CRITICAL FIX] Exclude Enter key - it's only for form submission, NOT part of keystroke pattern!
+        // This must match register.html behavior for consistency
+        if (e.key === 'Enter') {
+            return; // Let it propagate to form submit, don't record as keystroke
+        }
+        
+        // Ignore other special keys (but allow Backspace)
+        if (e.key.length > 1 && e.key !== 'Backspace') return;
+        
+        const key = e.key;
+        const code = e.code;
+        const now = performance.now();
+
+        // Start timer on first keystroke
+        if (isFirstKeystroke) {
+            typingStartTime = now;
+            isFirstKeystroke = false;
+            typingTimer.style.display = 'block';
+            startTimer();
+        }
+
+        // Handle auto-repeat: prevent the browser from inserting repeated
+        // characters into the visible input while still recording the repeat
+        // event for backend analysis (matches register.html behavior).
+        const isModifier = (e.key.length > 1 && e.key !== 'Backspace');
+        if (e.repeat && !isModifier) {
+            e.preventDefault();
+            rawEvents.push({ evt: 'd', key: key, code: code, t: now, isRepeat: true });
+            return;
+        }
+
+        // Record keydown if key is not already considered pressed
+        if (!activeKeys[code]) {
+            rawEvents.push({ evt: 'd', key: key, code: code, t: now, isRepeat: false });
+            activeKeys[code] = now;
+
+            // Debug log for troubleshooting
+            console.log(`[KEYDOWN] Key: ${key}, Code: ${code}, Events: ${rawEvents.length}`);
+        }
+    });
+    
+    passwordField.addEventListener('keyup', function(e) {
+        // [CRITICAL FIX] Exclude Enter key - it's only for form submission, NOT part of keystroke pattern!
+        if (e.key === 'Enter') {
+            return; // Skip recording
+        }
+        
+        // Ignore other special keys (but allow Backspace)
+        if (e.key.length > 1 && e.key !== 'Backspace') return;
+        
+        const key = e.key;
+        const code = e.code;
+        const now = performance.now();
+
+        if (activeKeys[code]) {
+            rawEvents.push({ evt: 'u', key: key, code: code, t: now });
+            delete activeKeys[code];
+
+            // Debug log for troubleshooting
+            console.log(`[KEYUP] Key: ${key}, Code: ${code}, Events: ${rawEvents.length}`);
+        }
+    });
+    
+    // ============================================================================
+    // TIMER DISPLAY
+    // ============================================================================
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            const elapsed = (performance.now() - typingStartTime) / 1000;
+            timerDisplay.textContent = elapsed.toFixed(3);
+        }, 10); // Update every 10ms for smooth display
+    }
+    
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+    
+    function resetTimer() {
+        stopTimer();
+        typingStartTime = null;
+        isFirstKeystroke = true;
+        timerDisplay.textContent = '0.000';
+        typingTimer.style.display = 'none';
+    }
+    
+    // ============================================================================
+    // PASSWORD VISIBILITY TOGGLE
+    // ============================================================================
+    function togglePassword() {
+        const input = passwordField;
+        const icon = document.getElementById('toggleIcon');
+        
+        const pathVisible = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+        const pathHidden = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${pathHidden}</svg>`;
+        } else {
+            input.type = 'password';
+            icon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${pathVisible}</svg>`;
+        }
+    }
+    
+    // ============================================================================
+    // FORM SUBMISSION
+    // ============================================================================
+    // DEV toggle: read injected flag from DOM (injected via context processor)
+    const LOGIN_DEV_LENIENT = (function() {
+        try {
+            const root = document.getElementById('registerRoot');
+            return root ? root.dataset.devLenient === 'true' : false;
+        } catch (e) { return false; }
+    })();
+    
+    // Show debug panel when in dev
+    try {
+        if (LOGIN_DEV_LENIENT) {
+            const dbg = document.getElementById('debugPanel');
+            if (dbg) dbg.classList.remove('hidden');
+        }
+    } catch(e){}
+
+    function handleLogin(event) {
+        event.preventDefault();
+        
+        if (isSubmitting) return false;
+        
+        let username = usernameField.value.trim();
+        if (username.includes('@')) username = username.toLowerCase();
+        const debugRequest = document.getElementById('debugToggle') ? document.getElementById('debugToggle').checked : false;
+        
+        if (!username) {
+            showResult('Please enter username', 'error');
+            return false;
+        }
+        
+        // Debug: Log captured events
+        console.log(`[DEBUG] Captured ${rawEvents.length} keystroke events`);
+        console.log('[DEBUG] Events:', rawEvents);
+        
+        // Minimum 4 events = 2 characters (each char has keydown + keyup)
+        if (rawEvents.length < 4) {
+            showResult(`Insufficient keystroke data (${rawEvents.length} events). Type your password naturally (minimum 2 characters).`, 'error');
+            return false;
+        }
+        
+        // Disable form
+        isSubmitting = true;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span> Verifying...';
+        
+        stopTimer();
+        
+        // Send to unified login endpoint
+        fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: username,
+                events: rawEvents,
+                debug: debugRequest || LOGIN_DEV_LENIENT
+            })
+        })
+        .then(r => r.json().then(data => ({status: r.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 200 && body.success) {
+                // SUCCESS
+                showResult(body.message, 'success');
+                // Redirect to home after 2 seconds
+                setTimeout(() => {
+                    window.location.href = '/home';
+                }, 2000);
+                
+            } else {
+                // FAILED
+                let message = body.message || 'Login failed';
+                
+                if (body.reason === 'rate_limit_exceeded') {
+                    message += '<br><small>Too many failed attempts. Please wait 15 minutes.</small>';
+                } else if (body.reason === 'impostor_detected') {
+                    message += '<br><small>Type with the same rhythm as during enrollment</small>';
+                } else if (body.reason === 'no_enrollment') {
+                    message += '<br><small><a href="/register" style="color: #6b9fff;">Register first</a></small>';
+                } else if (body.reason === 'PASSWORD_MISMATCH' || body.reason === 'hash_mismatch') {
+                    message = 'Incorrect password. Make sure you type the same password used during registration.';
+                }
+                
+                showResult(message, 'error');
+
+                // Show debug output if present
+                try {
+                    const dbgOut = document.getElementById('debugOutput');
+                    if (body.debug && dbgOut) {
+                        dbgOut.classList.remove('hidden');
+                        dbgOut.textContent = JSON.stringify(body.debug, null, 2);
+                    }
+                } catch(e) { console.warn('Could not show debug output', e); }
+
+                // Re-enable form
+                setTimeout(() => {
+                    resetForm();
+                }, 2000);
+            }
+        })
+        .catch(err => {
+            console.error('Login error:', err);
+            console.error('[FULL ERROR DETAILS]:', err.message, err.stack);
+            showResult('Server error. Please try again.', 'error');
+            setTimeout(() => {
+                resetForm();
+            }, 2000);
+        });
+        
+        return false;
+    }
+    
+    // ============================================================================
+    // UI HELPERS
+    // ============================================================================
+    function showResult(message, type) {
+        resultBox.innerHTML = message;
+        resultBox.className = type;
+        resultBox.style.display = 'block';
+    }
+    
+    function resetForm() {
+        rawEvents = [];
+        activeKeys = {};
+        isSubmitting = false;
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Sign In';
+        resetTimer();
+        passwordField.value = '';
+        resultBox.style.display = 'none';
+    }
+</script>
+{% endblock %}
+<script src="{{ url_for('static', filename='js/keystroke.js') }}"></script>
+<script>

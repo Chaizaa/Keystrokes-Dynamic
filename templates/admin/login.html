@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Sign In{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<style>
+  .admin-login-wrap { min-height:80vh; display:flex; align-items:center; justify-content:center; padding:28px }
+  .admin-login-card { max-width:420px; width:100%; padding:34px; border-radius:14px; }
+  #adminResult { margin-top:14px; display:none; }
+  #adminResult.success { display:block; }
+  #adminResult.error { display:block; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="bg-gradient admin-login-wrap">
+  <div class="card admin-login-card">
+    <h2 style="text-align:center;margin-bottom:6px;color:#fff">Admin Sign In</h2>
+    <p class="subtitle text-center">Restricted access — administrators only</p>
+    <form id="adminLoginForm" onsubmit="return handleAdminLogin(event)" style="margin-top:18px">
+      <div class="form-group">
+        <label for="a_username">Username</label>
+        <input id="a_username" type="text" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="a_password">Password</label>
+        <input id="a_password" type="password" required autocomplete="off">
+      </div>
+      <button type="submit" class="btn btn-primary">Sign In as Admin</button>
+    </form>
+
+    <div id="adminResult" class="status" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+function showAdminResult(msg, cls){
+  const el = document.getElementById('adminResult');
+  el.style.display = 'block';
+  el.className = 'status ' + (cls === 'success' ? 'status-success' : 'status-error');
+  el.innerHTML = msg;
+}
+
+function handleAdminLogin(e){
+  e.preventDefault();
+  const u = document.getElementById('a_username').value.trim();
+  const p = document.getElementById('a_password').value;
+  if(!u||!p){ showAdminResult('Enter username and password','error'); return false; }
+  fetch('/admin/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p}) })
+    .then(async (r)=>{ const b = await r.json().catch(()=>({})); return {s:r.status,b}; })
+    .then(({s,b})=>{
+      if(s===200 && b.success){ showAdminResult('Authenticated — redirecting...','success'); setTimeout(()=>window.location.href='/admin',900); }
+      else showAdminResult(b.message||'Login failed','error');
+    }).catch(err=>{ showAdminResult('Server error','error'); console.error(err); });
+  return false;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,202 @@
+/* Landing Page Specific Styles */
+
+.hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+nav {
+    padding: 32px 58px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 10;
+}
+
+.nav-links {
+    display: flex;
+    gap: 40px;
+    align-items: center;
+}
+
+.nav-links a {
+    color: #a0a0a0;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover {
+    color: #ffffff;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    position: relative;
+    z-index: 10;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+}
+
+.text-content h1 {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 24px;
+    letter-spacing: -1.5px;
+}
+
+.text-content .subtitle {
+    font-size: 20px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin-bottom: 40px;
+    font-weight: 400;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 40px;
+}
+
+.features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+    margin-top: 58px;
+}
+
+.feature {
+    padding: 26px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+}
+
+.feature:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.feature-icon {
+    font-size: 11px;
+    margin-bottom: 16px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: #6b9fff;
+    opacity: 0.8;
+}
+
+.feature h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.feature p {
+    font-size: 13px;
+    color: #a0a0a0;
+    line-height: 1.5;
+}
+
+.visual-side {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.auth-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 52px 46px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    max-width: 400px;
+    width: 100%;
+}
+
+.auth-card h3 {
+    font-size: 24px;
+    margin-bottom: 32px;
+    font-weight: 600;
+}
+
+.metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 17px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metric:last-child {
+    border-bottom: none;
+}
+
+.metric-label {
+    color: #9ca8b8;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.metric-value {
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.footer {
+    padding: 40px 60px;
+    text-align: center;
+    color: #606060;
+    font-size: 13px;
+    position: relative;
+    z-index: 10;
+}
+
+@media (max-width: 1024px) {
+    .container {
+        grid-template-columns: 1fr;
+        gap: 60px;
+    }
+    
+    nav {
+        padding: 20px 30px;
+    }
+    
+    .content {
+        padding: 40px 30px;
+    }
+    
+    .text-content h1 {
+        font-size: 42px;
+    }
+    
+    .visual-side {
+        order: -1;
+    }
+    
+    .features {
+        grid-template-columns: 1fr;
+    }
+}

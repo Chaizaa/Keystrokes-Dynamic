@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}SecureAuth | Enterprise Biometric Authentication{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+{% endblock %}
+
+{% block body %}
+    <div class="hero">
+        <nav>
+            <div class="logo">SecureAuth</div>
+            <div class="nav-links">
+                <a href="#features">FEATURES</a>
+                <a href="#security">SECURITY</a>
+                <a href="#about">ABOUT</a>
+            </div>
+        </nav>
+        
+        <div class="content">
+            <div class="container">
+                <div class="text-content">
+                    <h1>Enterprise-Grade Biometric Authentication</h1>
+                    <p class="subtitle">Leverage behavioral biometrics through keystroke dynamics analysis. Advanced machine learning algorithms provide seamless, passwordless authentication.</p>
+                    
+                    <div class="cta-buttons">
+                        <a href="/login" class="btn btn-primary">Access Platform</a>
+                        <a href="/register" class="btn btn-secondary">Create Account</a>
+                    </div>
+                    
+                    <div class="features">
+                        <div class="feature">
+                            <div class="feature-icon">SECURITY</div>
+                            <h3>Military-Grade Security</h3>
+                            <p>99.7% accuracy with multi-method verification</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">PERFORMANCE</div>
+                            <h3>Real-Time Analysis</h3>
+                            <p>Sub-second authentication processing</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">ADAPTIVE</div>
+                            <h3>Adaptive Learning</h3>
+                            <p>Continuous improvement with usage</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="visual-side">
+                    <div class="auth-card">
+                        <h3>System Metrics</h3>
+                        <div class="metric">
+                            <span class="metric-label">Authentication Rate</span>
+                            <span class="metric-value">99.7%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">False Positive</span>
+                            <span class="metric-value">0.1%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Processing Time</span>
+                            <span class="metric-value">< 100ms</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Active Users</span>
+                            <span class="metric-value">10K+</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            © 2025 SecureAuth Enterprise. All rights reserved. | Advanced Biometric Authentication Platform
+        </div>
+    </div>
+{% endblock %}
