@@ -99,7 +99,7 @@ class KeystrokeVector(db.Model):
         if self.H_vector:
             try:
                 return json.loads(self.H_vector)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return []
         return []
 
@@ -112,7 +112,7 @@ class KeystrokeVector(db.Model):
         if self.H_features:
             try:
                 return json.loads(self.H_features)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return {}
         return {}
 
@@ -125,7 +125,7 @@ class KeystrokeVector(db.Model):
         if self.quality_warnings:
             try:
                 return json.loads(self.quality_warnings)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return []
         return []
 
@@ -138,7 +138,7 @@ class KeystrokeVector(db.Model):
         if self.raw_events:
             try:
                 return json.loads(self.raw_events)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return []
         return []
 
