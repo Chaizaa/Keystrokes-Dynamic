@@ -47,6 +47,7 @@ data/*.db-journal
 data/*.csv
 data/*.log
 data/*.pid
+data/*.db
 
 # Logs
 *.log
