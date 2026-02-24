@@ -63,6 +63,8 @@ tests/.pytest_cache/
 
 # Backups
 backups/*
+!backups/archived/
+!backups/archived/**
 
 # Scripts temp files
 scripts/__pycache__/
@@ -83,3 +85,7 @@ htmlcov/
 # Backup
 *.bak
 backup/
+
+# Local artifacts we want archived but not tracked in root
+tmp_register.html
+server.pid
