@@ -59,7 +59,7 @@
       <div class="card" style="padding:12px 8px;border-radius:10px;">
         <table class="admin-table">
           <thead>
-            <tr><th>Username</th><th>Email</th><th>Role</th><th>Enrolled</th><th>Created</th></tr>
+            <tr><th>Username</th><th>Email</th><th>Role</th><th>Enrolled</th><th>Created</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {% for u in users %}
@@ -69,6 +69,20 @@
               <td>{{ u.role }}</td>
               <td>{{ u.get_enrollment_count() }}</td>
               <td class="muted">{{ u.created_at.isoformat() if u.created_at else '-' }}</td>
+              <td>
+                {% if current_user.is_authenticated and current_user.is_admin() %}
+                <div style="display:flex;gap:8px;align-items:center">
+                  <button class="btn btn-secondary admin-action-reset" data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset Password</button>
+                  {% if current_user.id == u.id %}
+                    <button class="btn btn-danger disabled" title="Cannot delete your own admin account" aria-disabled="true">Delete</button>
+                  {% else %}
+                    <button class="btn btn-danger admin-action-delete" data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
+                  {% endif %}
+                </div>
+                {% else %}
+                -
+                {% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -99,3 +113,61 @@
   </div>
 </div>
 {% endblock %}
+
+  {% block extra_js %}
+  <script>
+  // Admin action handlers: Reset Password (send reset email) and Delete User
+  document.addEventListener('DOMContentLoaded', function(){
+    function showToast(msg, tone='info'){
+      try{ const t = document.createElement('div'); t.textContent=msg; t.className='toast show '+(tone==='error'?'toast-error':(tone==='warn'?'toast-warn':'toast-info')); Object.assign(t.style,{position:'fixed',right:'20px',top:'20px',padding:'10px 14px',background:'rgba(0,0,0,0.6)',color:'#fff',borderRadius:'8px',zIndex:1200}); document.body.appendChild(t); setTimeout(()=>t.remove(),4000);}catch(e){console.log(msg)}
+    }
+
+    document.querySelectorAll('.admin-action-reset').forEach(btn => {
+      btn.addEventListener('click', async function(){
+        const userId = this.dataset.userId;
+        const btnEl = this;
+        const ok = await showConfirmModal('Reset Password', 'Send a password reset email to this user? The user will receive a secure reset link (no email confirmation required by admin).', {confirmText:'Yes, send', cancelText:'No', destructive:false});
+        if (!ok) return;
+        try{
+          // disable button while request processes
+          btnEl.disabled = true; btnEl.classList.add('disabled');
+          const resp = await fetch(`/admin/user/${userId}/send_reset`, {method:'POST'});
+          const data = await resp.json();
+          if (!resp.ok){ showToast(data.message||'Failed to send', 'error'); return; }
+          showToast('Reset email sent', 'info');
+          // API intentionally does not return verification_url/token for security
+        }catch(e){ console.error(e); showToast('Network error', 'error'); }
+        finally{ btnEl.disabled = false; btnEl.classList.remove('disabled'); }
+      });
+    });
+
+    document.querySelectorAll('.admin-action-delete').forEach(btn => {
+      btn.addEventListener('click', async function(){
+        const userId = this.dataset.userId;
+        const btnEl = this;
+        const ok = await showConfirmModal('Delete User', 'Permanently delete this user and all related personal data? This action cannot be undone.', {confirmText:'Yes, delete', cancelText:'Cancel', destructive:true});
+        if (!ok) return;
+        try{
+          // disable while processing
+          btnEl.disabled = true; btnEl.classList.add('disabled');
+          const resp = await fetch(`/admin/user/${userId}/delete`, {method:'POST'});
+          const data = await resp.json();
+          if (!resp.ok){ showToast(data.message||'Failed to delete', 'error'); return; }
+          showToast('User deleted', 'info');
+          // Remove the user's row from the table
+          const row = btnEl.closest('tr'); if (row) row.remove();
+          // Update Total Users stat
+          try{
+            const totalEl = document.querySelector('.stat .n');
+            if (totalEl){
+              const current = parseInt(totalEl.textContent.trim()) || 0;
+              totalEl.textContent = Math.max(0, current - 1);
+            }
+          }catch(e){ /* ignore */ }
+        }catch(e){ console.error(e); showToast('Network error', 'error'); }
+        finally{ if (btnEl){ btnEl.disabled=false; btnEl.classList.remove('disabled'); } }
+      });
+    });
+  });
+  </script>
+  {% endblock %}

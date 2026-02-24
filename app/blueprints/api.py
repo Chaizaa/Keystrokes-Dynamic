@@ -118,7 +118,8 @@ def verify_email():
             # If timestamp parsing fails, continue and validate token normally
             print("[DEBUG] verify_email expiry check failed:", _e)
 
-        # Verify token using short-code hash or stateless signed token and the recorded sent_at
+        # Verify token: try generic verifier first (covers short-code and signed 'email-verify'),
+        # then fallback to checking a signed token with the 'password-reset' salt for admin-issued resets.
         try:
             ok, reason = email_service.verify_token(
                 token,
@@ -127,10 +128,24 @@ def verify_email():
                 code_hash=user.email_verification_code_hash,
             )
         except TypeError:
-            # Backwards-compatible fallback for tests or older monkeypatches that expect 3 args
+            # Backwards-compatible fallback for older monkeypatches
             ok, reason = email_service.verify_token(
                 token, user.email, user.email_verification_sent_at
             )
+
+        if not ok:
+            # If generic verification failed, try the password-reset signed-token path
+            try:
+                ok2, reason2 = email_service.verify_signed_token(
+                    token, user.email, user.email_verification_sent_at, salt="password-reset"
+                )
+                if ok2:
+                    ok, reason = True, None
+                else:
+                    # preserve original reason if available
+                    reason = reason or reason2
+            except Exception:
+                pass
         if not ok:
             if reason == "expired":
                 return (

@@ -2,7 +2,7 @@
 Auth Blueprint - Authentication routes (login, register, logout)
 """
 
-from flask import Blueprint, flash, redirect, render_template, session, url_for
+from flask import Blueprint, flash, redirect, render_template, session, url_for, request
 from flask_login import current_user, login_user, logout_user
 
 auth_bp = Blueprint("auth", __name__)
@@ -11,8 +11,10 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.route("/login")
 def login_page():
     """Login page"""
-    # Redirect if already logged in
-    if current_user.is_authenticated:
+    # Redirect if already logged in, except when this request is part of a reset flow
+    # (presence of `reset=1` tells us the caller wants the login UI for reset completion)
+    reset_param = request.args.get("reset")
+    if current_user.is_authenticated and reset_param != "1":
         return redirect(url_for("main.home"))
     return render_template("login_unified.html")
 

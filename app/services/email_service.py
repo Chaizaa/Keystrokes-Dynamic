@@ -563,19 +563,32 @@ class EmailService:
             from flask import url_for
 
             # Build a verification URL that points to the UI (not an API endpoint)
-            # If purpose is provided (e.g. 'reset'), include it so the UI can redirect appropriately
+            # If purpose is provided (e.g. 'reset'), build a purpose-specific URL.
             if purpose:
-                verification_url = url_for(
-                    "auth.verify_page",
-                    username=user.username,
-                    purpose=purpose,
-                    _external=True,
-                )
+                if purpose == "reset":
+                    # Admin-initiated reset should open a dedicated reset page
+                    # Include the signed token as a query param so the recipient can follow the link.
+                    verification_url = url_for(
+                        "auth.reset_complete_page",
+                        username=user.username,
+                        reset_token=token,
+                        _external=True,
+                    )
+                else:
+                    verification_url = url_for(
+                        "auth.verify_page",
+                        username=user.username,
+                        purpose=purpose,
+                        _external=True,
+                    )
             else:
                 verification_url = url_for(
                     "auth.verify_page", username=user.username, _external=True
                 )
+            # Adjust subject for reset purpose
             subject = "Verify your SecureAuth account"
+            if purpose == "reset":
+                subject = "Admin password reset for your SecureAuth account"
             # Try to render a template if available
             try:
                 from flask import render_template
@@ -585,23 +598,46 @@ class EmailService:
                     username=user.username,
                     token=token,
                     verification_url=verification_url,
+                    purpose=purpose,
                 )
-                text_body = f"Hello {user.username},\n\nUse the following code to verify your email: {token}\n\nOr open this link: {verification_url}\n\nIf you didn't request this, ignore this message."
+                if purpose == "reset":
+                    text_body = (
+                        f"Hello {user.username},\n\n"
+                        f"An administrator initiated a password reset for this account. "
+                        f"Open the following link to reset the password: {verification_url}\n\n"
+                        "If you didn't expect this, ignore this message."
+                    )
+                else:
+                    text_body = f"Hello {user.username},\n\nUse the following code to verify your email: {token}\n\nOr open this link: {verification_url}\n\nIf you didn't request this, ignore this message."
             except Exception:
                 # Fallback to simple inline text/html
-                text_body = (
-                    f"Hello {user.username},\n\n"
-                    f"Use the following code to verify your email: {token}\n\n"
-                    f"Or open this link in your browser: {verification_url}\n\n"
-                    "If you didn't request this, ignore this message."
-                )
-                html_body = (
-                    f"<p>Hello {user.username},</p>"
-                    f"<p>Use the following verification <strong>code</strong> to verify your email for your SecureAuth account:</p>"
-                    f"<p style='font-size: 1.2em; font-weight: 600'>{token}</p>"
-                    f"<p>Or click <a href='{verification_url}'>this link</a> to open the verification page.</p>"
-                    "<p>If you didn't request this, ignore this message.</p>"
-                )
+                if purpose == "reset":
+                    text_body = (
+                        f"Hello {user.username},\n\n"
+                        f"An administrator initiated a password reset for this account. "
+                        f"Open the following link to reset the password: {verification_url}\n\n"
+                        "If you didn't expect this, ignore this message."
+                    )
+                    html_body = (
+                        f"<p>Hello {user.username},</p>"
+                        f"<p>An administrator initiated a password reset for this account. "
+                        f"Open the following link to reset the password: <a href='{verification_url}'>Reset password</a></p>"
+                        "<p>If you didn't request this, ignore this message.</p>"
+                    )
+                else:
+                    text_body = (
+                        f"Hello {user.username},\n\n"
+                        f"Use the following code to verify your email: {token}\n\n"
+                        f"Or open this link in your browser: {verification_url}\n\n"
+                        "If you didn't request this, ignore this message."
+                    )
+                    html_body = (
+                        f"<p>Hello {user.username},</p>"
+                        f"<p>Use the following verification <strong>code</strong> to verify your email for your SecureAuth account:</p>"
+                        f"<p style='font-size: 1.2em; font-weight: 600'>{token}</p>"
+                        f"<p>Or click <a href='{verification_url}'>this link</a> to open the verification page.</p>"
+                        "<p>If you didn't request this, ignore this message.</p>"
+                    )
 
             return EmailService.send_email(
                 subject, [user.email], html_body=html_body, text_body=text_body
