@@ -1515,18 +1515,49 @@ def login():
                         templates = []
 
                 if templates:
-                    # First, try the global biometric_service with provided templates (honours test monkeypatches)
+                    # RF-first verification branch, fallback ke flow lama bila disabled/error/fail
                     try:
-                        verification_result = biometric_service.verify_keystroke_sample(
-                            result["features"], templates
-                        )
-                    except Exception:
-                        verification_result = {
-                            "success": False,
-                            "verified": False,
-                            "score": 0.0,
-                        }
+                        from flask import current_app
 
+                        use_rf = bool(current_app.config.get("RF_MODEL_ENABLED", False))
+                    except Exception:
+                        use_rf = False
+
+                    if use_rf:
+                        try:
+                            from flask import current_app
+                            from app.services.rf_biometric_service import RFBiometricService
+
+                            rf_path = current_app.config.get("RF_MODEL_PATH")
+                            rf_service = RFBiometricService(rf_path)
+
+                            rf_result = rf_service.verify_sample(result["features"], username)
+                            verification_result = {
+                                "success": True,
+                                "verified": bool(rf_result.get("verified")),
+                                "score": float(rf_result.get("score", 0.0)),
+                                "method": "random_forest",
+                                "threshold": rf_result.get("threshold"),
+                            }
+                        except Exception as e:
+                            print(f"[DEBUG] RF verification error: {e}")
+                            verification_result = {
+                                "success": False,
+                                "verified": False,
+                                "score": 0.0,
+                            }
+                    else:
+                        # Existing behavior (unchanged) when RF is disabled
+                        try:
+                            verification_result = biometric_service.verify_keystroke_sample(
+                                result["features"], templates
+                            )
+                        except Exception:
+                            verification_result = {
+                                "success": False,
+                                "verified": False,
+                                "score": 0.0,
+                            }
                     # If that didn't verify, run an internal lightweight verification as a fallback
                     if not verification_result.get("verified"):
                         try:
