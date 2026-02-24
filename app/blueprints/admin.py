@@ -1,5 +1,7 @@
 from functools import wraps
 from datetime import datetime, timezone
+import json
+import traceback
 
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
@@ -40,6 +42,119 @@ def admin_index():
 
     # Render a simple admin dashboard template
     return render_template("admin/index.html", users=users, audits=audits)
+
+
+@admin_bp.route('/user/<int:user_id>/send_reset', methods=['POST'])
+@admin_required
+def admin_send_reset(user_id):
+    from flask import jsonify, url_for
+    from datetime import datetime, timezone
+    from app.services.email_service import email_service
+    try:
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        if not user.email:
+            return jsonify({'success': False, 'message': 'User has no email'}), 400
+
+        # Generate a signed token (no visible code) and store sent timestamp.
+        # Admin-triggered reset should not include a numeric code in the email.
+        sent_at = datetime.now(timezone.utc)
+        try:
+            # Clear any previous short-code hash and set sent timestamp
+            user.email_verification_code_hash = None
+        except Exception:
+            pass
+        user.email_verification_sent_at = sent_at
+        db.session.commit()
+
+        # Use a dedicated salt for password-reset tokens so they are only valid
+        # when verified with the same salt on the reset flow.
+        token = email_service.generate_token(user.email, salt="password-reset", sent_at=sent_at)
+        sent = email_service.send_verification_email(user, token, purpose="reset")
+
+        # Audit the admin action (do not include sensitive user fields in details)
+        try:
+            a = AdminAudit(
+                user_id=current_user.id,
+                username=current_user.username,
+                action='admin_send_reset',
+                details=json.dumps({'target_user_id': user.id}),
+            )
+            db.session.add(a)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        if not sent:
+            return jsonify({'success': False, 'message': 'Failed to send email'}), 500
+        # Do NOT expose the verification URL or token in API responses for security.
+        return jsonify({'success': True, 'message': 'Verification email sent'}), 200
+    except Exception as e:
+        print(f"[ERROR] admin_send_reset: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Server error'}), 500
+
+
+@admin_bp.route('/user/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(user_id):
+    from flask import jsonify
+    try:
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Prevent deleting the last admin
+        try:
+            admin_count = User.query.filter(User.role == 'admin').count()
+            if user.is_admin() and admin_count <= 1:
+                return jsonify({'success': False, 'message': 'Cannot delete the last admin account'}), 400
+        except Exception:
+            pass
+
+        # Remove related audit entries and vectors explicitly to avoid FK issues
+        try:
+            # Delete AdminAudit entries referencing this user
+            AdminAudit.query.filter((AdminAudit.user_id == user.id) | (AdminAudit.username == user.username)).delete(synchronize_session=False)
+        except Exception:
+            db.session.rollback()
+
+        try:
+            # Delete EnrollmentVector, FeatureVector, KeystrokeVector, LoginAttempt if models exist
+            from app.models import EnrollmentVector, FeatureVector, KeystrokeVector, LoginAttempt
+
+            EnrollmentVector.query.filter((EnrollmentVector.user_id == user.id) | (EnrollmentVector.username == user.username)).delete(synchronize_session=False)
+            FeatureVector.query.filter((FeatureVector.user_id == user.id) | (FeatureVector.username == user.username)).delete(synchronize_session=False)
+            KeystrokeVector.query.filter((KeystrokeVector.user_id == user.id) | (KeystrokeVector.username == user.username)).delete(synchronize_session=False)
+            LoginAttempt.query.filter((LoginAttempt.user_id == user.id) | (LoginAttempt.username == user.username)).delete(synchronize_session=False)
+        except Exception:
+            # Models may not exist in some legacy schemas; ignore failures and continue
+            db.session.rollback()
+
+        # Finally delete the user row using a class-level DELETE to avoid
+        # loading relationship collections (which may reference missing
+        # legacy columns and cause OperationalError on some databases).
+        try:
+            db.session.query(User).filter(User.id == user.id).delete(synchronize_session=False)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': 'Failed to delete user'}), 500
+
+        # Record admin audit for deletion (do not include personal data)
+        try:
+            a = AdminAudit(user_id=current_user.id, username=current_user.username, action='admin_delete_user', details=json.dumps({'target_user_id': user_id}))
+            db.session.add(a)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({'success': True, 'message': 'User deleted'}), 200
+    except Exception as e:
+        print(f"[ERROR] admin_delete_user: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 
 # NOTE: `/admin/register` endpoint removed. Use scripts/create_admin_manual.py

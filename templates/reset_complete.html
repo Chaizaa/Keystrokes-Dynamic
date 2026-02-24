@@ -12,8 +12,8 @@
         <div class="logo">
             <div class="logo-text"></div>
         </div>
-        <h2>Set New Master Password</h2>
-        <p class="subtitle">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
+        <h2 id="rcTitle">Set New Master Password</h2>
+        <p id="rcSubtitle" class="subtitle">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
 
         <!-- Username removed from UI; kept hidden element for compatibility with JS -->
         <div class="form-group" style="display:none;">
@@ -113,6 +113,14 @@ const params = new URLSearchParams(window.location.search);
 const prefillUsername = params.get('username') || "{{ username|default('') }}";
 if (prefillUsername) usernameEl.value = prefillUsername;
 
+// If arrived via admin reset (reset_token present) adjust UI copy
+if (params.get('reset_token')) {
+    const title = document.getElementById('rcTitle');
+    const subtitle = document.getElementById('rcSubtitle');
+    if (title) title.textContent = 'Reset Master Password';
+    if (subtitle) subtitle.textContent = "An administrator initiated a password reset for this account. Create a new master password and re-enroll your biometrics by typing it 20 times.";
+}
+
 function startTimer() {
     if (!typingStartTime) {
         typingStartTime = performance.now();
@@ -199,8 +207,8 @@ async function handleEnterPress() {
 
             if (sampleCount >= targetSamples) {
                 document.getElementById('finishSection').classList.remove('hidden');
-                // redirect to login after a short delay
-                setTimeout(() => { window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&from=reset`; }, 1500);
+                // redirect to login after a short delay. include reset=1 so login UI will render
+                setTimeout(() => { window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&reset=1`; }, 1500);
                 return;
             }
         } else {

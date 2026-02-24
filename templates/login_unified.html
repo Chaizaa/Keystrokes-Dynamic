@@ -75,21 +75,38 @@
 </div>
 
 <script>
-    // If redirected from registration, prefill username and show a friendly toast
+    // If redirected from registration or reset flow, prefill username and show a friendly toast
     (function prefillFromQuery() {
         try {
             const params = new URLSearchParams(window.location.search);
             const preUser = params.get('username');
             const from = params.get('from');
+            const resetFlag = params.get('reset');
+
             if (preUser) {
                 const el = document.getElementById('username');
                 if (el) {
                     el.value = decodeURIComponent(preUser);
                     try { el.focus(); } catch (e) {}
                 }
+
+                // If this is a reset flow, focus the password field to encourage signing in
+                if (resetFlag === '1') {
+                    try {
+                        setTimeout(() => {
+                            const pf = document.getElementById('passwordField');
+                            if (pf) pf.focus();
+                        }, 50);
+                    } catch (e) { /* noop */ }
+                }
             }
+
             if (from === 'register') {
                 try { showToast('Account created — please sign in', 'info', 4000); } catch(e){}
+            }
+
+            if (resetFlag === '1') {
+                try { showToast('Re-enrollment complete — please sign in', 'success', 5000); } catch(e){}
             }
         } catch (e) {
             console.warn('Prefill query parsing failed', e);
