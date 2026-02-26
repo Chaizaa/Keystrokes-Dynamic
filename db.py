@@ -1,3 +1,11 @@
+"""Legacy database helper — DEPRECATED.
+
+.. deprecated::
+    This module wraps raw SQLite/CSV access.
+    New code should use SQLAlchemy models from ``app.models`` instead.
+    See ``app/database/db.py`` for the app-level wrapper.
+    This file is retained only for backward-compatibility with legacy scripts.
+"""
 import csv
 import json
 import os
@@ -36,24 +44,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
-                    plain_password TEXT,
                     password_hash TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Create failed_logins table if not exists
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS failed_logins (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT,
-                    failure_reason TEXT,
-                    verification_score REAL,
-                    ip_address TEXT,
-                    user_agent TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
@@ -449,7 +441,7 @@ class Database:
             # Try users table first (new architecture)
             cursor.execute(
                 """
-                SELECT username, created_at as last_login, plain_password
+                SELECT username, created_at as last_login
                 FROM users 
                 WHERE username = ?
             """,
@@ -466,8 +458,7 @@ class Database:
                 """
                 SELECT DISTINCT 
                     username, 
-                    MAX(timestamp) as last_login, 
-                    password as plain_password
+                    MAX(timestamp) as last_login
                 FROM user_vectors 
                 WHERE username = ?
                 GROUP BY username
@@ -490,12 +481,22 @@ class Database:
     # =========================================================================
     # [DEV ONLY] - FITUR TAMBAHAN UNTUK MENYIMPAN PASSWORD ASLI
     # =========================================================================
-    def save_dev_credentials(self, username, plain_password, password_hash=None):
+    def save_dev_credentials(self, username, plain_password=None, password_hash=None):
         """
-        [DEV MODE + SECURITY]
-        Menyimpan username, password asli (dev), dan password hash (security).
-        Hash digunakan untuk pre-verification sebelum collection/verification mode.
+        .. deprecated::
+            Storing plain-text passwords is a security risk and no longer supported.
+            Use ``auth_service.create_user`` + bcrypt hashing instead.
+            This method now stores only the password_hash and ignores plain_password.
         """
+        import warnings
+        warnings.warn(
+            "save_dev_credentials stores plain-text passwords and is deprecated. "
+            "Use AuthService.create_user() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if plain_password is not None:
+            plain_password = None  # Never persist plain-text passwords
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         try:
@@ -505,7 +506,6 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
-                    plain_password TEXT,
                     password_hash TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -517,31 +517,24 @@ class Database:
             exists = cursor.fetchone()
 
             if exists:
-                # Update password kalau user sudah ada
                 if password_hash:
                     cursor.execute(
-                        "UPDATE users SET plain_password = ?, password_hash = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?",
-                        (plain_password, password_hash, username),
+                        "UPDATE users SET password_hash = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?",
+                        (password_hash, username),
                     )
-                else:
-                    cursor.execute(
-                        "UPDATE users SET plain_password = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?",
-                        (plain_password, username),
-                    )
-                print(f"[DEV MODE] Password asli untuk '{username}' diperbarui di tabel 'users'.")
+                    print(f"[DEV MODE] Password hash untuk '{username}' diperbarui di tabel 'users'.")
             else:
-                # Insert baru
                 if password_hash:
                     cursor.execute(
-                        "INSERT INTO users (username, plain_password, password_hash) VALUES (?, ?, ?)",
-                        (username, plain_password, password_hash),
+                        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                        (username, password_hash),
                     )
                 else:
                     cursor.execute(
-                        "INSERT INTO users (username, plain_password) VALUES (?, ?)",
-                        (username, plain_password),
+                        "INSERT INTO users (username) VALUES (?)",
+                        (username,),
                     )
-                print(f"[DEV MODE] Password asli untuk '{username}' disimpan di tabel 'users'.")
+                print(f"[DEV MODE] User '{username}' disimpan di tabel 'users'.")
 
             conn.commit()
         except Exception as e:

@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 import pytest
+from sqlalchemy.pool import StaticPool
 from werkzeug.security import generate_password_hash
 
 # Add project root to Python path
@@ -20,7 +21,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from app import create_app
-from app.models import KeystrokeVector, LoginAttempt, User, db
+from app.models import KeystrokeVector, User, db
 from app.services import AuthService, BiometricService
 
 
@@ -35,6 +36,10 @@ def app():
         "TESTING": True,
         "WTF_CSRF_ENABLED": False,  # Disable CSRF for tests
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",  # In-memory database
+        "SQLALCHEMY_ENGINE_OPTIONS": {
+            "connect_args": {"check_same_thread": False},
+            "poolclass": StaticPool,
+        },
         "SECRET_KEY": "test-secret-key-for-testing-only",
         "RATELIMIT_ENABLED": False,  # Disable rate limiting for tests
     }

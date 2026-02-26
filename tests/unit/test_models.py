@@ -180,18 +180,18 @@ class TestKeystrokeVectorModel:
             user_id=user.id,
             username="testuser",
             event_type="enrollment",
-            mean_H=0.123,
-            std_H=0.045,
-            mean_DD=0.234,
-            std_DD=0.056,
+            H_mean=0.123,
+            H_std=0.045,
+            DD_mean=0.234,
+            DD_std=0.056,
         )
         db_session.add(vector)
         db_session.commit()
 
-        assert vector.mean_H == 0.123
-        assert vector.std_H == 0.045
-        assert vector.mean_DD == 0.234
-        assert vector.std_DD == 0.056
+        assert vector.H_mean == 0.123
+        assert vector.H_std == 0.045
+        assert vector.DD_mean == 0.234
+        assert vector.DD_std == 0.056
 
     def test_keystroke_vector_to_dict(self, db_session):
         """Test keystroke vector to_dict method"""
@@ -200,7 +200,7 @@ class TestKeystrokeVectorModel:
         db_session.commit()
 
         vector = KeystrokeVector(
-            user_id=user.id, username="testuser", event_type="enrollment", mean_H=0.123
+            user_id=user.id, username="testuser", event_type="enrollment", H_mean=0.123
         )
         db_session.add(vector)
         db_session.commit()

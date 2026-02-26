@@ -1,12 +1,18 @@
 <html>
   <body>
     <p>Hello {{ username }},</p>
-    {% if purpose == 'reset' %}
+    {% if purpose == 'admin_reset' %}
       <p>You've been sent a password reset request by an administrator. Click the button below to reset the user's password:</p>
       <p style="margin:18px 0">
         <a href="{{ verification_url }}" style="display:inline-block;padding:12px 20px;background:#0f1724;color:#fff;border-radius:8px;text-decoration:none;">Reset password</a>
       </p>
       <p>If you didn't expect this, please ignore the message.</p>
+    {% elif purpose == 'user_reset' %}
+      <p>We received a request to reset your <strong>SecureAuth</strong> account password.</p>
+      <p>Enter the following code on the verification page:</p>
+      <p style="font-size:1.4em;font-weight:700;letter-spacing:4px;padding:10px 16px;background:#0f1724;color:#fff;border-radius:6px;display:inline-block">{{ token }}</p>
+      <p>Or <a href="{{ verification_url }}">click here</a> to open the verification page directly.</p>
+      <p>If you didn't request this, you can safely ignore this email.</p>
     {% else %}
       <p>Use the following verification code to verify your email for your SecureAuth account:</p>
       <p style="font-size:1.25em;font-weight:600"><code style="display:block;padding:8px 12px;background:#0f1724;border-radius:6px;color:#fff;word-break:break-all;">{{ token }}</code></p>

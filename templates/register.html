@@ -172,6 +172,9 @@
     let passwordMismatchCount = 0; // Track consecutive password mismatches
     // Flag: true when user has completed enrollment (20/20)
     let registrationComplete = false;
+    // Flag: true after email-verified redirect has set the locked verified state.
+    // Prevents a delayed second checkUsername() call from overwriting the verified status.
+    let emailVerifiedLocked = false;
     
     const usernameInput = document.getElementById('regUsername');
     const mainPassInput = document.getElementById('mainPassword');
@@ -202,8 +205,8 @@
                 const j = await resp.json().catch(() => ({}));
                 if (resp.ok) {
                     showToast('Verification code sent. Check your inbox.', 'info');
-                    // Redirect to verify page where user can paste code
-                    setTimeout(() => { window.location.href = `/verify?username=${encodeURIComponent(username)}`; }, 600);
+                    // Redirect to verify page, carrying email so it can be passed back after verification
+                    setTimeout(() => { window.location.href = `/verify?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`; }, 600);
                 } else {
                     showToast(j.message || 'Failed to send verification code', 'error');
                     sendVerifyBtn.disabled = false;
@@ -287,9 +290,9 @@
                     weakHint = document.createElement('p');
                     weakHint.id = weakHintId;
                     weakHint.className = 'hint-text';
-                    weakHint.style.color = '#b91c1c';
+                    weakHint.style.color = '#d97706';
                     weakHint.style.marginTop = '6px';
-                    weakHint.textContent = 'Password terlalu lemah — gunakan minimal 12 karakter atau tambahkan simbol dan angka.';
+                    weakHint.textContent = '⚠ Password lemah — disarankan menggunakan minimal 12 karakter dengan kombinasi huruf, angka, dan simbol.';
                     mainPassInput.parentNode.appendChild(weakHint);
                 }
             } else {
@@ -365,6 +368,9 @@
     async function checkUsername() {
         // Do not perform username checks after registration completes
         if (registrationComplete) return;
+        // After email-verified redirect has been fully processed, block any further
+        // status updates (e.g., from IIFE's delayed 150ms second call).
+        if (emailVerifiedLocked) return;
         const username = usernameInput.value.trim();
         usernameAvailable = false;
         
@@ -601,6 +607,11 @@
 
     // If username provided in query (from verification redirect), prefill and validate it
     const prefillUsername = params.get('username');
+    const prefillEmail = params.get('email');
+    // Re-fill the email field when returning from the verify page so it isn't lost
+    if (prefillEmail && emailInput && !emailInput.value) {
+        emailInput.value = prefillEmail;
+    }
     if (prefillUsername) {
         usernameInput.value = prefillUsername;
         // Perform server-side availability/enrollment check and then enable enrollment if verified
@@ -612,6 +623,9 @@
                     // Update UI to show username is accepted
                     showUsernameStatus('success', 'Username prefilled and email verified');
                     usernameAvailable = true;
+                    // Lock the verified state so no subsequent delayed checkUsername() call
+                    // (e.g., from the IIFE 150ms timer) can overwrite this status.
+                    emailVerifiedLocked = true;
                     try {
                         // Lock username/email fields to avoid confusing edits after verification
                         usernameInput.readOnly = true;
@@ -737,6 +751,12 @@
         }
     });
 
+    // Reset the timer display when focus leaves the typing field — do NOT wipe
+    // rawEvents or the input value (user may have clicked the eye icon to preview).
+    typingInput.addEventListener('blur', () => {
+        resetTimer();
+    });
+
     async function handleEnterPress() {
         const username = usernameInput.value.trim();
         const mainPass = mainPassInput.value;
@@ -750,6 +770,16 @@
 
         if (!username || !mainPass) {
             statusEl.textContent = "Fill credentials first";
+            return;
+        }
+
+        // Guard: rawEvents will be empty if the field was never typed into (e.g. auto-fill
+        // or focus returned after blur without re-typing). Show a friendly local message.
+        if (!rawEvents || rawEvents.length === 0) {
+            statusEl.textContent = 'Ketik password di field ini terlebih dahulu lalu tekan Enter.';
+            statusEl.style.color = '#f59e0b';
+            setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 3000);
+            typingInput.focus();
             return;
         }
         
@@ -857,8 +887,16 @@
                 if (sampleCount >= targetSamples) {
                     const params = new URLSearchParams(window.location.search);
                     const isReset = params.get('reset') === '1';
-                    // On completion, for regular registration require email and send verification then redirect
+                    // On completion, for regular registration
                     if (!isReset) {
+                        // If the user already verified their email before starting enrollment,
+                        // skip the second send_verification call — email is already confirmed.
+                        if (emailVerifiedUser) {
+                            try { showToast('Registration complete — please sign in to continue', 'info', 3500); } catch(e){}
+                            window.location.href = `/login?username=${encodeURIComponent(username)}&from=register`;
+                            return;
+                        }
+
                         const emailVal = (document.getElementById('regEmail').value || '').trim();
                         if (!emailVal) {
                             // Email is optional — finish registration without sending verification
@@ -867,7 +905,8 @@
                             return;
                         }
 
-                        // Send verification email and redirect to verification page
+                        // Email provided but not yet verified: send verification email then redirect to login.
+                        // Note: this path is only reached when the user skipped email verification before enrollment.
                         try {
                             const resp = await fetch('/api/send_verification', {
                                 method: 'POST',
@@ -1109,6 +1148,11 @@
     // Auto-run username validation on page load / when navigating back (handles browser autofill)
     (function initUsernameCheckOnLoad(){
         try {
+            // When arriving from email-verify redirect (?verified=1), the prefillUsername
+            // block below already triggers checkUsername(). Skip the IIFE's delayed check
+            // to prevent it from overwriting the "verified" status that the .then() sets.
+            if (emailVerifiedUser) return;
+
             const val = usernameInput.value && usernameInput.value.trim();
             if (val && val.length >= 3) {
                 console.debug('[register] Initial username detected, validating...');

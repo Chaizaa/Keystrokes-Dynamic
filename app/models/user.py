@@ -5,10 +5,10 @@ User Model - User accounts with password management
 from datetime import datetime, timezone
 
 from flask_login import UserMixin
+from sqlalchemy import select, func, event as _sa_event
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
-from sqlalchemy import text
 
 
 class User(UserMixin, db.Model):
@@ -27,6 +27,7 @@ class User(UserMixin, db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)  # Always equals id; populated via after_insert event
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)  # Nullable for migration
     # Role: 'user' or 'admin'
@@ -45,16 +46,26 @@ class User(UserMixin, db.Model):
     # Hashed short code (6-digit) used for verification when short-code flow is enabled
     email_verification_code_hash = db.Column(db.String(128), nullable=True)
 
-    # Two-Factor Authentication fields (keep for now)
+    # Password-reset fields (separate from email-verification so the two flows don't collide).
+    # Used by both admin-initiated reset (signed-URL token) and user-initiated reset (6-digit code).
+    password_reset_sent_at = db.Column(db.DateTime, nullable=True)
+    password_reset_code_hash = db.Column(db.String(128), nullable=True)
+
+    # Two-Factor Authentication fields
     two_factor_enabled = db.Column(db.Boolean, default=False, nullable=False)
     two_factor_secret = db.Column(db.String(255), nullable=True)
 
-    # Relationships
-    keystroke_vectors = db.relationship(
-        "KeystrokeVector", backref="user", lazy="dynamic", cascade="all, delete-orphan"
-    )
-    login_attempts = db.relationship(
-        "LoginAttempt", backref="user", lazy="dynamic", cascade="all, delete-orphan"
+    # Password strength metadata (mirrors users_vectors aggregate)
+    password_strength = db.Column(db.String(32), nullable=True)   # 'weak', 'medium', 'strong'
+    password_score = db.Column(db.Integer, nullable=True)
+    password_details = db.Column(db.JSON, nullable=True)          # JSON object
+
+    # Relationship to keystroke enrollment vectors (read-only, joined via username)
+    enrollment_vectors = db.relationship(
+        "UsersVector",
+        primaryjoin="User.username == foreign(UsersVector.username)",
+        viewonly=True,
+        lazy="dynamic",
     )
 
     def __repr__(self):
@@ -83,56 +94,45 @@ class User(UserMixin, db.Model):
             return check_password_hash(self.password_hash, password)
         return False
 
-    def get_enrollment_count(self):
+    def get_enrollment_count(self) -> int:
         """
-        Get number of enrollment samples for this user
+        Get number of enrollment samples for this user from users_vectors.
 
         Returns:
-            int: Number of enrollment samples
+            int: count of enrollment samples
         """
-        # Use a raw SQL COUNT query to avoid selecting all mapped columns
-        # (some legacy DBs may lack newer columns like `password` on user_vectors)
         try:
-            res = db.session.execute(
-                text(
-                    "SELECT COUNT(*) AS c FROM user_vectors WHERE user_id = :uid AND event_type = :etype AND is_successful = 1"
-                ),
-                {"uid": self.id, "etype": "enrollment"},
-            )
-            return int(res.scalar_one())
+            from .keystroke_vector import UsersVector
+
+            count = db.session.execute(
+                select(func.count()).select_from(UsersVector).where(
+                    UsersVector.username == self.username,
+                    UsersVector.data_type == "enrollment",
+                )
+            ).scalar_one()
+            return int(count)
         except Exception:
-            # Fallback to ORM count in case raw SQL fails for any reason
-            try:
-                return self.keystroke_vectors.filter_by(event_type="enrollment", is_successful=True).count()
-            except Exception:
-                return 0
+            return 0
 
-    def get_enrollment_samples(self):
+    def get_enrollment_samples(self) -> list:
         """
-        Get all successful enrollment samples
+        Get all enrollment samples for this user from users_vectors.
 
         Returns:
-            list: KeystrokeVector objects
+            list[dict]: rows from users_vectors where data_type='enrollment', ordered by newest first
         """
-        # The legacy `user_vectors` table may be missing columns that the
-        # SQLAlchemy model maps (e.g. `password`). Query a minimal set of
-        # fields via raw SQL and return lightweight dicts to avoid mapping
-        # errors when reading older DBs.
         try:
+            from .keystroke_vector import UsersVector
+
             rows = db.session.execute(
-                text(
-                    "SELECT id, username, event_type, is_successful, timestamp, session_id, raw_events FROM user_vectors "
-                    "WHERE user_id = :uid AND event_type = :etype AND is_successful = 1 ORDER BY id DESC"
-                ),
-                {"uid": self.id, "etype": "enrollment"},
-            ).mappings().all()
-            # Convert RowMapping to dicts
-            return [dict(r) for r in rows]
+                select(UsersVector).where(
+                    UsersVector.username == self.username,
+                    UsersVector.data_type == "enrollment",
+                ).order_by(UsersVector.id.desc())
+            ).scalars().all()
+            return [r.to_dict() for r in rows]
         except Exception:
-            try:
-                return self.keystroke_vectors.filter_by(event_type="enrollment", is_successful=True).all()
-            except Exception:
-                return []
+            return []
 
     def is_admin(self) -> bool:
         """Return True if user is an admin. Default: False (can be overridden later)."""
@@ -158,3 +158,13 @@ class User(UserMixin, db.Model):
             "enrollment_count": self.get_enrollment_count(),
             "has_password": bool(self.password_hash),
         }
+
+
+@_sa_event.listens_for(User, "after_insert")
+def _populate_user_id(mapper, connection, target):
+    """Automatically set user_id = id after every INSERT into users."""
+    connection.execute(
+        User.__table__.update()
+        .where(User.__table__.c.id == target.id)
+        .values(user_id=target.id)
+    )

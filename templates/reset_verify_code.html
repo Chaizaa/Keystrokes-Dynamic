@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Reset Code | SecureAuth{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="auth-container bg-gradient">
+    <div class="auth-box">
+        <h2>Reset Your Password</h2>
+        <p class="subtitle">Enter the 6-digit code we sent to your email to continue with the password reset.</p>
+
+        <div class="form-group">
+            <label for="rcvUsername">Username</label>
+            <input id="rcvUsername" type="text" readonly>
+        </div>
+        <div class="form-group">
+            <label for="rcvCode">Reset Code</label>
+            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code">
+            <small class="hint-text">Check your email for the 6-digit reset code</small>
+        </div>
+        <div id="rcvAlert" class="alert"></div>
+        <div class="verify-actions">
+            <button id="rcvVerifyBtn" class="btn btn-primary" disabled>
+                <span id="rcvSpinner" class="spinner hidden" aria-hidden="true"></span>
+                <span id="rcvBtnText">Verify Code</span>
+            </button>
+            <button id="rcvResendBtn" class="btn btn-secondary">Resend Code</button>
+            <a href="{{ url_for('auth.login_page') }}" class="btn btn-secondary verify-back">Back to Login</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const serverUsername = "{{ username|default('') }}".trim();
+    const username = serverUsername || params.get('username') || '';
+    document.getElementById('rcvUsername').value = username;
+
+    const codeInput   = document.getElementById('rcvCode');
+    const verifyBtn   = document.getElementById('rcvVerifyBtn');
+    const spinner     = document.getElementById('rcvSpinner');
+    const btnText     = document.getElementById('rcvBtnText');
+    const alertEl     = document.getElementById('rcvAlert');
+    const resendBtn   = document.getElementById('rcvResendBtn');
+
+    function showAlert(msg, cls) {
+        alertEl.className = 'alert';
+        alertEl.textContent = msg;
+        alertEl.classList.add('active', cls);
+    }
+
+    codeInput.addEventListener('input', () => {
+        verifyBtn.disabled = !codeInput.value.trim();
+    });
+
+    function setResendCooldown(seconds) {
+        resendBtn.disabled = true;
+        let t = seconds;
+        const orig = 'Resend Code';
+        const iv = setInterval(() => {
+            resendBtn.textContent = `Resend (${t}s)`;
+            t -= 1;
+            if (t < 0) {
+                clearInterval(iv);
+                resendBtn.textContent = orig;
+                resendBtn.disabled = false;
+            }
+        }, 1000);
+    }
+
+    verifyBtn.addEventListener('click', async function () {
+        const code = codeInput.value.trim().replace(/\s+/g, '');
+        alertEl.className = 'alert';
+        if (!code) { showAlert('Please enter the reset code', 'error'); return; }
+
+        try {
+            verifyBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.textContent = 'Verifying...';
+
+            const resp = await fetch('/api/verify_reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, token: code })
+            });
+            const j = await resp.json().catch(() => ({}));
+
+            if (resp.ok && j.reset_token) {
+                showAlert('Code verified — redirecting to password reset...', 'success');
+                const target = `/reset/complete?username=${encodeURIComponent(username)}&reset_token=${encodeURIComponent(j.reset_token)}&source=self`;
+                setTimeout(() => { window.location.href = target; }, 900);
+            } else {
+                if (j.error_code === 'expired_token') {
+                    showAlert('Code has expired. Please request a new one.', 'error');
+                } else if (j.error_code === 'invalid_token') {
+                    showAlert('Invalid code. Please check and try again.', 'error');
+                } else {
+                    showAlert(j.message || 'Verification failed', 'error');
+                }
+            }
+        } catch (e) {
+            showAlert('Network error. Please try again.', 'error');
+        } finally {
+            verifyBtn.disabled = false;
+            spinner.classList.add('hidden');
+            btnText.textContent = 'Verify Code';
+        }
+    });
+
+    resendBtn.addEventListener('click', async function () {
+        try {
+            resendBtn.disabled = true;
+            const resp = await fetch('/api/send_reset_verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            });
+            const j = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                showAlert('A new code has been sent to your email.', 'success');
+                setResendCooldown(60);
+            } else {
+                showAlert(j.message || 'Failed to resend code.', 'error');
+                resendBtn.disabled = false;
+            }
+        } catch (e) {
+            showAlert('Network error. Please try again.', 'error');
+            resendBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

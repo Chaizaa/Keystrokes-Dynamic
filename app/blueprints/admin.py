@@ -29,14 +29,18 @@ def admin_required(f):
 def admin_index():
     # Gather basic metrics and recent audits
     try:
-        users = User.query.order_by(User.created_at.desc()).limit(50).all()
+        from sqlalchemy import select
+        users = db.session.execute(
+            select(User).order_by(User.created_at.desc()).limit(500)
+        ).scalars().all()
     except Exception:
         users = []
 
     try:
-        audits = (
-            AdminAudit.query.order_by(AdminAudit.timestamp.desc()).limit(100).all()
-        )
+        from sqlalchemy import select
+        audits = db.session.execute(
+            select(AdminAudit).order_by(AdminAudit.timestamp.desc()).limit(100)
+        ).scalars().all()
     except Exception:
         audits = []
 
@@ -57,21 +61,23 @@ def admin_send_reset(user_id):
         if not user.email:
             return jsonify({'success': False, 'message': 'User has no email'}), 400
 
-        # Generate a signed token (no visible code) and store sent timestamp.
-        # Admin-triggered reset should not include a numeric code in the email.
+        # Generate a signed token (no visible code) and store sent timestamp in the
+        # dedicated password_reset_sent_at column so it doesn't interfere with the
+        # email-verification flow that uses email_verification_sent_at.
         sent_at = datetime.now(timezone.utc)
         try:
-            # Clear any previous short-code hash and set sent timestamp
-            user.email_verification_code_hash = None
+            # Write to password_reset_sent_at (not email_verification_sent_at)
+            user.password_reset_sent_at = sent_at
+            # Clear any stale reset code hash
+            user.password_reset_code_hash = None
         except Exception:
             pass
-        user.email_verification_sent_at = sent_at
         db.session.commit()
 
         # Use a dedicated salt for password-reset tokens so they are only valid
         # when verified with the same salt on the reset flow.
         token = email_service.generate_token(user.email, salt="password-reset", sent_at=sent_at)
-        sent = email_service.send_verification_email(user, token, purpose="reset")
+        sent = email_service.send_verification_email(user, token, purpose="admin_reset")
 
         # Audit the admin action (do not include sensitive user fields in details)
         try:
@@ -107,7 +113,10 @@ def admin_delete_user(user_id):
 
         # Prevent deleting the last admin
         try:
-            admin_count = User.query.filter(User.role == 'admin').count()
+            from sqlalchemy import func, select
+            admin_count = db.session.execute(
+                select(func.count(User.id)).where(User.role == 'admin')
+            ).scalar()
             if user.is_admin() and admin_count <= 1:
                 return jsonify({'success': False, 'message': 'Cannot delete the last admin account'}), 400
         except Exception:
@@ -116,27 +125,31 @@ def admin_delete_user(user_id):
         # Remove related audit entries and vectors explicitly to avoid FK issues
         try:
             # Delete AdminAudit entries referencing this user
-            AdminAudit.query.filter((AdminAudit.user_id == user.id) | (AdminAudit.username == user.username)).delete(synchronize_session=False)
+            from sqlalchemy import delete as sa_delete
+            db.session.execute(
+                sa_delete(AdminAudit).where(
+                    (AdminAudit.user_id == user.id) | (AdminAudit.username == user.username)
+                )
+            )
         except Exception:
             db.session.rollback()
 
         try:
-            # Delete EnrollmentVector, FeatureVector, KeystrokeVector, LoginAttempt if models exist
-            from app.models import EnrollmentVector, FeatureVector, KeystrokeVector, LoginAttempt
+            # Delete UsersVector records for this user (enrollment + login samples)
+            from app.models import UsersVector
+            from sqlalchemy import delete as sa_delete
 
-            EnrollmentVector.query.filter((EnrollmentVector.user_id == user.id) | (EnrollmentVector.username == user.username)).delete(synchronize_session=False)
-            FeatureVector.query.filter((FeatureVector.user_id == user.id) | (FeatureVector.username == user.username)).delete(synchronize_session=False)
-            KeystrokeVector.query.filter((KeystrokeVector.user_id == user.id) | (KeystrokeVector.username == user.username)).delete(synchronize_session=False)
-            LoginAttempt.query.filter((LoginAttempt.user_id == user.id) | (LoginAttempt.username == user.username)).delete(synchronize_session=False)
+            db.session.execute(
+                sa_delete(UsersVector).where(UsersVector.username == user.username)
+            )
         except Exception:
             # Models may not exist in some legacy schemas; ignore failures and continue
             db.session.rollback()
 
-        # Finally delete the user row using a class-level DELETE to avoid
-        # loading relationship collections (which may reference missing
-        # legacy columns and cause OperationalError on some databases).
+        # Finally delete the user row
         try:
-            db.session.query(User).filter(User.id == user.id).delete(synchronize_session=False)
+            from sqlalchemy import delete as sa_delete
+            db.session.execute(sa_delete(User).where(User.id == user.id))
             db.session.commit()
         except Exception:
             db.session.rollback()
@@ -180,7 +193,8 @@ def admin_login():
         if not username or not password:
             return jsonify({"success": False, "message": "Username and password required"}), 400
 
-        user = db.session.query(User).filter_by(username=username).first()
+        from sqlalchemy import select
+        user = db.session.execute(select(User).where(User.username == username)).scalars().first()
         if not user or not user.is_admin():
             return jsonify({"success": False, "message": "Unauthorized"}), 403
 

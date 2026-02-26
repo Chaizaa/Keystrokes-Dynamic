@@ -3,18 +3,20 @@ API Blueprint - RESTful API endpoints for biometric authentication
 """
 
 import json
+import re
 import secrets
-
 import traceback
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session
 from flask_login import current_user, login_required, logout_user
+from sqlalchemy import select
+from werkzeug.security import generate_password_hash
 
 from app import limiter  # Import rate limiter
 from app.database import Database
-from app.models import User, db  # Import User model and db
-from app.services import APIKeyService, AuthService, BiometricService  # Import service layer
+from app.models import AdminAudit, EnrollmentVector, KeystrokeVector, User, db
+from app.services import AuthService, BiometricService  # Import service layer
 from app.services.email_service import email_service
 from app.utils.keystroke_processor import assess_sample_quality, process_web_events
 from app.utils.password_strength import (
@@ -31,242 +33,6 @@ db_manager = Database()
 auth_service = AuthService()
 # Pass the legacy db manager to BiometricService so it can read enrollment samples
 biometric_service = BiometricService(db=db_manager)
-
-
-def _get_client_ip():
-    """Resolve client IP, preferring X-Forwarded-For when behind a proxy."""
-    forwarded_for = (request.headers.get("X-Forwarded-For") or "").strip()
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.remote_addr
-
-
-def _extract_partner_api_key():
-    """Extract API key from Authorization header or X-API-Key fallback."""
-    auth_header = (request.headers.get("Authorization") or "").strip()
-    if auth_header:
-        if auth_header.lower().startswith("bearer "):
-            return auth_header.split(" ", 1)[1].strip()
-        return auth_header
-
-    return (request.headers.get("X-API-Key") or "").strip()
-
-
-def _authenticate_partner_api_request():
-    """Validate API key, origin policy, and per-key quota for partner endpoints."""
-    provided_key = _extract_partner_api_key()
-    is_valid, api_key, error_message = APIKeyService.verify_api_key(provided_key)
-    if not is_valid:
-        lowered_error = (error_message or "").lower()
-        status_code = 401
-        if "expired" in lowered_error or "inactive" in lowered_error:
-            status_code = 403
-
-        return None, (
-            jsonify(
-                {
-                    "success": False,
-                    "message": error_message or "Unauthorized",
-                    "error_code": "INVALID_API_KEY",
-                }
-            ),
-            status_code,
-        )
-
-    origin = (request.headers.get("Origin") or "").strip()
-    if not origin:
-        origin = (request.headers.get("Referer") or "").strip()
-
-    if not APIKeyService.check_origin_allowed(api_key, origin):
-        return None, (
-            jsonify(
-                {
-                    "success": False,
-                    "message": "Request origin is not allowed for this API key",
-                    "error_code": "ORIGIN_NOT_ALLOWED",
-                }
-            ),
-            403,
-        )
-
-    is_allowed, remaining_quota, error_message = APIKeyService.check_rate_limit(api_key)
-    if not is_allowed:
-        return None, (
-            jsonify(
-                {
-                    "success": False,
-                    "message": error_message,
-                    "error_code": "RATE_LIMIT_EXCEEDED",
-                    "remaining_quota": 0,
-                }
-            ),
-            429,
-        )
-
-    return (
-        {
-            "api_key": api_key,
-            "origin": origin or None,
-            "client_ip": _get_client_ip(),
-            "user_agent": request.headers.get("User-Agent", "Unknown"),
-            "remaining_quota": remaining_quota,
-        },
-        None,
-    )
-
-
-def _normalize_numeric_vector(raw_vector, field_name):
-    """Normalize vector values to floats and validate payload shape."""
-    if raw_vector is None:
-        return []
-    if not isinstance(raw_vector, list):
-        raise ValueError(f"{field_name} must be an array of numbers")
-
-    normalized = []
-    for value in raw_vector:
-        try:
-            normalized.append(float(value))
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{field_name} contains non-numeric value") from exc
-    return normalized
-
-
-def _build_partner_features(payload, username):
-    """Build feature vectors either from raw events or directly provided vectors."""
-    events = payload.get("events")
-    if events is not None:
-        if not isinstance(events, list) or not events:
-            return None, None, None, "events must be a non-empty array"
-        processed = process_web_events(events, username)
-        if processed.get("status") != "success":
-            return None, None, None, processed.get("msg", "Failed to process keystroke events")
-
-        features = processed.get("features") or {}
-        return (
-            features,
-            processed.get("real_password_string"),
-            processed.get("password_hash"),
-            None,
-        )
-
-    raw_features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
-    merged = dict(raw_features)
-
-    for key in ("H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"):
-        if key in payload and key not in merged:
-            merged[key] = payload.get(key)
-
-    try:
-        features = {
-            "H_vector": _normalize_numeric_vector(merged.get("H_vector"), "H_vector"),
-            "DD_vector": _normalize_numeric_vector(merged.get("DD_vector"), "DD_vector"),
-            "UD_vector": _normalize_numeric_vector(merged.get("UD_vector"), "UD_vector"),
-            "UU_vector": _normalize_numeric_vector(merged.get("UU_vector"), "UU_vector"),
-            "DU_vector": _normalize_numeric_vector(merged.get("DU_vector"), "DU_vector"),
-        }
-    except ValueError as exc:
-        return None, None, None, str(exc)
-
-    if not features["H_vector"] or not features["DD_vector"]:
-        return None, None, None, "events or H_vector/DD_vector are required"
-
-    password = payload.get("password") if isinstance(payload.get("password"), str) else None
-    password_hash = (
-        payload.get("password_hash") if isinstance(payload.get("password_hash"), str) else None
-    )
-    return features, password, password_hash, None
-
-
-def _safe_parse_vector(raw_value):
-    """Parse serialized vector values from database rows."""
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        return raw_value
-    if isinstance(raw_value, tuple):
-        return list(raw_value)
-    if isinstance(raw_value, str):
-        try:
-            parsed = json.loads(raw_value)
-            if isinstance(parsed, list):
-                return parsed
-        except Exception:
-            pass
-
-        try:
-            import ast
-
-            parsed = ast.literal_eval(raw_value)
-            if isinstance(parsed, list):
-                return parsed
-        except Exception:
-            pass
-
-    return []
-
-
-def _load_partner_enrollment_templates(username):
-    """Load enrollment templates from SQLAlchemy-backed tables for partner verification."""
-    from sqlalchemy import select
-
-    from app.models import EnrollmentVector, KeystrokeVector
-
-    templates = []
-
-    enrollment_rows = (
-        db.session.execute(
-            select(EnrollmentVector)
-            .where(EnrollmentVector.username == username)
-            .order_by(EnrollmentVector.id.desc())
-        )
-        .scalars()
-        .all()
-    )
-
-    for row in enrollment_rows:
-        h_vector = _safe_parse_vector(getattr(row, "H_vector", None))
-        dd_vector = _safe_parse_vector(getattr(row, "DD_vector", None))
-        if not h_vector or not dd_vector:
-            continue
-        templates.append(
-            {
-                "H_vector": h_vector,
-                "DD_vector": dd_vector,
-                "UD_vector": _safe_parse_vector(getattr(row, "UD_vector", None)),
-            }
-        )
-
-    if templates:
-        return templates
-
-    vector_rows = (
-        db.session.execute(
-            select(KeystrokeVector)
-            .where(
-                KeystrokeVector.username == username,
-                KeystrokeVector.event_type == "enrollment",
-                KeystrokeVector.is_successful.is_(True),
-            )
-            .order_by(KeystrokeVector.id.desc())
-        )
-        .scalars()
-        .all()
-    )
-
-    for row in vector_rows:
-        h_vector = _safe_parse_vector(getattr(row, "H_vector", None))
-        dd_vector = _safe_parse_vector(getattr(row, "DD_vector", None))
-        if not h_vector or not dd_vector:
-            continue
-        templates.append(
-            {
-                "H_vector": h_vector,
-                "DD_vector": dd_vector,
-                "UD_vector": _safe_parse_vector(getattr(row, "UD_vector", None)),
-            }
-        )
-
-    return templates
 
 # ============================================================================
 # USERNAME VALIDATION
@@ -355,8 +121,10 @@ def verify_email():
             # If timestamp parsing fails, continue and validate token normally
             print("[DEBUG] verify_email expiry check failed:", _e)
 
-        # Verify token: try generic verifier first (covers short-code and signed 'email-verify'),
-        # then fallback to checking a signed token with the 'password-reset' salt for admin-issued resets.
+        # Verify token: accepts both a 6-digit numeric code (short-code flow)
+        # and a signed 'email-verify' token.
+        # Password-reset tokens (salt="password-reset") are intentionally NOT
+        # accepted here; they are only valid at /api/reset_password.
         try:
             ok, reason = email_service.verify_token(
                 token,
@@ -371,19 +139,9 @@ def verify_email():
             )
 
         if not ok:
-            # If generic verification failed, try the password-reset signed-token path
-            try:
-                ok2, reason2 = email_service.verify_signed_token(
-                    token, user.email, user.email_verification_sent_at, salt="password-reset"
-                )
-                if ok2:
-                    ok, reason = True, None
-                else:
-                    # preserve original reason if available
-                    reason = reason or reason2
-            except Exception:
-                pass
-        if not ok:
+            # NOTE: intentionally do NOT fall back to salt="password-reset" here.
+            # Admin reset tokens must only be accepted via /api/reset_password,
+            # not via the email-verification endpoint.
             if reason == "expired":
                 return (
                     jsonify(
@@ -412,10 +170,6 @@ def verify_email():
                 user.email_verification_code_hash = None
         except Exception:
             pass
-        user.email_verified = True
-        db.session.commit()
-        return jsonify({"success": True, "message": "Email verified"}), 200
-
         user.email_verified = True
         db.session.commit()
         return jsonify({"success": True, "message": "Email verified"}), 200
@@ -534,11 +288,14 @@ def send_reset_verification():
             from werkzeug.security import generate_password_hash
 
             code = str(secrets.randbelow(10**6)).zfill(6)
-            user.email_verification_code_hash = generate_password_hash(code)
-            user.email_verification_sent_at = sent_at
+            # Write reset code to the dedicated password_reset_* columns so this
+            # does not overwrite the email_verification_sent_at used by the
+            # registration email-verification flow.
+            user.password_reset_code_hash = generate_password_hash(code)
+            user.password_reset_sent_at = sent_at
             db.session.commit()
-            # Send email with purpose=reset so UI will redirect appropriately
-            email_service.send_verification_email(user, code, purpose="reset")
+            # Send email with purpose=user_reset so UI will redirect appropriately
+            email_service.send_verification_email(user, code, purpose="user_reset")
             return jsonify({"success": True, "message": "Verification email sent"}), 200
         except Exception as e:
             db.session.rollback()
@@ -581,12 +338,12 @@ def verify_reset():
             ok, reason = email_service.verify_token(
                 token,
                 user.email,
-                user.email_verification_sent_at,
-                code_hash=user.email_verification_code_hash,
+                user.password_reset_sent_at,
+                code_hash=user.password_reset_code_hash,
             )
         except TypeError:
             ok, reason = email_service.verify_token(
-                token, user.email, user.email_verification_sent_at
+                token, user.email, user.password_reset_sent_at
             )
         if not ok:
             if reason == "expired":
@@ -616,7 +373,7 @@ def verify_reset():
             reset_token = email_service.generate_token(
                 user.email,
                 salt="password-reset",
-                sent_at=user.email_verification_sent_at,
+                sent_at=user.password_reset_sent_at,
             )
             return jsonify({"success": True, "reset_token": reset_token}), 200
         except Exception as e:
@@ -655,11 +412,12 @@ def reset_password_public():
         if not user:
             return jsonify({"status": "error", "message": "User tidak ditemukan"}), 404
 
-        # Verify signed reset token
+        # Verify signed reset token — read from the dedicated password_reset_sent_at
+        # column so admin resets don't interfere with email verification state.
         ok, reason = email_service.verify_signed_token(
             reset_token,
             user.email,
-            user.email_verification_sent_at,
+            user.password_reset_sent_at,
             salt="password-reset",
         )
         if not ok:
@@ -748,21 +506,13 @@ def reset_password_public():
             from app.models import db as sqlalchemy_db
 
             uid = getattr(user, "id", None)
-            ev = EnrollmentVector(user_id=uid, username=username, event_type="enrollment")
+            ev = EnrollmentVector(username=username, data_type="enrollment")
             if "H_vector" in features:
                 ev.H_vector = json.dumps(features["H_vector"])
             if "DD_vector" in features:
                 ev.DD_vector = json.dumps(features["DD_vector"])
-            if "raw_events" in features:
-                ev.raw_events = json.dumps(features["raw_events"])
-            if "quality_label" in features:
-                ev.quality_label = features["quality_label"]
-            if "quality_score" in features:
-                ev.quality_score = features["quality_score"]
-            if "password_strength" in features:
-                ev.password_strength = features["password_strength"]
-            if "password_hash" in features and features["password_hash"]:
-                ev.password = features["password_hash"]
+            if password_hash:
+                ev.password_hash = password_hash
 
             sqlalchemy_db.session.add(ev)
             sqlalchemy_db.session.commit()
@@ -1060,7 +810,7 @@ def check_username():
         # Status should be explicit: 'available', 'taken', or 'resumable' (partial registration)
         # Special case: if user row exists and enrollment is not complete (<=19), treat as resumable
         # This allows existing accounts with 0 samples to start/resume enrollment
-        if availability.get("exists") and enrollment_count >= 0 and enrollment_count < 20:
+        if availability.get("exists") and enrollment_count > 0 and enrollment_count < 20:
             status_str = "resumable"
         elif not availability["available"] and availability.get("reason") == "resumable":
             status_str = "resumable"
@@ -1327,33 +1077,60 @@ def register_sample():
                 if uid is not None:
                     # Expose resolved user id to fallback writers and for auditing
                     features["user_id"] = int(uid)
-                    from app.models import EnrollmentVector, FeatureVector
+                    from app.models import EnrollmentVector
                     from app.models import db as sqlalchemy_db
 
-                    ev = EnrollmentVector(user_id=uid, username=username, event_type="enrollment")
-                    # populate minimal vectors/fields
-                    if "H_vector" in features:
-                        ev.H_vector = json.dumps(features["H_vector"])
-                    if "DD_vector" in features:
-                        ev.DD_vector = json.dumps(features["DD_vector"])
-                    if "raw_events" in features:
-                        ev.raw_events = json.dumps(features["raw_events"])
-                    if "quality_label" in features:
-                        ev.quality_label = features["quality_label"]
-                    if "quality_score" in features:
-                        ev.quality_score = features["quality_score"]
-                    if "password_strength" in features:
-                        ev.password_strength = features["password_strength"]
-                    # Save client-derived sha256 password hash to enrollment sample for pre-verification
-                    if "password_hash" in features and features["password_hash"]:
-                        try:
-                            ev.password = features["password_hash"]
-                        except Exception:
-                            pass
+                    ev = EnrollmentVector(username=username, data_type="enrollment")
+
+                    # --- Timestamp & duration ---
+                    ev.timestamp     = datetime.now(timezone.utc).isoformat()
+                    ev.total_duration = features.get("total_duration")
+
+                    # --- Raw timing vectors ---
+                    ev.H_vector  = json.dumps(features.get("H_vector",  []))
+                    ev.DD_vector = json.dumps(features.get("DD_vector", []))
+                    ev.UD_vector = json.dumps(features.get("UD_vector", []))
+                    ev.UU_vector = json.dumps(features.get("UU_vector", []))
+                    ev.DU_vector = json.dumps(features.get("DU_vector", []))
+
+                    # --- Per-vector statistics ---
+                    def _set_stats(ev_obj, prefix, stats_dict):
+                        setattr(ev_obj, f"{prefix}_mean", stats_dict.get("mean"))
+                        setattr(ev_obj, f"{prefix}_std",  stats_dict.get("std"))
+                        setattr(ev_obj, f"{prefix}_min",  stats_dict.get("min"))
+                        setattr(ev_obj, f"{prefix}_max",  stats_dict.get("max"))
+
+                    _set_stats(ev, "H",  features.get("H_stats",  {}))
+                    _set_stats(ev, "DD", features.get("DD_stats", {}))
+                    _set_stats(ev, "UD", features.get("UD_stats", {}))
+                    _set_stats(ev, "UU", features.get("UU_stats", {}))
+                    _set_stats(ev, "DU", features.get("DU_stats", {}))
+
+                    # --- Coefficient of variation (CV = std / mean) ---
+                    def _cv(vec):
+                        import statistics as _stat
+                        if len(vec) < 2:
+                            return None
+                        m = _stat.mean(vec)
+                        return _stat.stdev(vec) / m if m else None
+
+                    ev.H_cv  = _cv(features.get("H_vector",  []))
+                    ev.DD_cv = _cv(features.get("DD_vector", []))
+                    ev.UD_cv = _cv(features.get("UD_vector", []))
+                    ev.UU_cv = _cv(features.get("UU_vector", []))
+                    ev.DU_cv = _cv(features.get("DU_vector", []))
+
+                    # --- Typing speed (chars / second) ---
+                    _dur = features.get("total_duration") or 0
+                    _cnt = features.get("char_count", 0)
+                    ev.typing_speed = (_cnt / _dur) if _dur > 0 else None
+
+                    # --- Password hash ---
+                    if password_hash:
+                        ev.password_hash = password_hash
 
                     sqlalchemy_db.session.add(ev)
                     sqlalchemy_db.session.commit()
-                    new_count = biometric_service.get_enrollment_status(username)["count"]
                 else:
                     # Fallback to legacy DB manager if we couldn't resolve a user_id
                     saved_ok = db_manager.save_data(features)
@@ -1531,6 +1308,50 @@ def pre_verify_password():
 # ============================================================================
 
 
+def _fetch_enrollment_templates(username):
+    """Fetch enrollment templates from SQLAlchemy (EnrollmentVector → KeystrokeVector fallback)."""
+
+    def _parse_row(r):
+        t = {}
+        for key in ("H_vector", "DD_vector"):
+            val = getattr(r, key, None)
+            if val:
+                try:
+                    t[key] = json.loads(val)
+                except Exception:
+                    try:
+                        t[key] = eval(val)
+                    except Exception:
+                        t[key] = []
+            else:
+                t[key] = []
+        return t
+
+    templates = []
+    try:
+        rows = db.session.execute(
+            select(EnrollmentVector).where(EnrollmentVector.username == username)
+        ).scalars().all()
+        templates = [_parse_row(r) for r in rows]
+    except Exception:
+        templates = []
+
+    if not templates:
+        try:
+            rows = db.session.execute(
+                select(KeystrokeVector).where(
+                    KeystrokeVector.username == username,
+                    (KeystrokeVector.event_type == "enrollment")
+                    | (KeystrokeVector.data_type == "enrollment"),
+                )
+            ).scalars().all()
+            templates = [_parse_row(r) for r in rows]
+        except Exception:
+            templates = []
+
+    return templates
+
+
 @api_bp.route("/login", methods=["POST"])
 @limiter.limit("10 per minute")  # Rate limit: 10 login attempts per minute
 def login():
@@ -1610,10 +1431,7 @@ def login():
             user = auth_service.get_user_by_username(username)
 
             # Determine typed password char count from features
-            typed_len = int(
-                result.get("features", {}).get("char_count", 0)
-                or len(result.get("features", {}).get("H_vector", []))
-            )
+            typed_len = features.get("char_count", 0) or len(features.get("H_vector", []))
 
             # Fetch enrollment templates to find matching-length templates
             templates = []
@@ -1697,186 +1515,21 @@ def login():
         # Prefer verifying with SQLAlchemy-sourced templates when user appears ready for login
         if enrollment_status.get("ready_for_login"):
             try:
-                import json
-
-                from sqlalchemy import select
-
-                from app.models import EnrollmentVector, KeystrokeVector
-                from app.models import db as sqlalchemy_db
-
-                templates = []
-                try:
-                    rows = (
-                        sqlalchemy_db.session.execute(
-                            select(EnrollmentVector).where(EnrollmentVector.username == username)
-                        )
-                        .scalars()
-                        .all()
-                    )
-                    for r in rows:
-                        t = {}
-                        try:
-                            t["H_vector"] = json.loads(r.H_vector) if r.H_vector else []
-                        except Exception:
-                            try:
-                                t["H_vector"] = eval(r.H_vector) if r.H_vector else []
-                            except Exception:
-                                t["H_vector"] = []
-                        try:
-                            t["DD_vector"] = json.loads(r.DD_vector) if r.DD_vector else []
-                        except Exception:
-                            try:
-                                t["DD_vector"] = eval(r.DD_vector) if r.DD_vector else []
-                            except Exception:
-                                t["DD_vector"] = []
-                        templates.append(t)
-                except Exception:
-                    templates = []
-
-                if not templates:
-                    try:
-                        rows = (
-                            sqlalchemy_db.session.execute(
-                                select(KeystrokeVector).where(
-                                    KeystrokeVector.username == username,
-                                    (KeystrokeVector.event_type == "enrollment")
-                                    | (KeystrokeVector.data_type == "enrollment"),
-                                )
-                            )
-                            .scalars()
-                            .all()
-                        )
-                        for r in rows:
-                            t = {}
-                            try:
-                                t["H_vector"] = json.loads(r.H_vector) if r.H_vector else []
-                            except Exception:
-                                try:
-                                    t["H_vector"] = eval(r.H_vector) if r.H_vector else []
-                                except Exception:
-                                    t["H_vector"] = []
-                            try:
-                                t["DD_vector"] = json.loads(r.DD_vector) if r.DD_vector else []
-                            except Exception:
-                                try:
-                                    t["DD_vector"] = eval(r.DD_vector) if r.DD_vector else []
-                                except Exception:
-                                    t["DD_vector"] = []
-                            templates.append(t)
-                    except Exception:
-                        templates = []
-
+                templates = _fetch_enrollment_templates(username)
                 if templates:
-                    # First, try the global biometric_service with provided templates (honours test monkeypatches)
                     try:
                         verification_result = biometric_service.verify_keystroke_sample(
                             result["features"], templates
                         )
                     except Exception:
-                        verification_result = {
-                            "success": False,
-                            "verified": False,
-                            "score": 0.0,
-                        }
-
-                    # If that didn't verify, run an internal lightweight verification as a fallback
-                    if not verification_result.get("verified"):
-                        try:
-                            from app.services.biometric import BiometricService as _Biom
-
-                            _v = _Biom()
-                            login_sample = result["features"]
-                            eu_scores = []
-                            cos_scores = []
-                            stat_scores = []
-                            import numpy as _np
-
-                            for t in templates:
-                                tH = t.get("H_vector", []) or []
-                                tDD = t.get("DD_vector", []) or []
-                                login_H = login_sample.get("H_vector", []) or []
-                                login_DD = login_sample.get("DD_vector", []) or []
-                                if len(tH) != len(login_H) or len(tDD) != len(login_DD):
-                                    continue
-                                h_dist = _v.calculate_euclidean_distance(login_H, tH)
-                                dd_dist = _v.calculate_euclidean_distance(login_DD, tDD)
-                                eu = (1.0 / (1.0 + h_dist) + 1.0 / (1.0 + dd_dist)) / 2
-                                eu_scores.append(eu)
-                                h_cos = _v.calculate_cosine_similarity(login_H, tH)
-                                dd_cos = _v.calculate_cosine_similarity(login_DD, tDD)
-                                cos = (((h_cos + 1) / 2) + ((dd_cos + 1) / 2)) / 2
-                                cos_scores.append(cos)
-                                s = _v.calculate_statistical_similarity(login_sample, templates)
-                                stat_scores.append(s.get("score", 0.0))
-
-                            eu_score = float(_np.mean(eu_scores)) if eu_scores else 0.0
-                            cos_score = float(_np.mean(cos_scores)) if cos_scores else 0.0
-                            statistical_score = float(_np.mean(stat_scores)) if stat_scores else 0.0
-                            base_confidence = (
-                                0.5 * eu_score + 0.3 * cos_score + 0.2 * statistical_score
-                            )
-                            base_confidence = float(max(0.0, min(1.0, base_confidence)))
-                            calibrated_confidence = float(
-                                max(0.0, min(1.0, base_confidence * statistical_score))
-                            )
-                            verified = calibrated_confidence >= _v.LOW_CONFIDENCE_THRESHOLD
-                            confidence_label = (
-                                "exact_match"
-                                if calibrated_confidence >= _v.EXACT_MATCH_THRESHOLD
-                                else (
-                                    "high"
-                                    if calibrated_confidence >= _v.HIGH_CONFIDENCE_THRESHOLD
-                                    else (
-                                        "medium"
-                                        if calibrated_confidence >= _v.MEDIUM_CONFIDENCE_THRESHOLD
-                                        else (
-                                            "low"
-                                            if calibrated_confidence >= _v.LOW_CONFIDENCE_THRESHOLD
-                                            else "failed"
-                                        )
-                                    )
-                                )
-                            )
-                            if verified:
-                                verification_result = {
-                                    "success": True,
-                                    "verified": True,
-                                    "score": float(round(calibrated_confidence, 4)),
-                                    "avg_score": (
-                                        float(
-                                            round(
-                                                _np.mean(
-                                                    [
-                                                        eu_score,
-                                                        cos_score,
-                                                        statistical_score,
-                                                    ]
-                                                ),
-                                                4,
-                                            )
-                                        )
-                                        if (eu_scores or cos_scores or stat_scores)
-                                        else 0.0
-                                    ),
-                                    "confidence": confidence_label,
-                                    "templates_used": len(templates),
-                                    "message": "Biometric verification successful",
-                                }
-                        except Exception as e:
-                            print(f"[DEBUG] Internal verification error: {e}")
-
-                    # Final fallback: if still not verified, call verify with username-based flow
+                        verification_result = {"success": False, "verified": False, "score": 0.0}
                     if not verification_result.get("verified"):
                         try:
                             verification_result = biometric_service.verify_keystroke_sample(
                                 username, result["features"]
                             )
                         except Exception:
-                            verification_result = {
-                                "success": False,
-                                "verified": False,
-                                "score": 0.0,
-                            }
+                            verification_result = {"success": False, "verified": False, "score": 0.0}
                 else:
                     verification_result = biometric_service.verify_keystroke_sample(
                         username, result["features"]
@@ -1904,80 +1557,7 @@ def login():
             # This addresses cases where templates are stored in SQLAlchemy tables (EnrollmentVector / KeystrokeVector)
             try:
                 if enrollment_status["ready_for_login"]:
-                    import json
-
-                    from sqlalchemy import select
-
-                    from app.models import EnrollmentVector, KeystrokeVector
-                    from app.models import db as sqlalchemy_db
-
-                    templates = []
-                    # Prefer EnrollmentVector templates
-                    try:
-                        rows = (
-                            sqlalchemy_db.session.execute(
-                                select(EnrollmentVector).where(
-                                    EnrollmentVector.username == username
-                                )
-                            )
-                            .scalars()
-                            .all()
-                        )
-                        for r in rows:
-                            t = {}
-                            try:
-                                t["H_vector"] = json.loads(r.H_vector) if r.H_vector else []
-                            except Exception:
-                                try:
-                                    t["H_vector"] = eval(r.H_vector) if r.H_vector else []
-                                except Exception:
-                                    t["H_vector"] = []
-                            try:
-                                t["DD_vector"] = json.loads(r.DD_vector) if r.DD_vector else []
-                            except Exception:
-                                try:
-                                    t["DD_vector"] = eval(r.DD_vector) if r.DD_vector else []
-                                except Exception:
-                                    t["DD_vector"] = []
-                            templates.append(t)
-
-                    except Exception:
-                        templates = []
-
-                    # Fallback to KeystrokeVector templates if none found
-                    if not templates:
-                        try:
-                            rows = (
-                                sqlalchemy_db.session.execute(
-                                    select(KeystrokeVector).where(
-                                        KeystrokeVector.username == username,
-                                        (KeystrokeVector.event_type == "enrollment")
-                                        | (KeystrokeVector.data_type == "enrollment"),
-                                    )
-                                )
-                                .scalars()
-                                .all()
-                            )
-                            for r in rows:
-                                t = {}
-                                try:
-                                    t["H_vector"] = json.loads(r.H_vector) if r.H_vector else []
-                                except Exception:
-                                    try:
-                                        t["H_vector"] = eval(r.H_vector) if r.H_vector else []
-                                    except Exception:
-                                        t["H_vector"] = []
-                                try:
-                                    t["DD_vector"] = json.loads(r.DD_vector) if r.DD_vector else []
-                                except Exception:
-                                    try:
-                                        t["DD_vector"] = eval(r.DD_vector) if r.DD_vector else []
-                                    except Exception:
-                                        t["DD_vector"] = []
-                                templates.append(t)
-                        except Exception:
-                            templates = []
-
+                    templates = _fetch_enrollment_templates(username)
                     if templates:
                         secondary_ver = biometric_service.verify_keystroke_sample(
                             result["features"], templates
@@ -2090,7 +1670,6 @@ def login():
             )
 
         # Pre-verification: Password hash check via AuthService
-        input_hash = result.get("password_hash")
         real_password = result.get("real_password_string")
 
         # Verify password (supports both bcrypt and legacy)
@@ -2150,7 +1729,12 @@ def login():
             )
 
         # Comprehensive keystroke verification via BiometricService
-        verification_result = biometric_service.verify_keystroke_sample(username, features)
+        # Only re-run if not already confirmed by the earlier template-based SQLAlchemy check
+        if not verification_result.get("verified"):
+            verification_result = biometric_service.verify_keystroke_sample(username, features)
+        # Ensure success key is present when already verified
+        if verification_result.get("verified") and not verification_result.get("success"):
+            verification_result["success"] = True
 
         # If dev relaxed pass was set earlier, override verification result to accept the login
         try:
@@ -2182,15 +1766,12 @@ def login():
 
         # Decision logic
         if is_genuine:
-            # Save verified login
+            # Save verified login (audit log only — no raw biometric vectors)
             db_manager.save_verified_login(
                 {
                     "username": username,
                     "password_hash": user.password_hash,
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "H_vector": features.get("H_vector"),
-                    "DD_vector": features.get("DD_vector"),
-                    "UD_vector": features.get("UD_vector"),
                     "verification_score": confidence_score,
                     "recommended_method": verification_result.get("confidence", "medium"),
                     "ip_address": ip_address,
@@ -2398,40 +1979,24 @@ def get_user_info():
     try:
         username = current_user.username  # Use Flask-Login current_user
         user_data = db_manager.get_user_by_username(username)
-        from sqlalchemy import select
 
-        user = db.session.execute(select(User).where(User.username == username)).scalars().first()
-
-        if not user_data and not user:
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
         # Use BiometricService for enrollment status
         enrollment_status = biometric_service.get_enrollment_status(username)
         verified_logins = db_manager.get_verified_login_count(username)
-        active_api_keys = APIKeyService.list_api_keys(
-            user_id=current_user.id,
-            active_only=True,
-        )
-
-        created_at = user.created_at.isoformat() if user and user.created_at else None
-        email = user.email if user else user_data.get("email", "N/A")
-        email_verified = bool(user.email_verified) if user else False
-        has_password = bool(user.password_hash) if user else False
 
         return (
             jsonify(
                 {
                     "username": username,
-                    "email": email,
-                    "email_verified": email_verified,
-                    "created_at": created_at,
+                    "email": user_data.get("email", "N/A"),
                     "last_login": user_data.get("last_login"),
                     "session_start": session.get("login_time"),
                     "enrollment_count": enrollment_status["count"],
                     "enrollment_ready": enrollment_status["ready_for_login"],
                     "verified_logins": verified_logins,
-                    "has_password": has_password,
-                    "api_key_count": len(active_api_keys),
                 }
             ),
             200,
@@ -2441,525 +2006,6 @@ def get_user_info():
         print(f"[ERROR] get_user_info: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/user/api-keys", methods=["GET"])
-@login_required
-def list_user_api_keys():
-    """List API keys created by the currently logged-in user."""
-    try:
-        include_inactive = request.args.get("include_inactive", "false").lower() == "true"
-        api_keys = APIKeyService.list_api_keys(
-            user_id=current_user.id,
-            active_only=not include_inactive,
-        )
-
-        payload = []
-        for key in api_keys:
-            stats = APIKeyService.get_key_stats(key.id)
-            payload.append(
-                {
-                    "id": key.id,
-                    "partner_name": key.partner_name,
-                    "description": key.description,
-                    "key_prefix": key.key_prefix,
-                    "is_active": bool(key.is_active),
-                    "rate_limit": key.rate_limit,
-                    "allowed_origins": key.allowed_origins,
-                    "created_at": key.created_at.isoformat() if key.created_at else None,
-                    "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
-                    "expires_at": key.expires_at.isoformat() if key.expires_at else None,
-                    "stats": stats,
-                }
-            )
-
-        return jsonify({"success": True, "keys": payload, "count": len(payload)}), 200
-    except Exception as e:
-        print(f"[ERROR] list_user_api_keys: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)}), 500
-
-
-@api_bp.route("/user/api-keys/generate", methods=["POST"])
-@login_required
-@limiter.limit("5 per hour")
-def generate_user_api_key():
-    """Generate a new API key for partner integration from dashboard."""
-    try:
-        data = request.get_json(silent=True) or {}
-
-        partner_name = (data.get("partner_name") or "").strip()
-        description = (data.get("description") or "").strip() or None
-        allowed_origins = (data.get("allowed_origins") or "").strip() or None
-
-        if not partner_name:
-            return jsonify({"success": False, "message": "partner_name is required"}), 400
-        if len(partner_name) < 3:
-            return (
-                jsonify({"success": False, "message": "partner_name minimal 3 characters"}),
-                400,
-            )
-        if len(partner_name) > 255:
-            return (
-                jsonify({"success": False, "message": "partner_name maximal 255 characters"}),
-                400,
-            )
-
-        rate_limit_raw = data.get("rate_limit", 100)
-        try:
-            rate_limit = int(rate_limit_raw)
-        except (TypeError, ValueError):
-            return jsonify({"success": False, "message": "rate_limit must be a number"}), 400
-        if rate_limit < 1 or rate_limit > 100000:
-            return (
-                jsonify({"success": False, "message": "rate_limit must be between 1 and 100000"}),
-                400,
-            )
-
-        expires_days = data.get("expires_days")
-        if expires_days in (None, ""):
-            expires_days = None
-        else:
-            try:
-                expires_days = int(expires_days)
-            except (TypeError, ValueError):
-                return jsonify({"success": False, "message": "expires_days must be a number"}), 400
-            if expires_days < 1 or expires_days > 3650:
-                return (
-                    jsonify({"success": False, "message": "expires_days must be between 1 and 3650"}),
-                    400,
-                )
-
-        full_key, key_model = APIKeyService.generate_new_key(
-            user_id=current_user.id,
-            partner_name=partner_name,
-            description=description,
-            rate_limit=rate_limit,
-            allowed_origins=allowed_origins,
-        )
-
-        if expires_days is not None:
-            key_model.expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
-            db.session.commit()
-
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "message": "API key generated successfully",
-                    "api_key": full_key,
-                    "key": {
-                        "id": key_model.id,
-                        "partner_name": key_model.partner_name,
-                        "description": key_model.description,
-                        "key_prefix": key_model.key_prefix,
-                        "rate_limit": key_model.rate_limit,
-                        "is_active": bool(key_model.is_active),
-                        "created_at": key_model.created_at.isoformat()
-                        if key_model.created_at
-                        else None,
-                        "expires_at": key_model.expires_at.isoformat()
-                        if key_model.expires_at
-                        else None,
-                    },
-                    "warning": "Save this API key now. It will not be shown again.",
-                }
-            ),
-            201,
-        )
-    except Exception as e:
-        db.session.rollback()
-        print(f"[ERROR] generate_user_api_key: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)}), 500
-
-
-@api_bp.route("/user/api-keys/<int:key_id>/deactivate", methods=["POST"])
-@login_required
-def deactivate_user_api_key(key_id):
-    """Deactivate an API key owned by the current user."""
-    try:
-        ok = APIKeyService.deactivate_key(key_id, user_id=current_user.id)
-        if not ok:
-            return jsonify({"success": False, "message": "API key not found"}), 404
-
-        return jsonify({"success": True, "message": "API key deactivated"}), 200
-    except Exception as e:
-        print(f"[ERROR] deactivate_user_api_key: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)}), 500
-
-
-@api_bp.route("/partner/enroll", methods=["POST"])
-@limiter.limit("120 per minute")
-def partner_enroll():
-    """Enroll partner keystroke sample using API key authentication."""
-    auth_context, auth_error = _authenticate_partner_api_request()
-    if auth_error:
-        return auth_error
-
-    api_key = auth_context["api_key"]
-    client_ip = auth_context["client_ip"]
-    user_agent = auth_context["user_agent"]
-
-    data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-    raw_email = data.get("email")
-    email = raw_email.strip() if isinstance(raw_email, str) else None
-
-    if not username:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": "username is required",
-                    "error_code": "INVALID_INPUT",
-                }
-            ),
-            400,
-        )
-
-    validation = auth_service.validate_username(username)
-    if not validation["valid"]:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": validation["message"],
-                    "error_code": "INVALID_USERNAME",
-                }
-            ),
-            400,
-        )
-
-    log_entry = APIKeyService.log_enrollment(
-        api_key_id=api_key.id,
-        username=username,
-        email=email,
-        samples_count=1,
-        client_ip=client_ip,
-        user_agent=user_agent,
-        status="processing",
-    )
-
-    try:
-        features, typed_password, typed_password_hash, parse_error = _build_partner_features(
-            data, username
-        )
-        if parse_error:
-            log_entry.mark_failed(parse_error)
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "message": parse_error,
-                        "error_code": "INVALID_KEYSTROKE_DATA",
-                    }
-                ),
-                400,
-            )
-
-        quality = assess_sample_quality(features)
-        features["username"] = username
-        features["event_type"] = "enrollment"
-        features["quality_label"] = quality["quality_label"]
-        features["quality_score"] = quality["quality_score"]
-
-        user = auth_service.get_user_by_username(username)
-        created_new_user = False
-
-        if user and email and not getattr(user, "email", None):
-            user.email = email
-
-        if user and typed_password and getattr(user, "password_hash", None):
-            if not user.check_password(typed_password):
-                log_entry.mark_failed("Incorrect password")
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "message": "Incorrect password",
-                            "error_code": "PASSWORD_MISMATCH",
-                        }
-                    ),
-                    403,
-                )
-
-        if user and typed_password and not getattr(user, "password_hash", None):
-            user.set_password(typed_password)
-
-        if not user:
-            create_password = typed_password or f"partner_{secrets.token_urlsafe(24)}"
-            user_result = auth_service.create_user(username, create_password, email=email)
-            if not user_result.get("success") or not user_result.get("user"):
-                log_entry.mark_failed(user_result.get("message", "Unable to create user"))
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "message": user_result.get("message", "Unable to create user"),
-                            "error_code": "USER_CREATION_FAILED",
-                        }
-                    ),
-                    400,
-                )
-
-            user = user_result["user"]
-            created_new_user = True
-
-        from app.models import EnrollmentVector
-
-        enrollment_row = EnrollmentVector(
-            user_id=user.id,
-            username=username,
-            event_type="enrollment",
-        )
-        enrollment_row.H_vector = json.dumps(features.get("H_vector", []))
-        enrollment_row.DD_vector = json.dumps(features.get("DD_vector", []))
-        enrollment_row.UD_vector = json.dumps(features.get("UD_vector", []))
-        enrollment_row.UU_vector = json.dumps(features.get("UU_vector", []))
-        enrollment_row.DU_vector = json.dumps(features.get("DU_vector", []))
-        enrollment_row.quality_label = quality["quality_label"]
-        enrollment_row.quality_score = quality["quality_score"]
-        if typed_password_hash:
-            enrollment_row.password = typed_password_hash
-
-        db.session.add(enrollment_row)
-        db.session.commit()
-
-        enrollment_status = biometric_service.get_enrollment_status(username)
-        enrollment_id = f"enr_{api_key.id}_{log_entry.id}_{int(datetime.now(timezone.utc).timestamp())}"
-
-        log_entry.user_id = user.id
-        log_entry.samples_count = 1
-        log_entry.mark_success(enrollment_id)
-
-        api_key.total_enrollments = int(api_key.total_enrollments or 0) + 1
-        if created_new_user:
-            api_key.enrolled_users = int(api_key.enrolled_users or 0) + 1
-        api_key.last_used_at = datetime.now(timezone.utc)
-        db.session.commit()
-
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "message": "Enrollment sample accepted",
-                    "enrollment_id": enrollment_id,
-                    "username": username,
-                    "api_key_prefix": api_key.key_prefix,
-                    "progress": {
-                        "current": enrollment_status.get("count", 0),
-                        "target": 20,
-                        "complete": bool(enrollment_status.get("ready_for_login", False)),
-                    },
-                    "quality": quality,
-                    "remaining_quota": api_key.get_remaining_quota(),
-                }
-            ),
-            201,
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        try:
-            log_entry.mark_failed(str(e))
-        except Exception:
-            pass
-        print(f"[ERROR] partner_enroll: {e}")
-        traceback.print_exc()
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": "Failed to process enrollment request",
-                    "error_code": "SERVER_ERROR",
-                }
-            ),
-            500,
-        )
-
-
-@api_bp.route("/partner/verify", methods=["POST"])
-@limiter.limit("180 per minute")
-def partner_verify():
-    """Verify partner keystroke sample using API key authentication."""
-    auth_context, auth_error = _authenticate_partner_api_request()
-    if auth_error:
-        return auth_error
-
-    api_key = auth_context["api_key"]
-    client_ip = auth_context["client_ip"]
-    user_agent = auth_context["user_agent"]
-
-    data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-
-    if not username:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": "username is required",
-                    "error_code": "INVALID_INPUT",
-                }
-            ),
-            400,
-        )
-
-    validation = auth_service.validate_username(username)
-    if not validation["valid"]:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": validation["message"],
-                    "error_code": "INVALID_USERNAME",
-                }
-            ),
-            400,
-        )
-
-    user = auth_service.get_user_by_username(username)
-    user_id = user.id if user else None
-
-    try:
-        features, _, _, parse_error = _build_partner_features(data, username)
-        if parse_error:
-            APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                user_id=user_id,
-                username=username,
-                verified=False,
-                confidence_score=0.0,
-                error_message=parse_error,
-                client_ip=client_ip,
-                user_agent=user_agent,
-            )
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "message": parse_error,
-                        "error_code": "INVALID_KEYSTROKE_DATA",
-                    }
-                ),
-                400,
-            )
-
-        templates = _load_partner_enrollment_templates(username)
-        min_templates = int(
-            getattr(biometric_service, "MIN_SAMPLES_FOR_VERIFICATION", 3) or 3
-        )
-        if len(templates) < min_templates:
-            message = (
-                f"Insufficient enrollment samples ({len(templates)}/{min_templates})"
-            )
-            APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                user_id=user_id,
-                username=username,
-                verified=False,
-                confidence_score=0.0,
-                error_message=message,
-                client_ip=client_ip,
-                user_agent=user_agent,
-            )
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "message": message,
-                        "error_code": "INSUFFICIENT_ENROLLMENT",
-                    }
-                ),
-                404,
-            )
-
-        verification_result = biometric_service.verify_keystroke_sample(features, templates)
-
-        verified = False
-        confidence_score = None
-        confidence_label = None
-        decision = "impostor"
-
-        if isinstance(verification_result, dict) and "decision" in verification_result:
-            decision = verification_result.get("decision", "impostor")
-            verified = decision == "genuine"
-            confidence_score = verification_result.get("confidence_score")
-            confidence_label = verification_result.get("confidence_label")
-        else:
-            verified = bool((verification_result or {}).get("verified", False))
-            confidence_score = (verification_result or {}).get("score")
-            confidence_label = (verification_result or {}).get("confidence")
-            decision = "genuine" if verified else "impostor"
-
-        verification_error = None
-        if not verified:
-            verification_error = (verification_result or {}).get(
-                "error", "Biometric verification failed"
-            )
-
-        verification_log = APIKeyService.log_verification(
-            api_key_id=api_key.id,
-            user_id=user_id,
-            username=username,
-            verified=verified,
-            confidence_score=confidence_score,
-            error_message=verification_error,
-            client_ip=client_ip,
-            user_agent=user_agent,
-        )
-
-        api_key.total_verifications = int(api_key.total_verifications or 0) + 1
-        api_key.last_used_at = datetime.now(timezone.utc)
-        db.session.commit()
-
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "verified": bool(verified),
-                    "decision": decision,
-                    "username": username,
-                    "confidence_score": confidence_score,
-                    "confidence_label": confidence_label,
-                    "templates_used": len(templates),
-                    "verification_id": verification_log.id,
-                    "api_key_prefix": api_key.key_prefix,
-                    "remaining_quota": api_key.get_remaining_quota(),
-                }
-            ),
-            200,
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        try:
-            APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                user_id=user_id,
-                username=username,
-                verified=False,
-                confidence_score=0.0,
-                error_message=str(e),
-                client_ip=client_ip,
-                user_agent=user_agent,
-            )
-        except Exception:
-            pass
-        print(f"[ERROR] partner_verify: {e}")
-        traceback.print_exc()
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": "Failed to process verification request",
-                    "error_code": "SERVER_ERROR",
-                }
-            ),
-            500,
-        )
 
 
 @api_bp.route("/user/reset_password", methods=["POST"])
@@ -2979,12 +2025,12 @@ def reset_password():
 
         current_password = data.get("current_password")
 
-        if current_password:
-            success, message = auth_service.change_password(
-                username, current_password, new_password
-            )
-        else:
-            success, message = auth_service.change_password(current_user, new_password)
+        if not current_password:
+            return jsonify({"error": "Current password required to reset"}), 400
+
+        success, message = auth_service.change_password(
+            username, current_password, new_password
+        )
 
         if not success:
             return jsonify({"error": message}), 400
@@ -3010,15 +2056,3 @@ def reset_password():
         return jsonify({"error": str(e)}), 500
 
 
-# ============================================================================
-# DEBUG ENDPOINTS (Development only)
-# ============================================================================
-
-
-@api_bp.route("/debug/user/<username>", methods=["GET"])
-def debug_user(username):
-    """
-    Debug endpoint to view user enrollment data
-    """
-    # Implementation will be migrated from original app.py
-    return jsonify({"status": "error", "message": "Endpoint under migration"}), 501

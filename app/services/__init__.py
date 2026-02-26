@@ -4,9 +4,7 @@ Business logic layer for the application
 """
 
 from app.services.auth_service import AuthService
-
-# Use refactored biometric implementation to avoid legacy indentation issues
-from app.services.biometric import BiometricService
+from app.services.biometric_service import BiometricService
 
 from app.services.api_key_service import APIKeyService
 
