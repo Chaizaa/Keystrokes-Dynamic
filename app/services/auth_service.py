@@ -3,7 +3,6 @@ Authentication Service - User authentication and registration logic
 Handles password validation, user creation, and login verification
 """
 
-import hashlib
 from typing import Dict, Optional, Tuple
 
 from flask import session
@@ -392,22 +391,6 @@ class AuthService:
             print(f"[ERROR] login_user_session: {e}")
             return False
 
-    def logout_user_session(self) -> bool:
-        """
-        Logout user and clear session
-
-        Returns:
-            Success status
-        """
-        try:
-            logout_user()
-            session.clear()
-            return True
-
-        except Exception as e:
-            print(f"[ERROR] logout_user_session: {e}")
-            return False
-
     def change_password(
         self, username: str, old_password: str, new_password: str
     ) -> Tuple[bool, str]:
@@ -434,20 +417,6 @@ class AuthService:
         except Exception as e:
             sqlalchemy_db.session.rollback()
             return False, f"Failed to change password: {str(e)}"
-
-    def set_two_factor_secret(self, username: str, secret: str) -> bool:
-        """Set the two-factor secret for a user."""
-        user = self.get_user_by_username(username)
-        if not user:
-            return False
-        try:
-            user.two_factor_secret = secret
-            user.two_factor_enabled = False
-            db.session.commit()
-            return True
-        except Exception:
-            db.session.rollback()
-            return False
 
     def verify_two_factor_token(self, username: str, token: str) -> bool:
         """Verify a TOTP token for the given user."""

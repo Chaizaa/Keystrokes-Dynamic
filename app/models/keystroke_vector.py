@@ -1,231 +1,186 @@
 """
-Keystroke Vector Model - Biometric keystroke samples
+UsersVector Model - Unified biometric keystroke storage for both register and login.
+
+  data_type = 'enrollment'  → samples captured during registration
+  data_type = 'login'       → samples captured during login attempt
+
+Schema mirrors biometric_system.db reference exactly.
 """
 
 import json
-from datetime import datetime, timezone
+
+from sqlalchemy import Index
 
 from . import db
 
 
-class KeystrokeVector(db.Model):
+class UsersVector(db.Model):
     """
-    Keystroke biometric vector storage
+    Unified keystroke biometric storage.
+    Used for both enrollment (register) and login verification.
 
-    Stores timing features for keystroke dynamics:
-    - H (Hold Time): Duration of key press
-    - DD (Down-Down): Time between key presses
-    - UD (Up-Down): Time between key release and next press
-    - UU (Up-Up): Time between key releases
-    - DU (Down-Up): Time between key press and release
-
-    Supports both legacy vector format and new character-labeled features
+    Timing features:
+      H   = Hold Time    (key-down duration)
+      DD  = Down-Down    (consecutive key-down intervals)
+      UD  = Up-Down      (key-up to next key-down)
+      UU  = Up-Up        (consecutive key-up intervals)
+      DU  = Down-Up      (key-down to its own key-up = same as H, different aggregate)
     """
 
-    __tablename__ = "user_vectors"
+    __tablename__ = "users_vectors"
 
-    # Composite indexes for common query patterns
     __table_args__ = (
-        db.Index("idx_vector_user_event_type", "user_id", "event_type"),
-        db.Index("idx_vector_username_event", "username", "event_type"),
-        db.Index("idx_vector_user_timestamp", "user_id", "timestamp"),
+        Index("idx_vector_user_event_type", "user_id", "event_type"),
+        Index("idx_vector_username_event", "username", "event_type"),
+        Index("idx_vector_user_timestamp", "user_id", "timestamp"),
     )
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    username = db.Column(db.String(80), nullable=False, index=True)  # Denormalized for query speed
+    # --- Primary key ---
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
-    # Event metadata
-    event_type = db.Column(
-        db.String(50), nullable=False, index=True
-    )  # 'enrollment', 'login_attempt'
-    is_successful = db.Column(db.Boolean, default=True, nullable=False)
-    timestamp = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+    # --- Identity (user_id is optional FK for legacy rows without it) ---
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 
-    # Password (for keystroke matching)
-    password = db.Column(db.String(255), nullable=True)
-    password_hash = db.Column(db.String(255), nullable=True)
+    # --- Identity ---
+    username      = db.Column(db.Text, nullable=True, index=True)
+    timestamp     = db.Column(db.Text, nullable=True)
+    password_hash = db.Column(db.Text, nullable=True)
 
-    # Legacy vectors (backward compatibility)
-    H_vector = db.Column(db.Text, nullable=True)  # JSON array
+    # --- Aggregate timing ---
+    total_duration = db.Column(db.Float, nullable=True)
+
+    # --- Raw timing vectors (JSON arrays) ---
+    H_vector  = db.Column(db.Text, nullable=True)
     DD_vector = db.Column(db.Text, nullable=True)
     UD_vector = db.Column(db.Text, nullable=True)
     UU_vector = db.Column(db.Text, nullable=True)
     DU_vector = db.Column(db.Text, nullable=True)
 
-    # New character-labeled features (JSON)
-    H_features = db.Column(db.Text, nullable=True)  # {"H.a_0": 0.123, ...}
-    DD_features = db.Column(db.Text, nullable=True)
-    UD_features = db.Column(db.Text, nullable=True)
-    UU_features = db.Column(db.Text, nullable=True)
-    DU_features = db.Column(db.Text, nullable=True)
+    # --- Per-vector statistics ---
+    H_mean  = db.Column(db.Float, nullable=True)
+    H_std   = db.Column(db.Float, nullable=True)
+    H_min   = db.Column(db.Float, nullable=True)
+    H_max   = db.Column(db.Float, nullable=True)
 
-    # Statistical features
-    mean_H = db.Column(db.Float, nullable=True)
-    std_H = db.Column(db.Float, nullable=True)
-    mean_DD = db.Column(db.Float, nullable=True)
-    std_DD = db.Column(db.Float, nullable=True)
-    mean_UD = db.Column(db.Float, nullable=True)
-    std_UD = db.Column(db.Float, nullable=True)
+    DD_mean = db.Column(db.Float, nullable=True)
+    DD_std  = db.Column(db.Float, nullable=True)
+    DD_min  = db.Column(db.Float, nullable=True)
+    DD_max  = db.Column(db.Float, nullable=True)
 
-    # Advanced statistics
-    skew_H = db.Column(db.Float, nullable=True)
-    kurtosis_H = db.Column(db.Float, nullable=True)
-    median_H = db.Column(db.Float, nullable=True)
-    iqr_H = db.Column(db.Float, nullable=True)
+    UD_mean = db.Column(db.Float, nullable=True)
+    UD_std  = db.Column(db.Float, nullable=True)
+    UD_min  = db.Column(db.Float, nullable=True)
+    UD_max  = db.Column(db.Float, nullable=True)
 
-    # Quality metrics
-    sample_quality = db.Column(db.Float, nullable=True)
-    quality_warnings = db.Column(db.Text, nullable=True)  # JSON array
+    UU_mean = db.Column(db.Float, nullable=True)
+    UU_std  = db.Column(db.Float, nullable=True)
+    UU_min  = db.Column(db.Float, nullable=True)
+    UU_max  = db.Column(db.Float, nullable=True)
 
-    # Password strength metrics
-    password_strength = db.Column(db.String(50), nullable=True)  # 'weak', 'medium', 'strong'
-    password_score = db.Column(db.Float, nullable=True)
+    DU_mean = db.Column(db.Float, nullable=True)
+    DU_std  = db.Column(db.Float, nullable=True)
+    DU_min  = db.Column(db.Float, nullable=True)
+    DU_max  = db.Column(db.Float, nullable=True)
 
-    # Metadata
-    raw_events = db.Column(db.Text, nullable=True)  # JSON array of keystroke events
-    session_id = db.Column(db.String(100), nullable=True)
+    # --- Typing speed ---
+    typing_speed = db.Column(db.Float, nullable=True)
+
+    # --- Coefficient of variation per vector ---
+    H_cv  = db.Column(db.Float, nullable=True)
+    DD_cv = db.Column(db.Float, nullable=True)
+    UD_cv = db.Column(db.Float, nullable=True)
+    UU_cv = db.Column(db.Float, nullable=True)
+    DU_cv = db.Column(db.Float, nullable=True)
+
+    # --- Flow discriminator ---
+    data_type = db.Column(db.Text, nullable=True, index=True)  # 'enrollment' | 'login'
+    # event_type mirrors data_type so that legacy code using event_type continues to work
+    event_type = db.Column(db.Text, nullable=True, index=True)  # alias for data_type
 
     def __repr__(self):
-        return f"<KeystrokeVector {self.username} - {self.event_type} @ {self.timestamp}>"
+        return f"<UsersVector {self.username!r} [{self.data_type}] @ {self.timestamp}>"
 
-    def get_H_vector(self):
-        """Parse H_vector from JSON string"""
-        if self.H_vector:
-            try:
-                return json.loads(self.H_vector)
-            except (json.JSONDecodeError, TypeError):
-                return []
-        return []
+    def get_vector(self, name: str) -> list:
+        """Parse a named vector column (H/DD/UD/UU/DU) from JSON string.
 
-    def set_H_vector(self, vector):
-        """Set H_vector as JSON string"""
-        self.H_vector = json.dumps(vector) if vector else None
+        Args:
+            name: vector name, one of 'H', 'DD', 'UD', 'UU', 'DU'
 
-    def get_H_features(self):
-        """Parse H_features from JSON string"""
-        if self.H_features:
-            try:
-                return json.loads(self.H_features)
-            except (json.JSONDecodeError, TypeError):
-                return {}
-        return {}
+        Returns:
+            list of float values, or empty list if missing/invalid
+        """
+        raw = getattr(self, f"{name}_vector", None)
+        if raw is None:
+            return []
+        if isinstance(raw, list):
+            return raw
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return []
 
-    def set_H_features(self, features):
-        """Set H_features as JSON string"""
-        self.H_features = json.dumps(features) if features else None
+    def set_vector(self, name: str, values: list) -> None:
+        """Serialize a list into the named vector column as JSON.
 
-    def get_quality_warnings(self):
-        """Parse quality warnings from JSON"""
-        if self.quality_warnings:
-            try:
-                return json.loads(self.quality_warnings)
-            except (json.JSONDecodeError, TypeError):
-                return []
-        return []
+        Args:
+            name: vector name, one of 'H', 'DD', 'UD', 'UU', 'DU'
+            values: list of float values to store
+        """
+        setattr(self, f"{name}_vector", json.dumps(values) if values is not None else None)
 
-    def set_quality_warnings(self, warnings):
-        """Set quality warnings as JSON"""
-        self.quality_warnings = json.dumps(warnings) if warnings else None
+    def get_all_vectors(self) -> dict:
+        """Return all timing vectors as a dict of lists.
 
-    def get_raw_events(self):
-        """Parse raw keystroke events from JSON"""
-        if self.raw_events:
-            try:
-                return json.loads(self.raw_events)
-            except (json.JSONDecodeError, TypeError):
-                return []
-        return []
-
-    def set_raw_events(self, events):
-        """Set raw events as JSON"""
-        self.raw_events = json.dumps(events) if events else None
-
-    def __init__(self, **kwargs):
-        # Accept legacy keys and map them to current attribute names
-        if "data_type" in kwargs and "event_type" not in kwargs:
-            kwargs["event_type"] = kwargs.pop("data_type")
-        # Accept lower-case vector keys used in tests
-        if "h_vector" in kwargs:
-            kwargs["H_vector"] = kwargs.pop("h_vector")
-        if "dd_vector" in kwargs:
-            kwargs["DD_vector"] = kwargs.pop("dd_vector")
-        if "ud_vector" in kwargs:
-            kwargs["UD_vector"] = kwargs.pop("ud_vector")
-        if "uu_vector" in kwargs:
-            kwargs["UU_vector"] = kwargs.pop("uu_vector")
-        if "du_vector" in kwargs:
-            kwargs["DU_vector"] = kwargs.pop("du_vector")
-
-        # Auto-populate username when only user_id is provided to support tests
-        if "username" not in kwargs and "user_id" in kwargs:
-            try:
-                from .user import User
-
-                user_id = kwargs.get("user_id")
-                # Use session.get if available, otherwise fallback to a safe query (avoid deprecated Query.get)
-                try:
-                    user = db.session.get(User, user_id)
-                except Exception:
-                    try:
-                        from sqlalchemy import select
-
-                        user = (
-                            db.session.execute(select(User).where(User.id == user_id))
-                            .scalars()
-                            .one_or_none()
-                        )
-                    except Exception:
-                        user = None
-                if user:
-                    kwargs["username"] = user.username
-            except Exception:
-                # Best effort; if lookup fails, leave username unset and ORM may raise on commit
-                pass
-
-        super().__init__(**kwargs)
-
-    # Backwards-compatible properties (accept lower-case names in tests)
-    @property
-    def h_vector(self):
-        return self.get_H_vector()
-
-    @h_vector.setter
-    def h_vector(self, value):
-        self.set_H_vector(value)
+        Returns:
+            dict with keys H, DD, UD, UU, DU each containing a list of floats
+        """
+        return {
+            name: self.get_vector(name)
+            for name in ("H", "DD", "UD", "UU", "DU")
+        }
 
     @property
-    def dd_vector(self):
-        return json.loads(self.DD_vector) if self.DD_vector else []
-
-    @dd_vector.setter
-    def dd_vector(self, value):
-        self.DD_vector = json.dumps(value) if value else None
+    def is_enrollment(self) -> bool:
+        """True if this sample was captured during registration."""
+        return self.data_type == "enrollment"
 
     @property
-    def ud_vector(self):
-        return json.loads(self.UD_vector) if self.UD_vector else []
+    def is_login(self) -> bool:
+        """True if this sample was captured during a login attempt."""
+        return self.data_type == "login"
 
-    @ud_vector.setter
-    def ud_vector(self, value):
-        self.UD_vector = json.dumps(value) if value else None
-
-    def to_dict(self):
-        """Convert to dictionary for API responses"""
+    def to_dict(self) -> dict:
+        """Full dict representation including all statistics for API responses."""
         return {
             "id": self.id,
             "username": self.username,
-            "event_type": self.event_type,
-            "is_successful": self.is_successful,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-            "sample_quality": self.sample_quality,
-            "password_strength": self.password_strength,
-            "mean_H": self.mean_H,
-            "std_H": self.std_H,
-            "quality_warnings": self.get_quality_warnings(),
+            "timestamp": self.timestamp,
+            "data_type": self.data_type,
+            "total_duration": self.total_duration,
+            "typing_speed": self.typing_speed,
+            # Per-vector statistics
+            "H_mean": self.H_mean,   "H_std": self.H_std,
+            "H_min": self.H_min,    "H_max": self.H_max,
+            "H_cv": self.H_cv,
+            "DD_mean": self.DD_mean, "DD_std": self.DD_std,
+            "DD_min": self.DD_min,   "DD_max": self.DD_max,
+            "DD_cv": self.DD_cv,
+            "UD_mean": self.UD_mean, "UD_std": self.UD_std,
+            "UD_min": self.UD_min,   "UD_max": self.UD_max,
+            "UD_cv": self.UD_cv,
+            "UU_mean": self.UU_mean, "UU_std": self.UU_std,
+            "UU_min": self.UU_min,   "UU_max": self.UU_max,
+            "UU_cv": self.UU_cv,
+            "DU_mean": self.DU_mean, "DU_std": self.DU_std,
+            "DU_min": self.DU_min,   "DU_max": self.DU_max,
+            "DU_cv": self.DU_cv,
         }
+
+
+# Backward-compatibility alias
+KeystrokeVector = UsersVector

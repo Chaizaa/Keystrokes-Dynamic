@@ -33,6 +33,13 @@
                 </span>
             </div>
             <p class="hint-text">This password will be used for biometric re-enrollment.</p>
+            <!-- Password strength meter -->
+            <div id="pwStrength" class="pw-strength hidden" aria-live="polite">
+                <div class="strength-bar" style="height:8px; background:#e5e7eb; border-radius:6px; overflow:hidden; margin:8px 0;">
+                    <div id="strengthBarFill" style="height:100%; width:0%; background:#ef4444; transition: width 150ms ease;"></div>
+                </div>
+                <div id="pwStrengthLabel" class="hint-text" style="margin-top:4px; font-size:13px;">Strength: Unknown</div>
+            </div>
         </div>
 
         <div class="divider"></div>
@@ -92,6 +99,53 @@ function togglePass(inputId, iconSpan) {
     if (input.type === 'password') input.type = 'text'; else input.type = 'password';
 }
 
+// Password strength meter
+function calculateClientPasswordScore(password) {
+    if (!password) return { score: 0.0, strength: 'very weak' };
+    const score = Math.min(1.0, Math.max(0.0, password.length / 12.0));
+    let strength = 'very weak';
+    if (score >= 0.8) strength = 'strong';
+    else if (score >= 0.5) strength = 'medium';
+    else if (score >= 0.2) strength = 'weak';
+    return { score, strength };
+}
+function updatePasswordStrengthUI() {
+    try {
+        const pw = mainPassInput ? mainPassInput.value : '';
+        const result = calculateClientPasswordScore(pw);
+        const bar = document.getElementById('strengthBarFill');
+        const label = document.getElementById('pwStrengthLabel');
+        const container = document.getElementById('pwStrength');
+        if (!container || !bar || !label) return;
+        if (!pw) { container.classList.add('hidden'); return; }
+        container.classList.remove('hidden');
+        const pct = Math.round(result.score * 100);
+        bar.style.width = pct + '%';
+        if (result.score < 0.5) bar.style.background = '#f59e0b';
+        else if (result.score < 0.8) bar.style.background = '#f59e0b';
+        else bar.style.background = '#10b981';
+        label.style.color = result.score < 0.5 ? '#d97706' : (result.score < 0.8 ? '#d97706' : '#059669');
+        label.textContent = `Strength: ${result.strength} (${pct}%)`;
+        // Advisory hint — warning only, not a blocker
+        const weakHintId = 'rcPwWeakHint';
+        let weakHint = document.getElementById(weakHintId);
+        if (result.score < 0.5) {
+            if (!weakHint) {
+                weakHint = document.createElement('p');
+                weakHint.id = weakHintId;
+                weakHint.className = 'hint-text';
+                weakHint.style.color = '#d97706';
+                weakHint.style.marginTop = '6px';
+                weakHint.textContent = '⚠ Password lemah — disarankan menggunakan minimal 12 karakter dengan kombinasi huruf, angka, dan simbol.';
+                if (mainPassInput && mainPassInput.parentNode && mainPassInput.parentNode.parentNode)
+                    mainPassInput.parentNode.parentNode.appendChild(weakHint);
+            }
+        } else {
+            if (weakHint) weakHint.remove();
+        }
+    } catch (e) { console.warn('Failed to update password strength UI', e); }
+}
+
 // Basic enrollment variables
 let sampleCount = 0;
 const targetSamples = 20;
@@ -100,11 +154,14 @@ let activeKeys = {};
 let typingStartTime = null;
 let timerInterval = null;
 let isFirstKeystroke = true;
+let passwordMismatchCount = 0; // Track consecutive password mismatches (mirrors register.html)
+let backspaceCount = 0; // Track backspace presses per attempt (max 3)
 
 const countDisplay = document.getElementById('countDisplay');
 const progressBar = document.getElementById('progressBar');
 const typingInput = document.getElementById('typingField');
 const mainPassInput = document.getElementById('rcPassword');
+mainPassInput.addEventListener('input', () => updatePasswordStrengthUI());
 const usernameEl = document.getElementById('rcUsername');
 const statusEl = document.getElementById('status');
 
@@ -113,12 +170,16 @@ const params = new URLSearchParams(window.location.search);
 const prefillUsername = params.get('username') || "{{ username|default('') }}";
 if (prefillUsername) usernameEl.value = prefillUsername;
 
-// If arrived via admin reset (reset_token present) adjust UI copy
+// Adjust UI copy based on reset source
 if (params.get('reset_token')) {
     const title = document.getElementById('rcTitle');
     const subtitle = document.getElementById('rcSubtitle');
     if (title) title.textContent = 'Reset Master Password';
-    if (subtitle) subtitle.textContent = "An administrator initiated a password reset for this account. Create a new master password and re-enroll your biometrics by typing it 20 times.";
+    if (params.get('source') === 'self') {
+        if (subtitle) subtitle.textContent = 'Set a new master password and re-enroll your biometrics by typing it 20 times.';
+    } else {
+        if (subtitle) subtitle.textContent = 'An administrator initiated a password reset for this account. Create a new master password and re-enroll your biometrics by typing it 20 times.';
+    }
 }
 
 function startTimer() {
@@ -148,13 +209,48 @@ function resetTimer() { stopTimer(); isFirstKeystroke = true; }
 
 // Keystroke capture
 typingInput.addEventListener('keydown', (event) => {
-    const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+    // Expanded modifier/noise-key list: navigation & function keys excluded from recording
+    const isModifier = [
+        'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
+        'Tab', 'Escape', 'Insert', 'Delete',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+        'Home', 'End', 'PageUp', 'PageDown',
+        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+    ].includes(event.key);
+
     if (event.key === 'Enter') return;
-    if (event.repeat && !isModifier) {
-        event.preventDefault();
-        rawEvents.push({ key: event.key, code: event.code, evt: 'd', t: performance.now(), isRepeat: true });
-        return;
+
+    // Backspace: track count, clear field + reset rhythm after 3rd press exceeded
+    if (event.key === 'Backspace') {
+        backspaceCount++;
+        if (backspaceCount > 3) {
+            event.preventDefault(); // prevent further deletion
+            typingInput.value = '';
+            rawEvents = [];
+            backspaceCount = 0; // reset so next attempt starts fresh
+            resetTimer();
+            statusEl.textContent = 'Backspace terlalu banyak, ulangi kembali';
+            statusEl.style.color = '#ef4444';
+            setTimeout(() => {
+                if (statusEl.textContent.includes('terlalu') || statusEl.textContent.includes('Backspace')) {
+                    statusEl.textContent = '';
+                    statusEl.style.color = '';
+                }
+            }, 3000);
+        }
+        return; // backspace not recorded in rawEvents
     }
+
+    // Hold key (Option B): silently block — only first keydown counts for biometric timing
+    if (event.repeat && !isModifier) {
+        statusEl.textContent = 'Key held down (timing recorded)';
+        event.preventDefault();
+        // NOT pushed to rawEvents — repeat events are noise for timing rhythm
+        return;
+    } else {
+        if (statusEl.textContent.includes('held')) statusEl.textContent = '';
+    }
+
     if (!isModifier) {
         activeKeys[event.code] = performance.now();
         if (isFirstKeystroke) { startTimer(); isFirstKeystroke = false; }
@@ -162,28 +258,78 @@ typingInput.addEventListener('keydown', (event) => {
     }
 });
 
-// Stopwatch will start on the first actual typed key (handled in keydown)
-
 typingInput.addEventListener('keyup', (event) => {
-    const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
+    const isModifier = [
+        'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
+        'Tab', 'Escape', 'Insert', 'Delete',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+        'Home', 'End', 'PageUp', 'PageDown',
+        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+    ].includes(event.key);
+    if (activeKeys[event.code]) delete activeKeys[event.code]; // clean up pressed-key tracker
     if (event.key === 'Enter') { handleEnterPress(); return; }
+    if (event.key === 'Backspace') return; // backspace keyup not recorded
     if (!isModifier) rawEvents.push({ key: event.key, code: event.code, evt: 'u', t: performance.now() });
 });
 
+// Reset the timer display when focus leaves the typing field — do NOT wipe
+// rawEvents or the input value (user may have clicked the eye icon to preview).
+typingInput.addEventListener('blur', () => {
+    resetTimer();
+});
+
 async function handleEnterPress() {
+    backspaceCount = 0; // reset on each Enter attempt — fresh limit for next attempt
     const newPass = mainPassInput.value || '';
     const typedPass = typingInput.value || '';
     if (!newPass) { statusEl.textContent = 'Please enter the new master password.'; return; }
+    // Guard: rawEvents empty means user never typed here (e.g. clicked eye icon causing blur).
+    if (!rawEvents || rawEvents.length === 0) {
+        statusEl.textContent = 'Ketik password di field ini terlebih dahulu lalu tekan Enter.';
+        statusEl.style.color = '#f59e0b';
+        setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 3000);
+        typingInput.focus();
+        return;
+    }
     if (typedPass !== newPass) {
-        statusEl.textContent = 'Typed password does not match the master password.';
+        stopTimer();
+        passwordMismatchCount++;
+
+        // Progressive error messages with caps-lock and eye-icon hints (mirrors register.html)
+        let errorMsg = `Password incorrect (Attempt ${passwordMismatchCount})`;
+        if (passwordMismatchCount >= 3) {
+            errorMsg += ' - Check caps lock';
+        }
+        if (passwordMismatchCount >= 5) {
+            errorMsg = 'Too many failed attempts. Use the eye icon to verify password';
+        }
+
+        statusEl.textContent = errorMsg;
+        statusEl.style.color = '#ef4444'; // red
+
         typingInput.value = '';
         rawEvents = [];
         resetTimer();
+
+        // Auto-clear error after 3 seconds
+        setTimeout(() => {
+            if (statusEl.textContent.includes('incorrect') ||
+                statusEl.textContent.includes('caps') ||
+                statusEl.textContent.includes('attempts')) {
+                statusEl.textContent = '';
+                statusEl.style.color = '';
+            }
+        }, 3000);
         return;
     }
 
+    // Successful password match — reset mismatch counter
+    passwordMismatchCount = 0;
+
     // submit sample to reset endpoint
     typingInput.disabled = true;
+    statusEl.style.color = '';
+    statusEl.classList.remove('success');
     statusEl.textContent = 'Saving sample...';
     try {
         const resetToken = params.get('reset_token') || '';
@@ -201,6 +347,10 @@ async function handleEnterPress() {
             rawEvents = [];
             resetTimer();
             statusEl.textContent = 'Sample saved';
+            statusEl.style.color = '#10b981'; // green (mirrors register.html success color)
+            statusEl.classList.add('success');
+            passwordMismatchCount = 0;
+            backspaceCount = 0; // reset for next sample
             // Re-enable typing field for the next sample and focus it
             typingInput.disabled = false;
             try { typingInput.focus(); } catch (e) {}

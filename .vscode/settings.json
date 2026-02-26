@@ -1,8 +1,6 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
-    "python.analysis.extraPaths": [
-        "${workspaceFolder}/webV2"
-    ],
     "python.analysis.autoSearchPaths": true,
-    "python.envFile": "${workspaceFolder}/.env"
+    "python.envFile": "${workspaceFolder}/.env",
+    "python-envs.defaultEnvManager": "ms-python.python:venv"
 }
