@@ -147,7 +147,7 @@
         }
 
         // Fallback redirect in case email sending blocks for too long
-        const redirectUrl = `/verify?username=${encodeURIComponent(username)}&purpose=reset`;
+        const redirectUrl = `/reset/verify-code?username=${encodeURIComponent(username)}`;
         let didNavigate = false;
         const fallback = setTimeout(() => {
             if (btn) btn.textContent = originalText || 'Reset Password';

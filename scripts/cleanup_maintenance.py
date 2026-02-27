@@ -68,40 +68,38 @@ def show_statistics():
 
             # Show additional info for key tables
             if table == "verified_logins":
-                # Count by username
+                # Count successful logins by username
                 cursor.execute(
-                    "SELECT username, COUNT(*) as cnt FROM verified_logins GROUP BY username ORDER BY cnt DESC LIMIT 5"
+                    "SELECT username, COUNT(*) as cnt FROM verified_logins WHERE login_condition = 'success' GROUP BY username ORDER BY cnt DESC LIMIT 5"
                 )
                 top_users = cursor.fetchall()
                 if top_users:
-                    print(f"    └─ Top users:")
+                    print(f"    └─ Top users (successful):")
                     for user, cnt in top_users:
                         print(f"       • {user}: {cnt} logins")
 
-                # Recent logins
+                # Recent successful + failed logins from the unified table
                 cursor.execute(
-                    "SELECT COUNT(*) FROM verified_logins WHERE timestamp >= datetime('now', '-24 hours')"
+                    "SELECT COUNT(*) FROM verified_logins WHERE login_condition = 'success' AND timestamp >= datetime('now', '-24 hours')"
                 )
                 recent_24h = cursor.fetchone()[0]
-                print(f"    └─ Last 24h: {recent_24h} logins")
+                print(f"    └─ Last 24h: {recent_24h} successful logins")
 
-            elif table == "failed_logins":
-                # Count by reason
                 cursor.execute(
-                    "SELECT reason, COUNT(*) as cnt FROM failed_logins GROUP BY reason ORDER BY cnt DESC"
+                    "SELECT COUNT(*) FROM verified_logins WHERE login_condition = 'failed' AND timestamp >= datetime('now', '-24 hours')"
+                )
+                recent_failed = cursor.fetchone()[0]
+                print(f"    └─ Last 24h: {recent_failed} failed logins")
+
+                # Failed login breakdown by reason (from same unified table)
+                cursor.execute(
+                    "SELECT failure_reason, COUNT(*) as cnt FROM verified_logins WHERE login_condition = 'failed' GROUP BY failure_reason ORDER BY cnt DESC"
                 )
                 reasons = cursor.fetchall()
                 if reasons:
                     print(f"    └─ Failure reasons:")
                     for reason, cnt in reasons:
                         print(f"       • {reason}: {cnt}")
-
-                # Recent failures
-                cursor.execute(
-                    "SELECT COUNT(*) FROM failed_logins WHERE timestamp >= datetime('now', '-24 hours')"
-                )
-                recent_24h = cursor.fetchone()[0]
-                print(f"    └─ Last 24h: {recent_24h} failures")
 
             elif table == "enrollment_vectors":
                 # Count by username

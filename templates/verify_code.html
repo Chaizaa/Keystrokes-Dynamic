@@ -111,8 +111,12 @@
                     setTimeout(() => { window.location.href = `/reset/complete?verified=1&username=${encodeURIComponent(username)}&reset=1&reset_token=${encodeURIComponent(resetToken)}`; }, 900);
                 } else {
                     showAlert('Email verified! Redirecting to registration...', 'success');
-                    // Return to registration and enable password/enrollment step
-                    setTimeout(() => { window.location.href = `/register?verified=1&username=${encodeURIComponent(username)}`; }, 1100);
+                    // Return to registration; carry email param so the field stays filled
+                    const emailParam = params.get('email') || '';
+                    const regUrl = emailParam
+                        ? `/register?verified=1&username=${encodeURIComponent(username)}&email=${encodeURIComponent(emailParam)}`
+                        : `/register?verified=1&username=${encodeURIComponent(username)}`;
+                    setTimeout(() => { window.location.href = regUrl; }, 1100);
                 }
             } else {
                 if (j.error_code === 'expired_token') {

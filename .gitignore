@@ -24,6 +24,8 @@ wheels/
 venv/
 ENV/
 env/
+*.env
+*.env.example
 
 # IDE
 .vscode/
@@ -47,6 +49,7 @@ data/*.db-journal
 data/*.csv
 data/*.log
 data/*.pid
+data/*.db
 
 # Logs
 *.log
@@ -60,6 +63,8 @@ tests/.pytest_cache/
 
 # Backups
 backups/*
+!backups/archived/
+!backups/archived/**
 
 # Scripts temp files
 scripts/__pycache__/
@@ -80,3 +85,7 @@ htmlcov/
 # Backup
 *.bak
 backup/
+
+# Local artifacts we want archived but not tracked in root
+tmp_register.html
+server.pid

@@ -1,5 +1,7 @@
 from functools import wraps
 from datetime import datetime, timezone
+import json
+import traceback
 
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
@@ -27,19 +29,145 @@ def admin_required(f):
 def admin_index():
     # Gather basic metrics and recent audits
     try:
-        users = User.query.order_by(User.created_at.desc()).limit(50).all()
+        from sqlalchemy import select
+        users = db.session.execute(
+            select(User).order_by(User.created_at.desc()).limit(500)
+        ).scalars().all()
     except Exception:
         users = []
 
     try:
-        audits = (
-            AdminAudit.query.order_by(AdminAudit.timestamp.desc()).limit(100).all()
-        )
+        from sqlalchemy import select
+        audits = db.session.execute(
+            select(AdminAudit).order_by(AdminAudit.timestamp.desc()).limit(100)
+        ).scalars().all()
     except Exception:
         audits = []
 
     # Render a simple admin dashboard template
     return render_template("admin/index.html", users=users, audits=audits)
+
+
+@admin_bp.route('/user/<int:user_id>/send_reset', methods=['POST'])
+@admin_required
+def admin_send_reset(user_id):
+    from flask import jsonify, url_for
+    from datetime import datetime, timezone
+    from app.services.email_service import email_service
+    try:
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        if not user.email:
+            return jsonify({'success': False, 'message': 'User has no email'}), 400
+
+        # Generate a signed token (no visible code) and store sent timestamp in the
+        # dedicated password_reset_sent_at column so it doesn't interfere with the
+        # email-verification flow that uses email_verification_sent_at.
+        sent_at = datetime.now(timezone.utc)
+        try:
+            # Write to password_reset_sent_at (not email_verification_sent_at)
+            user.password_reset_sent_at = sent_at
+            # Clear any stale reset code hash
+            user.password_reset_code_hash = None
+        except Exception:
+            pass
+        db.session.commit()
+
+        # Use a dedicated salt for password-reset tokens so they are only valid
+        # when verified with the same salt on the reset flow.
+        token = email_service.generate_token(user.email, salt="password-reset", sent_at=sent_at)
+        sent = email_service.send_verification_email(user, token, purpose="admin_reset")
+
+        # Audit the admin action (do not include sensitive user fields in details)
+        try:
+            a = AdminAudit(
+                user_id=current_user.id,
+                username=current_user.username,
+                action='admin_send_reset',
+                details=json.dumps({'target_user_id': user.id}),
+            )
+            db.session.add(a)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        if not sent:
+            return jsonify({'success': False, 'message': 'Failed to send email'}), 500
+        # Do NOT expose the verification URL or token in API responses for security.
+        return jsonify({'success': True, 'message': 'Verification email sent'}), 200
+    except Exception as e:
+        print(f"[ERROR] admin_send_reset: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Server error'}), 500
+
+
+@admin_bp.route('/user/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(user_id):
+    from flask import jsonify
+    try:
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Prevent deleting the last admin
+        try:
+            from sqlalchemy import func, select
+            admin_count = db.session.execute(
+                select(func.count(User.id)).where(User.role == 'admin')
+            ).scalar()
+            if user.is_admin() and admin_count <= 1:
+                return jsonify({'success': False, 'message': 'Cannot delete the last admin account'}), 400
+        except Exception:
+            pass
+
+        # Remove related audit entries and vectors explicitly to avoid FK issues
+        try:
+            # Delete AdminAudit entries referencing this user
+            from sqlalchemy import delete as sa_delete
+            db.session.execute(
+                sa_delete(AdminAudit).where(
+                    (AdminAudit.user_id == user.id) | (AdminAudit.username == user.username)
+                )
+            )
+        except Exception:
+            db.session.rollback()
+
+        try:
+            # Delete UsersVector records for this user (enrollment + login samples)
+            from app.models import UsersVector
+            from sqlalchemy import delete as sa_delete
+
+            db.session.execute(
+                sa_delete(UsersVector).where(UsersVector.username == user.username)
+            )
+        except Exception:
+            # Models may not exist in some legacy schemas; ignore failures and continue
+            db.session.rollback()
+
+        # Finally delete the user row
+        try:
+            from sqlalchemy import delete as sa_delete
+            db.session.execute(sa_delete(User).where(User.id == user.id))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': 'Failed to delete user'}), 500
+
+        # Record admin audit for deletion (do not include personal data)
+        try:
+            a = AdminAudit(user_id=current_user.id, username=current_user.username, action='admin_delete_user', details=json.dumps({'target_user_id': user_id}))
+            db.session.add(a)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({'success': True, 'message': 'User deleted'}), 200
+    except Exception as e:
+        print(f"[ERROR] admin_delete_user: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 
 # NOTE: `/admin/register` endpoint removed. Use scripts/create_admin_manual.py
@@ -65,7 +193,8 @@ def admin_login():
         if not username or not password:
             return jsonify({"success": False, "message": "Username and password required"}), 400
 
-        user = db.session.query(User).filter_by(username=username).first()
+        from sqlalchemy import select
+        user = db.session.execute(select(User).where(User.username == username)).scalars().first()
         if not user or not user.is_admin():
             return jsonify({"success": False, "message": "Unauthorized"}), 403
 

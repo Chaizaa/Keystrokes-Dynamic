@@ -1,3 +1,11 @@
+"""App-level database helper — DEPRECATED for new code.
+
+.. deprecated::
+    New code should use SQLAlchemy ORM models in ``app.models`` for all
+    data access.  This class exists for backward compatibility with
+    biometric_service and admin routes that still rely on raw-SQL helpers.
+    Migrate remaining callers to ORM queries over time.
+"""
 import csv
 import json
 import os
@@ -40,24 +48,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
-                    plain_password TEXT,
                     password_hash TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Create failed_logins table if not exists
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS failed_logins (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT,
-                    failure_reason TEXT,
-                    verification_score REAL,
-                    ip_address TEXT,
-                    user_agent TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
@@ -91,8 +83,6 @@ class Database:
         print(f"\n[INFO] Menyimpan data ke: {self.db_path}")
         # Prefer SQLAlchemy models when available and a user can be resolved
         try:
-            import json
-
             from app.models import EnrollmentVector, FeatureVector, User
             from app.models import db as sqlalchemy_db
 
@@ -433,127 +423,106 @@ class Database:
     # =========================================================================
     # FUNGSI GETTER: MENGAMBIL DATA UNTUK VERIFIKASI
     # =========================================================================
+    @staticmethod
+    def _parse_vector_row(row):
+        """Parse a SQLite row dict: decode JSON vector/stats columns in-place."""
+        row_dict = dict(row)
+        for key in ("H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"):
+            if key in row_dict and isinstance(row_dict[key], str):
+                try:
+                    row_dict[key] = json.loads(row_dict[key])
+                except Exception:
+                    row_dict[key] = []
+        for key in ("H_stats", "DD_stats", "UD_stats"):
+            if key in row_dict and isinstance(row_dict[key], str):
+                try:
+                    row_dict[key] = json.loads(row_dict[key])
+                except Exception:
+                    row_dict[key] = {}
+        return row_dict
+
     def get_enrollment_samples(self, username):
         """
         Mengambil semua data sampel pendaftaran (HANYA ENROLLMENT!)
         Supports backward compatibility: enrollment_vectors (new) > user_vectors (old)
         """
         conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Agar hasil return berupa Dict
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         try:
-            # Try new table first (enrollment_vectors)
+            # Try enrollment_vectors (new table) first
             try:
                 cursor.execute(
-                    """
-                    SELECT * FROM enrollment_vectors
-                    WHERE username = ?
-                    ORDER BY id DESC
-                """,
+                    "SELECT * FROM enrollment_vectors WHERE username = ? ORDER BY id DESC",
                     (username,),
                 )
-
                 rows = cursor.fetchall()
-
                 if rows:
                     print(f"[DB] Loaded {len(rows)} samples from enrollment_vectors (new table)")
-                    # Parse JSON strings to Python objects
-                    parsed_rows = []
-                    for row in rows:
-                        row_dict = dict(row)
-                        # Parse vector columns from JSON strings to lists
-                        for key in [
-                            "H_vector",
-                            "DD_vector",
-                            "UD_vector",
-                            "UU_vector",
-                            "DU_vector",
-                        ]:
-                            if key in row_dict and isinstance(row_dict[key], str):
-                                try:
-                                    row_dict[key] = json.loads(row_dict[key])
-                                except Exception:
-                                    row_dict[key] = []
-                        # Parse stats columns from JSON strings to dicts
-                        for key in ["H_stats", "DD_stats", "UD_stats"]:
-                            if key in row_dict and isinstance(row_dict[key], str):
-                                try:
-                                    row_dict[key] = json.loads(row_dict[key])
-                                except Exception:
-                                    row_dict[key] = {}
-                        parsed_rows.append(row_dict)
-                    return parsed_rows
+                    return [self._parse_vector_row(r) for r in rows]
             except sqlite3.OperationalError:
-                # Table doesn't exist yet, fallback to old table
                 print("[DB] enrollment_vectors not found, using user_vectors (old table)")
 
-            # Fallback to old table (user_vectors)
-            cursor.execute(
-                """
-                SELECT * FROM user_vectors
-                WHERE username = ? AND data_type = 'enrollment'
-                ORDER BY id DESC
-            """,
-                (username,),
-            )
+            # Fallback to user_vectors (old table)
+            try:
+                cursor.execute(
+                    "SELECT * FROM user_vectors WHERE username = ? AND data_type = 'enrollment' ORDER BY id DESC",
+                    (username,),
+                )
+                rows = cursor.fetchall()
+                print(f"[DB] Loaded {len(rows)} samples from user_vectors (old table)")
+            except sqlite3.OperationalError:
+                print("[DB] user_vectors not found, trying users_vectors")
+                cursor.execute(
+                    "SELECT * FROM users_vectors WHERE username = ? ORDER BY id DESC",
+                    (username,),
+                )
+                rows = cursor.fetchall()
+                print(f"[DB] Loaded {len(rows)} samples from users_vectors")
 
-            rows = cursor.fetchall()
-            print(f"[DB] Loaded {len(rows)} samples from user_vectors (old table)")
-
-            # Parse JSON strings to Python objects
-            parsed_rows = []
-            for row in rows:
-                row_dict = dict(row)
-                # Parse vector columns from JSON strings to lists
-                for key in [
-                    "H_vector",
-                    "DD_vector",
-                    "UD_vector",
-                    "UU_vector",
-                    "DU_vector",
-                ]:
-                    if key in row_dict and isinstance(row_dict[key], str):
-                        try:
-                            row_dict[key] = json.loads(row_dict[key])
-                        except Exception:
-                            row_dict[key] = []
-                # Parse stats columns from JSON strings to dicts
-                for key in ["H_stats", "DD_stats", "UD_stats"]:
-                    if key in row_dict and isinstance(row_dict[key], str):
-                        try:
-                            row_dict[key] = json.loads(row_dict[key])
-                        except Exception:
-                            row_dict[key] = {}
-                parsed_rows.append(row_dict)
-
-            return parsed_rows
+            return [self._parse_vector_row(r) for r in rows]
 
         except Exception as e:
             print(f"[DB ERROR] Get Enrollment: {e}")
             import traceback
-
             traceback.print_exc()
             return []
         finally:
             conn.close()
 
-    def get_user_data(self, username):
-        """Mengambil 1 data enrollment terakhir (untuk profil tunggal)"""
+    def delete_enrollment_data(self, username):
+        """
+        Hapus semua enrollment data untuk user (digunakan saat reset password).
+        Mencoba menghapus dari semua tabel yang mungkin ada.
+        """
         conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "SELECT * FROM user_vectors WHERE username = ? ORDER BY id DESC LIMIT 1",
-                (username,),
-            )
-            row = cursor.fetchone()
-            if row:
-                return dict(row)
-            return None
+            for table, condition in [
+                ("enrollment_vectors", "username = ?"),
+                ("user_vectors", "username = ? AND data_type = 'enrollment'"),
+                ("users_vectors", "username = ?"),
+                ("feature_vectors", "username = ? AND event_type = 'enrollment'"),
+            ]:
+                try:
+                    cursor.execute(f"DELETE FROM {table} WHERE {condition}", (username,))
+                except sqlite3.OperationalError:
+                    pass  # Table doesn't exist, skip
+            conn.commit()
+            # Also try to delete via SQLAlchemy if available
+            try:
+                from sqlalchemy import delete as sa_delete
+                from app.models import EnrollmentVector
+                from app.models import db as sqlalchemy_db
+                sqlalchemy_db.session.execute(
+                    sa_delete(EnrollmentVector).where(EnrollmentVector.username == username)
+                )
+                sqlalchemy_db.session.commit()
+            except Exception:
+                pass
+            print(f"[DB] Enrollment data deleted for user: {username}")
         except Exception as e:
-            print(f"[ERROR] Get User: {e}")
-            return None
+            print(f"[DB ERROR] delete_enrollment_data: {e}")
         finally:
             conn.close()
 
@@ -653,55 +622,6 @@ class Database:
         finally:
             conn.close()
 
-    def get_login_count(self, username):
-        """Get jumlah login samples untuk username tertentu"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        try:
-            # Try feature_vectors first (new schema)
-            try:
-                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-                row = cursor.fetchone()
-                user_id = row[0] if row else None
-                if user_id is not None:
-                    try:
-                        cursor.execute(
-                            "SELECT COUNT(*) FROM feature_vectors WHERE user_id = ? AND event_type = 'login'",
-                            (user_id,),
-                        )
-                        count = cursor.fetchone()[0]
-                        if count > 0:
-                            print(f"[DB] Login count from feature_vectors: {count}")
-                            return count
-                    except sqlite3.OperationalError:
-                        pass
-            except sqlite3.OperationalError:
-                pass
-
-            # Fallback to legacy user_vectors table
-            try:
-                cursor.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM user_vectors
-                    WHERE username = ? AND data_type = 'login'
-                """,
-                    (username,),
-                )
-                count = cursor.fetchone()[0]
-                return count
-            except sqlite3.OperationalError:
-                return 0
-
-        except Exception as e:
-            print(f"[DB ERROR] Get Login Count: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return 0
-        finally:
-            conn.close()
-
     def get_user_by_username(self, username):
         """
         Get user data from users table with fallback to user_vectors
@@ -754,8 +674,7 @@ class Database:
                 """
                 SELECT DISTINCT
                     username,
-                    MAX(timestamp) as last_login,
-                    password as plain_password
+                    MAX(timestamp) as last_login
                 FROM user_vectors
                 WHERE username = ?
                 GROUP BY username
@@ -778,65 +697,6 @@ class Database:
     # =========================================================================
     # [DEV ONLY] - FITUR TAMBAHAN UNTUK MENYIMPAN PASSWORD ASLI
     # =========================================================================
-    def save_dev_credentials(self, username, plain_password, password_hash=None):
-        """
-        [DEV MODE + SECURITY]
-        Menyimpan username, password asli (dev), dan password hash (security).
-        Hash digunakan untuk pre-verification sebelum collection/verification mode.
-        """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        try:
-            # 1. Buat tabel 'users' dengan kolom password_hash
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE,
-                    plain_password TEXT,
-                    password_hash TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # 2. Simpan / Update Password (Upsert sederhana)
-            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-            exists = cursor.fetchone()
-
-            if exists:
-                # Update password kalau user sudah ada
-                if password_hash:
-                    cursor.execute(
-                        "UPDATE users SET plain_password = ?, password_hash = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?",
-                        (plain_password, password_hash, username),
-                    )
-                else:
-                    cursor.execute(
-                        "UPDATE users SET plain_password = ?, created_at = CURRENT_TIMESTAMP WHERE username = ?",
-                        (plain_password, username),
-                    )
-                print(f"[DEV MODE] Password asli untuk '{username}' diperbarui di tabel 'users'.")
-            else:
-                # Insert baru
-                if password_hash:
-                    cursor.execute(
-                        "INSERT INTO users (username, plain_password, password_hash) VALUES (?, ?, ?)",
-                        (username, plain_password, password_hash),
-                    )
-                else:
-                    cursor.execute(
-                        "INSERT INTO users (username, plain_password) VALUES (?, ?)",
-                        (username, plain_password),
-                    )
-                print(f"[DEV MODE] Password asli untuk '{username}' disimpan di tabel 'users'.")
-
-            conn.commit()
-        except Exception as e:
-            print(f"[DEV ERROR] Failed to save raw password: {e}")
-        finally:
-            conn.close()
-
     def get_password_hash(self, username):
         """Mengambil password hash untuk pre-verification"""
         conn = sqlite3.connect(self.db_path)
@@ -858,56 +718,47 @@ class Database:
     # UNIFIED LOGIN FUNCTIONS
     # =========================================================================
 
-    def get_enrollment_samples_from_new_table(self, username):
-        """Get enrollment samples from enrollment_vectors table (NEW)"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                """
-                SELECT * FROM enrollment_vectors
-                WHERE username = ?
-                ORDER BY id DESC
-            """,
-                (username,),
-            )
-
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-
-        except Exception as e:
-            print(f"[DB ERROR] Get enrollment from new table: {e}")
-            # Fallback to old method if new table doesn't exist
-            return self.get_enrollment_samples(username)
-        finally:
-            conn.close()
-
     def save_verified_login(self, login_data):
-        """Save verified login attempt to verified_logins table"""
+        """Save verified login attempt to verified_logins table.
+        
+        Uses unified verified_logins table (login_condition='success').
+        Failed logins are also recorded here with login_condition='failed'.
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         try:
-            # Ensure verified_logins table exists
+            # Ensure unified verified_logins table exists with all columns
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS verified_logins (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER REFERENCES users(id),
                     username TEXT,
+                    login_condition TEXT DEFAULT 'success',
                     password_hash TEXT,
                     timestamp TIMESTAMP,
-                    H_vector TEXT,
-                    DD_vector TEXT,
-                    UD_vector TEXT,
                     verification_score REAL,
                     recommended_method TEXT,
                     ip_address TEXT,
-                    user_agent TEXT
+                    user_agent TEXT,
+                    failure_reason TEXT
                 )
             """
             )
+            # Idempotent column migrations
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN user_id INTEGER REFERENCES users(id)")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN login_condition TEXT DEFAULT 'success'")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN failure_reason TEXT")
+            except Exception:
+                pass
 
             # Convert complex types to JSON
             db_data = {}
@@ -916,6 +767,17 @@ class Database:
                     db_data[key] = json.dumps(value)
                 else:
                     db_data[key] = value
+
+            # Always mark as success
+            db_data.setdefault("login_condition", "success")
+
+            # Lookup user_id FK
+            try:
+                cursor.execute("SELECT id FROM users WHERE username = ?", (db_data.get("username"),))
+                _uid_row = cursor.fetchone()
+                db_data.setdefault("user_id", _uid_row[0] if _uid_row else None)
+            except Exception:
+                pass
 
             # Build INSERT query safely
             columns = []
@@ -953,18 +815,62 @@ class Database:
         user_agent=None,
         verification_score=None,
     ):
-        """Log failed login attempt (NO keystroke data saved for security)"""
+        """Log failed login attempt into the unified verified_logins table.
+        
+        Recorded with login_condition='failed'. No keystroke data is stored.
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         try:
+            # Ensure unified table exists (same schema as save_verified_login)
             cursor.execute(
                 """
-                INSERT INTO failed_logins
-                (username, failure_reason, verification_score, ip_address, user_agent, timestamp)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                CREATE TABLE IF NOT EXISTS verified_logins (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER REFERENCES users(id),
+                    username TEXT,
+                    login_condition TEXT DEFAULT 'success',
+                    password_hash TEXT,
+                    timestamp TIMESTAMP,
+                    verification_score REAL,
+                    recommended_method TEXT,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    failure_reason TEXT
+                )
+            """
+            )
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN user_id INTEGER REFERENCES users(id)")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN login_condition TEXT DEFAULT 'success'")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE verified_logins ADD COLUMN failure_reason TEXT")
+            except Exception:
+                pass
+
+            # Lookup user_id FK
+            try:
+                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                _uid_row = cursor.fetchone()
+                _uid = _uid_row[0] if _uid_row else None
+            except Exception:
+                _uid = None
+
+            cursor.execute(
+                """
+                INSERT INTO verified_logins
+                (user_id, username, login_condition, failure_reason, verification_score,
+                 ip_address, user_agent, timestamp)
+                VALUES (?, ?, 'failed', ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """,
                 (
+                    _uid,
                     username,
                     failure_reason,
                     verification_score,
@@ -989,11 +895,11 @@ class Database:
         cursor = conn.cursor()
 
         try:
-            # First try verified_logins table
+            # Count only successful logins
             cursor.execute(
                 """
                 SELECT COUNT(*) FROM verified_logins
-                WHERE username = ?
+                WHERE username = ? AND login_condition = 'success'
             """,
                 (username,),
             )
@@ -1037,10 +943,12 @@ class Database:
         cursor = conn.cursor()
 
         try:
+            # Query unified verified_logins table filtered by login_condition='failed'
             cursor.execute(
                 """
-                SELECT COUNT(*) FROM failed_logins
+                SELECT COUNT(*) FROM verified_logins
                 WHERE username = ?
+                AND login_condition = 'failed'
                 AND timestamp > datetime('now', '-' || ? || ' minutes')
             """,
                 (username, minutes),
@@ -1081,15 +989,16 @@ class Database:
             conn.close()
 
     def cleanup_old_failed_logins(self, days=7):
-        """Delete failed logins older than N days (security log retention)"""
+        """Delete failed login records older than N days from the unified verified_logins table."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         try:
             cursor.execute(
                 """
-                DELETE FROM failed_logins
-                WHERE timestamp < datetime('now', '-' || ? || ' days')
+                DELETE FROM verified_logins
+                WHERE login_condition = 'failed'
+                AND timestamp < datetime('now', '-' || ? || ' days')
             """,
                 (days,),
             )
@@ -1122,8 +1031,9 @@ class Database:
                     COUNT(v.id) as login_count,
                     AVG(v.verification_score) as avg_score,
                     COALESCE((
-                        SELECT COUNT(*) FROM failed_logins f
+                        SELECT COUNT(*) FROM verified_logins f
                         WHERE f.username = v.username
+                        AND f.login_condition = 'failed'
                         AND DATE(f.timestamp) = DATE(v.timestamp)
                     ), 0) as failed_count
                 FROM verified_logins v
