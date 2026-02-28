@@ -183,4 +183,26 @@ def create_app(config_name="development"):
     with app.app_context():
         db.create_all()
 
+    # -------------------------------------------------------------------------
+    # Public-mode lockdown
+    # Set  DATASET_ONLY=1  in Railway env vars to expose ONLY /dataset publicly.
+    # All other routes return 404 so their existence is not revealed.
+    # Allowed prefixes:
+    #   /dataset        — the collection page
+    #   /api/dataset/   — AJAX endpoints used by dataset_capture.js
+    #   /static/        — CSS / JS / image assets
+    #   /health/        — Railway health-check pings
+    # -------------------------------------------------------------------------
+    import os as _os
+    if _os.environ.get("DATASET_ONLY") == "1":
+        _ALLOWED_PREFIXES = ("/dataset", "/api/dataset/", "/static/", "/health/")
+
+        @app.before_request
+        def _dataset_only_guard():
+            from flask import abort, request as _req
+            p = _req.path
+            if not any(p == prefix.rstrip("/") or p.startswith(prefix)
+                       for prefix in _ALLOWED_PREFIXES):
+                abort(404)
+
     return app
