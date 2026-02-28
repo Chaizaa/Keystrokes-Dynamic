@@ -6,17 +6,131 @@ Routes
 POST /api/dataset/register           — register new respondent, set their password
 POST /api/dataset/submit             — submit one keystroke sample
 GET  /api/dataset/status/<code>      — get progress for a subject
+GET  /api/dataset/export             — download full dataset as CSV or JSON (protected by EXPORT_KEY)
 """
 
+import csv
 import hashlib
+import io
+import os
 import traceback
 
-from flask import jsonify, request
+from flask import Response, jsonify, request
 
 from app.models import db
 from app.utils.keystroke_processor import process_web_events
 
 from ._shared import api_bp
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Export
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_bp.route("/dataset/export", methods=["GET"])
+def dataset_export():
+    """
+    Download the full collected dataset.
+
+    Query params
+    ------------
+    key     : (required) must match EXPORT_KEY env var
+    format  : "csv" (default) | "json"
+
+    Examples
+    --------
+    /api/dataset/export?key=mysecret
+    /api/dataset/export?key=mysecret&format=json
+    """
+    export_key = os.environ.get("EXPORT_KEY", "")
+    if not export_key or request.args.get("key") != export_key:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    from app.models.dataset import DatasetEntry, DatasetSubject
+
+    rows = (
+        db.session.query(DatasetEntry, DatasetSubject)
+        .join(DatasetSubject, DatasetEntry.subject_id == DatasetSubject.id)
+        .order_by(DatasetSubject.subject_code, DatasetEntry.repetition)
+        .all()
+    )
+
+    fmt = request.args.get("format", "csv").lower()
+
+    if fmt == "json":
+        data = []
+        for entry, subj in rows:
+            data.append({
+                "subject_code":  subj.subject_code,
+                "name_initial":  subj.name_initial,
+                "device_info":   subj.device_info,
+                "repetition":    entry.repetition,
+                "H_vector":      entry.H_vector,
+                "DD_vector":     entry.DD_vector,
+                "UD_vector":     entry.UD_vector,
+                "UU_vector":     entry.UU_vector,
+                "DU_vector":     entry.DU_vector,
+                "H_mean":        entry.H_mean,  "H_std":   entry.H_std,
+                "H_min":         entry.H_min,   "H_max":   entry.H_max,  "H_cv":  entry.H_cv,
+                "DD_mean":       entry.DD_mean, "DD_std":  entry.DD_std,
+                "DD_min":        entry.DD_min,  "DD_max":  entry.DD_max, "DD_cv": entry.DD_cv,
+                "UD_mean":       entry.UD_mean, "UD_std":  entry.UD_std,
+                "UD_min":        entry.UD_min,  "UD_max":  entry.UD_max, "UD_cv": entry.UD_cv,
+                "UU_mean":       entry.UU_mean, "UU_std":  entry.UU_std,
+                "UU_min":        entry.UU_min,  "UU_max":  entry.UU_max, "UU_cv": entry.UU_cv,
+                "DU_mean":       entry.DU_mean, "DU_std":  entry.DU_std,
+                "DU_min":        entry.DU_min,  "DU_max":  entry.DU_max, "DU_cv": entry.DU_cv,
+                "total_duration": entry.total_duration,
+                "typing_speed":  entry.typing_speed,
+                "created_at":    entry.created_at.isoformat() if entry.created_at else None,
+            })
+        return jsonify(data)
+
+    # Default: CSV
+    fieldnames = [
+        "subject_code", "name_initial", "device_info", "repetition",
+        "H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector",
+        "H_mean", "H_std", "H_min", "H_max", "H_cv",
+        "DD_mean", "DD_std", "DD_min", "DD_max", "DD_cv",
+        "UD_mean", "UD_std", "UD_min", "UD_max", "UD_cv",
+        "UU_mean", "UU_std", "UU_min", "UU_max", "UU_cv",
+        "DU_mean", "DU_std", "DU_min", "DU_max", "DU_cv",
+        "total_duration", "typing_speed", "created_at",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    for entry, subj in rows:
+        writer.writerow({
+            "subject_code":   subj.subject_code,
+            "name_initial":   subj.name_initial,
+            "device_info":    subj.device_info,
+            "repetition":     entry.repetition,
+            "H_vector":       entry.H_vector,
+            "DD_vector":      entry.DD_vector,
+            "UD_vector":      entry.UD_vector,
+            "UU_vector":      entry.UU_vector,
+            "DU_vector":      entry.DU_vector,
+            "H_mean":  entry.H_mean,  "H_std":  entry.H_std,
+            "H_min":   entry.H_min,   "H_max":  entry.H_max,  "H_cv":  entry.H_cv,
+            "DD_mean": entry.DD_mean, "DD_std": entry.DD_std,
+            "DD_min":  entry.DD_min,  "DD_max": entry.DD_max, "DD_cv": entry.DD_cv,
+            "UD_mean": entry.UD_mean, "UD_std": entry.UD_std,
+            "UD_min":  entry.UD_min,  "UD_max": entry.UD_max, "UD_cv": entry.UD_cv,
+            "UU_mean": entry.UU_mean, "UU_std": entry.UU_std,
+            "UU_min":  entry.UU_min,  "UU_max": entry.UU_max, "UU_cv": entry.UU_cv,
+            "DU_mean": entry.DU_mean, "DU_std": entry.DU_std,
+            "DU_min":  entry.DU_min,  "DU_max": entry.DU_max, "DU_cv": entry.DU_cv,
+            "total_duration": entry.total_duration,
+            "typing_speed":   entry.typing_speed,
+            "created_at":     entry.created_at.isoformat() if entry.created_at else None,
+        })
+    csv_bytes = buf.getvalue().encode("utf-8")
+    return Response(
+        csv_bytes,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=dataset_export.csv"},
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
