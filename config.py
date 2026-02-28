@@ -107,11 +107,14 @@ class ProductionConfig(Config):
 
     # Enforce strong secret key in production
     SECRET_KEY = os.environ.get("SECRET_KEY")
-    if not SECRET_KEY or SECRET_KEY == "dev-secret-key-change-in-prod":
-        raise ValueError(
-            "SECRET_KEY environment variable must be set in production. "
-            "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
-        )
+
+    @classmethod
+    def validate(cls):
+        if not cls.SECRET_KEY or cls.SECRET_KEY == "dev-secret-key-change-in-prod":
+            raise ValueError(
+                "SECRET_KEY environment variable must be set in production. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
 
 
 class TestingConfig(Config):

@@ -40,6 +40,7 @@ env/
 .env.*.local
 
 # Database
+data/*.db
 *.db
 *.sqlite
 *.sqlite3
@@ -89,3 +90,7 @@ backup/
 # Local artifacts we want archived but not tracked in root
 tmp_register.html
 server.pid
+
+#image
+*.png
+*.jpg

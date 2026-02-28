@@ -9,46 +9,61 @@ class KeystrokeCapture {
     handleKeyDown(event) {
         // Exclude Enter key - for form submission only
         if (event.key === 'Enter') return;
-        
-        // Ignore modifier keys (except they can be part of combination)
-        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
-        if (event.key.length > 1 && event.key !== 'Backspace' && !isModifier) return;
-        
-        const key = event.key;
-        const now = performance.now();
-        
+
+        // Exclude modifier keys entirely — not part of biometric vector
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key)) return;
+
+        // Exclude other special keys (arrows, F-keys, etc.) except Backspace
+        if (event.key.length > 1 && event.key !== 'Backspace') return;
+
+        // Track by physical key CODE (not character) so that keyup always matches
+        // even when Shift state changes between keydown and keyup (e.g. K → k).
+        const code = event.code;
+        const now  = performance.now();
+
+        // Skip OS key-repeat bursts (holding a key down).
+        // NOTE: do NOT use `activeKeys[code]` for this check — that guard was too
+        // aggressive and silently dropped genuine second presses of the same physical
+        // key when the first keyup hadn't fired yet (e.g. fast typing "test123"
+        // dropped the second 't' because KeyT was still in activeKeys).
+        // `event.repeat` is true ONLY for OS auto-repeat, never for real re-presses.
+        if (event.repeat) return;
+
         // Start timer on first keystroke
         if (this.startTime === null) {
             this.startTime = now;
         }
-        
-        // Handle key repeat
-        if (!this.activeKeys[key]) {
-            this.activeKeys[key] = now;
-            this.rawEvents.push({
-                evt: 'd',
-                key: key,
-                code: event.code,
-                t: now
-            });
-        }
+
+        // Always overwrite activeKeys so the hold-time anchor stays accurate
+        // even when two presses of the same key overlap during fast typing.
+        this.activeKeys[code] = now;
+        this.rawEvents.push({
+            evt: 'd',
+            key: event.key,   // character at keydown time
+            code: event.code,
+            t: now
+        });
     }
 
     handleKeyUp(event) {
         // Exclude Enter key
         if (event.key === 'Enter') return;
-        
-        const isModifier = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key);
-        if (event.key.length > 1 && event.key !== 'Backspace' && !isModifier) return;
-        
-        const key = event.key;
-        const now = performance.now();
-        
-        if (this.activeKeys[key]) {
-            delete this.activeKeys[key];
+
+        // Exclude modifier keys entirely
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key)) return;
+
+        // Exclude other special keys except Backspace
+        if (event.key.length > 1 && event.key !== 'Backspace') return;
+
+        // Match by physical code — correct even if Shift was released before keyup
+        const code = event.code;
+        const now  = performance.now();
+
+        if (this.activeKeys[code]) {
+            delete this.activeKeys[code];
             this.rawEvents.push({
                 evt: 'u',
-                key: key,
+                key: event.key,
                 code: event.code,
                 t: now
             });
@@ -57,6 +72,31 @@ class KeystrokeCapture {
 
     getEvents() {
         return this.rawEvents;
+    }
+
+    /**
+     * Close all dangling keydowns (keys still in activeKeys) by injecting
+     * synthetic keyup events timestamped to now.
+     *
+     * Call this immediately before getEvents() when a submit fires before
+     * the browser has had a chance to dispatch keyup for the last key(s) —
+     * which happens when the user presses Enter very quickly after their
+     * last character, so the last character would otherwise be dropped from
+     * the timing reconstruction.
+     */
+    flush() {
+        const now = performance.now();
+        Object.keys(this.activeKeys).forEach(code => {
+            // Find the most recent keydown event for this code to retrieve its key char
+            const lastDown = [...this.rawEvents].reverse().find(e => e.evt === 'd' && e.code === code);
+            this.rawEvents.push({
+                evt:  'u',
+                key:  lastDown ? lastDown.key : code,
+                code: code,
+                t:    now,
+            });
+            delete this.activeKeys[code];
+        });
     }
 
     reset() {

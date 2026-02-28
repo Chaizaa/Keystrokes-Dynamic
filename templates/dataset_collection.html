@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+
+{% block title %}Pengumpulan Data Ketikan | Keystroke Dynamics{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<style>
+/* ── Dataset Collection specific styles ── */
+.ds-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px 60px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+}
+
+.ds-card {
+    background: #1a2235;
+    border: 1px solid #2d3748;
+    border-radius: 16px;
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 560px;
+    color: #e2e8f0;
+}
+
+.ds-brand {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b9fff;
+    margin-bottom: 8px;
+}
+
+.ds-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0f4ff;
+    margin: 0 0 6px;
+}
+
+.ds-subtitle {
+    font-size: 14px;
+    color: #94a3b8;
+    margin: 0 0 28px;
+}
+
+.ds-divider {
+    border: none;
+    border-top: 1px solid #2d3748;
+    margin: 24px 0;
+}
+
+/* ── Form fields ── */
+.ds-field { margin-bottom: 18px; }
+
+.ds-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ds-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+.ds-input:focus { border-color: #6b9fff; }
+.ds-input::placeholder { color: #475569; }
+
+/* ── Buttons ── */
+.ds-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s, opacity 0.15s;
+    width: 100%;
+}
+.ds-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ds-btn--primary { background: #3b82f6; color: #fff; }
+.ds-btn--primary:hover:not(:disabled) { background: #2563eb; }
+.ds-btn--success { background: #059669; color: #fff; }
+.ds-btn--success:hover:not(:disabled) { background: #047857; }
+.ds-btn--outline {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 10px 18px;
+}
+.ds-btn--outline:hover:not(:disabled) { border-color: #6b9fff; color: #6b9fff; }
+
+/* ── Status message ── */
+.ds-status {
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 14px;
+    display: block;
+}
+.ds-status.hidden { display: none; }
+.ds-status--info    { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
+.ds-status--success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+.ds-status--warning { background: rgba(234,179,8,0.07);  color: #9a8040; border: 1px solid rgba(234,179,8,0.18); }
+.ds-status--error   { background: rgba(239,68,68,0.07);  color: #9b7070; border: 1px solid rgba(239,68,68,0.18); }
+
+/* ── Password strength bar ── */
+.ds-pw-strength {
+    margin-top: 8px;
+}
+.ds-pw-strength-track {
+    height: 6px;
+    background: #1e293b;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+.ds-pw-strength-fill {
+    height: 100%;
+    width: 0%;
+    background: #ef4444;
+    border-radius: 6px;
+    transition: width 150ms ease, background 150ms ease;
+}
+.ds-pw-strength-label {
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* ── Input wrapper for toggle ── */
+.ds-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.ds-input-wrap .ds-input {
+    flex: 1;
+    padding-right: 40px;
+}
+.ds-pw-toggle {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+}
+
+/* ── Target phrase display ── */
+.ds-phrase-box {
+    text-align: center;
+    background: #0f172a;
+    border: 2px dashed #334155;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+}
+.ds-phrase-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+.ds-phrase-text {
+    font-family: 'Courier New', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #6b9fff;
+    letter-spacing: 4px;
+    word-break: break-all;
+    user-select: none;
+}
+
+/* ── Progress ── */
+.ds-progress-wrap {
+    margin: 20px 0;
+}
+.ds-progress-track {
+    height: 8px;
+    background: #1e293b;
+    border-radius: 99px;
+    overflow: hidden;
+    margin: 8px 0;
+}
+.ds-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    border-radius: 99px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+.ds-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* ── Subject code badge ── */
+.ds-code-badge {
+    display: inline-block;
+    background: #1e3a5f;
+    border: 1px solid #1d4ed8;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-family: monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #93c5fd;
+    letter-spacing: 2px;
+}
+
+/* ── Info list ── */
+.ds-info-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.ds-info-list li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 7px 0;
+    font-size: 14px;
+    color: #94a3b8;
+    border-bottom: 1px solid #1e293b;
+}
+.ds-info-list li:last-child { border-bottom: none; }
+.ds-info-list .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+/* ── Highlight stat boxes ── */
+.ds-stat-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+}
+.ds-stat {
+    background: #0f172a;
+    border: 1px solid #2d3748;
+    border-radius: 10px;
+    padding: 14px 12px;
+    text-align: center;
+}
+.ds-stat-num {
+    font-size: 26px;
+    font-weight: 800;
+    color: #6b9fff;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.ds-stat-label {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+.text-center { text-align: center; }
+.mt-4  { margin-top: 16px; }
+.mt-8  { margin-top: 32px; }
+.mb-4  { margin-bottom: 16px; }
+
+/* ── Resume section ── */
+.ds-resume-section {
+    padding: 16px;
+    background: #0f172a;
+    border: 1px solid #2d3748;
+    border-radius: 10px;
+    margin-top: 12px;
+}
+.ds-resume-toggle {
+    background: none;
+    border: none;
+    color: #6b9fff;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="ds-container">
+<div class="ds-card">
+
+    <div class="ds-brand">Keystroke Dynamics · Riset</div>
+    <h1 class="ds-title">Pengumpulan Data Ketikan</h1>
+    <p class="ds-subtitle">Yuk bantu kami kumpulin data ketikan buat penelitian!</p>
+
+    <!-- ─────────────────────────────── STAGE: INTRO ─────────────────────── -->
+    <div id="stage-intro" class="ds-stage">
+
+        <!-- Info stats -->
+        <div class="ds-stat-row" style="grid-template-columns: 1fr 1fr; margin-bottom:20px;">
+            <div class="ds-stat">
+                <div class="ds-stat-num">{{ total_samples }}</div>
+                <div class="ds-stat-label">Total Sampel</div>
+            </div>
+            <div class="ds-stat">
+                <div class="ds-stat-num">&asymp;{{ (total_samples // 60) + 1 }}&ndash;{{ (total_samples // 30) + 1 }}<span style="font-size:14px;font-weight:500"> menit</span></div>
+                <div class="ds-stat-label">Estimasi Waktu</div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <ul class="ds-info-list">
+            <li>
+                <span class="icon">&#x2013;</span>
+                <span>Kamu bakal ngetik kata sandi kamu sebanyak
+                      <strong>{{ total_samples }} kali</strong>. Gampang kok!</span>
+            </li>
+            <li>
+                <span class="icon">&#x2013;</span>
+                <span>Ketik santai aja, nggak perlu dipaksa cepet atau pelan.</span>
+            </li>
+            <li>
+                <span class="icon">&#x2013;</span>
+                <span>Yang kita rekam cuma <strong>pola waktu ketikan</strong>-nya,
+                      bukan isi kata sandinya. Privasi kamu aman kok!</span>
+            </li>
+            <li>
+                <span class="icon">&#x2013;</span>
+                <span>Bisa dicicil kapan aja. Simpan kode subjekmu buat lanjut nanti.</span>
+            </li>
+        </ul>
+
+        <hr class="ds-divider">
+
+        <!-- Registration form -->
+        <div class="ds-field">
+            <label class="ds-label" for="ds-name">Nama / Inisial <span style="color:#475569;font-weight:400">(opsional)</span></label>
+            <input
+                class="ds-input"
+                type="text"
+                id="ds-name"
+                placeholder="Contoh: A. Rahman atau AR"
+                maxlength="50"
+                autocomplete="off">
+        </div>
+
+        <div class="ds-field">
+            <label class="ds-label" for="ds-password">Bikin Kata Sandi Kamu</label>
+            <div class="ds-input-wrap">
+                <input
+                    class="ds-input"
+                    type="password"
+                    id="ds-password"
+                    placeholder="Ini yang bakal kamu ketik {{ total_samples }} kali"
+                    autocomplete="new-password"
+                    maxlength="128">
+                <button type="button" class="ds-pw-toggle" id="ds-pwd-toggle-intro"
+                    onclick="togglePasswordVisibility('ds-password', this)" title="Tampilkan kata sandi">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </div>
+            <p style="font-size:12px; color:#64748b; margin:6px 0 4px;">
+                Campur huruf besar, kecil, angka, dan simbol biar makin kuat ya!
+            </p>
+            <div class="ds-pw-strength" id="ds-pw-strength-intro">
+                <div class="ds-pw-strength-track">
+                    <div class="ds-pw-strength-fill" id="ds-pw-fill-intro"></div>
+                </div>
+                <div class="ds-pw-strength-label" id="ds-pw-label-intro">Kekuatan kata sandi: —</div>
+            </div>
+        </div>
+
+        <button id="ds-register-btn" class="ds-btn ds-btn--primary">
+            Mulai
+        </button>
+
+        <!-- Resume option -->
+        <div class="mt-4 text-center">
+            <button class="ds-resume-toggle" onclick="document.getElementById('ds-resume-section').classList.toggle('hidden')">
+                Udah punya kode subjek? Lanjut aja →
+            </button>
+            <div id="ds-resume-section" class="ds-resume-section hidden mt-4">
+                <label class="ds-label" for="ds-resume-code">Kode Subjek</label>
+                <input
+                    class="ds-input mb-4"
+                    type="text"
+                    id="ds-resume-code"
+                    placeholder="Contoh: s001"
+                    maxlength="10"
+                    autocomplete="off"
+                    style="margin-bottom:10px">
+                <button id="ds-resume-btn" class="ds-btn ds-btn--outline">
+                    Lanjutkan
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─────────────────────────────── STAGE: CAPTURE ───────────────────── -->
+    <div id="stage-capture" class="ds-stage hidden">
+
+        <!-- Subject code (left) + sample counter (right) -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+                <span style="font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.05em;">Kode Subjek</span><br>
+                <span id="ds-subject-code-display" class="ds-code-badge ds-subject-code"></span>
+            </div>
+            <div style="text-align:right;">
+                <div id="ds-rep-label" style="font-size:13px; color:#6b9fff; font-weight:600;"></div>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="ds-progress-wrap">
+            <div class="ds-progress-track">
+                <div id="ds-progress-bar"
+                     class="ds-progress-fill"
+                     role="progressbar"
+                     aria-valuemin="0"
+                     aria-valuemax="100"
+                     aria-valuenow="0">
+                </div>
+            </div>
+            <div class="ds-progress-meta">
+                <span id="ds-progress-label">0 / {{ total_samples }} sampel</span>
+                <span style="color:#6b9fff;">Catat kode subjekmu!</span>
+            </div>
+        </div>
+
+        <!-- Input field -->
+        <div class="ds-field">
+            <label class="ds-label" for="ds-input">Ketik Kata Sandi Kamu</label>
+            <div class="ds-input-wrap">
+                <input
+                    class="ds-input"
+                    type="password"
+                    id="ds-input"
+                    placeholder="Ketik kata sandinya, terus Enter deh!"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    maxlength="128">
+                <button type="button" class="ds-pw-toggle" id="ds-pwd-toggle-capture"
+                    onclick="togglePasswordVisibility('ds-input', this)" title="Tampilkan kata sandi">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </div>
+            <div class="ds-pw-strength" id="ds-pw-strength-capture" style="margin-top:8px;">
+                <div class="ds-pw-strength-track">
+                    <div class="ds-pw-strength-fill" id="ds-pw-fill-capture"></div>
+                </div>
+                <div class="ds-pw-strength-label" id="ds-pw-label-capture"></div>
+            </div>
+        </div>
+
+        <button id="ds-submit-btn" class="ds-btn ds-btn--success">
+            Kirim (Enter)
+        </button>
+
+        <p style="font-size:12px; color:#475569; text-align:center; margin-top:16px;">
+            Jangan ditutup dulu ya, belum selesai!
+        </p>
+    </div>
+
+    <!-- ─────────────────────────────── STAGE: DONE ──────────────────────── -->
+    <div id="stage-done" class="ds-stage hidden text-center">
+        <h2 style="color:#6ee7b7; margin:0 0 8px;">Semua Sampel Selesai!</h2>
+        <p style="color:#94a3b8; margin:0 0 20px; font-size:15px;">
+            Makasih banyak udah mau bantu kami!<br>
+            Data ketikanmu udah kami simpan dan bakal jadi bagian dari penelitian ini.
+        </p>
+        <div style="margin: 16px 0 28px;">
+            <span style="font-size:13px; color:#64748b; display:block; margin-bottom:6px;">Kode Subjek Kamu</span>
+            <span id="ds-done-code" class="ds-code-badge" style="font-size:22px; padding: 8px 20px;"></span>
+        </div>
+        <p style="font-size:14px; color:#94a3b8;">
+            Ada yang mau ditanyain? Kontak peneliti aja dan kasih tau kode subjekmu.
+        </p>
+    </div>
+
+    <!-- Single shared status bar, shown by JS across all stages -->
+    <span id="ds-status" class="ds-status hidden" style="margin-top:0;"></span>
+
+</div><!-- .ds-card -->
+</div><!-- .ds-container -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/keystroke.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dataset_capture.js') }}"></script>
+{% endblock %}

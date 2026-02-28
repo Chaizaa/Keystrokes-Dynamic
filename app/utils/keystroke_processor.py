@@ -139,6 +139,19 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
     """
     raw_events_from_js.sort(key=lambda x: x["t"])
 
+    # Strip modifier key events (Shift, Ctrl, Alt, Meta, CapsLock) before processing.
+    # These should never be in the vector — filter here as a backend safety net.
+    _MODIFIER_CODES = {
+        "ShiftLeft", "ShiftRight",
+        "ControlLeft", "ControlRight",
+        "AltLeft", "AltRight",
+        "MetaLeft", "MetaRight",
+        "CapsLock",
+    }
+    raw_events_from_js = [
+        x for x in raw_events_from_js if x.get("code") not in _MODIFIER_CODES
+    ]
+
     if not raw_events_from_js:
         return {"status": "error", "msg": "Data kosong"}
 
@@ -150,7 +163,7 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
         1 for x in raw_events_from_js if x["code"] == "Backspace" and x["evt"] == "d"
     )
 
-    MAX_ALLOWED_BACKSPACE = 3
+    MAX_ALLOWED_BACKSPACE = 4
     if backspace_count > MAX_ALLOWED_BACKSPACE:
         return {
             "status": "error",
@@ -159,7 +172,10 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
 
     # ✅ Hapus MAX_HOLD_NORMAL, MAX_HOLD_MODIFIER, MAX_HOLD_FOR_REPEAT — tidak dipakai
     temp_keystrokes = []
-    temp_dict       = {}
+    # Each entry in temp_dict is a FIFO queue of (down_time, char) tuples.
+    # A queue (not a single entry) handles fast same-key typing where the second
+    # keydown can arrive before the first keyup (e.g. both 't' in "test123").
+    temp_dict: Dict[str, list] = {}
 
     for x in raw_events_from_js:
         k_id = x["code"]
@@ -168,23 +184,28 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
             continue
 
         if x["evt"] == "d":
+            # Push to the per-key queue — always, even if the key is already "down"
+            # (handles genuine fast same-key press before prior keyup arrives)
             if k_id not in temp_dict:
-                temp_dict[k_id] = (x["t"], x["key"])
+                temp_dict[k_id] = []
+            temp_dict[k_id].append((x["t"], x["key"]))
 
         elif x["evt"] == "u":
-            if k_id in temp_dict:
-                down_time, char_at_down = temp_dict[k_id]
+            if k_id in temp_dict and temp_dict[k_id]:
+                # Pop the oldest pending keydown (FIFO pairing)
+                down_time, char_at_down = temp_dict[k_id].pop(0)
+                if not temp_dict[k_id]:
+                    del temp_dict[k_id]
                 up_time = x["t"]
-                del temp_dict[k_id]
 
                 # ✅ Hapus is_modifier & limit — tidak dipakai untuk filter apapun
                 temp_keystrokes.append(
                     {
                         "key_char":     char_at_down,
-                        "key_code":     x["code"],
+                        "key_code":     k_id,
                         "down":         down_time,
                         "up":           up_time,
-                        "is_backspace": (x["code"] == "Backspace"),
+                        "is_backspace": (k_id == "Backspace"),
                     }
                 )
 
