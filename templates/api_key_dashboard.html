@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}API Key — SecureAuth{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ak-container {
+    max-width: 640px;
+    margin: 48px auto;
+    padding: 0 16px;
+    font-family: inherit;
+  }
+  .ak-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .ak-card h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    color: #1a202c;
+  }
+  .ak-card .subtitle {
+    font-size: .9rem;
+    color: #718096;
+    margin: 0 0 28px;
+  }
+  .ak-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .95rem;
+    margin-bottom: 24px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+  }
+  .ak-status .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-active   { background: #48bb78; }
+  .dot-inactive { background: #cbd5e0; }
+
+  /* Raw key display — one-time reveal */
+  .ak-reveal {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #fffbeb;
+    border: 1px solid #f6e05e;
+    border-radius: 8px;
+  }
+  .ak-reveal p {
+    margin: 0 0 8px;
+    font-size: .85rem;
+    color: #744210;
+    font-weight: 600;
+  }
+  .ak-reveal .key-value {
+    font-family: monospace;
+    font-size: .9rem;
+    word-break: break-all;
+    background: #fff;
+    border: 1px solid #f6e05e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: #1a202c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ak-reveal .key-value span { flex: 1; }
+  .ak-reveal .copy-btn {
+    font-size: .8rem;
+    padding: 4px 10px;
+    border: 1px solid #d69e2e;
+    border-radius: 4px;
+    background: #fefcbf;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s;
+  }
+  .ak-reveal .copy-btn:hover { background: #faf089; }
+  .ak-reveal .warning {
+    margin: 8px 0 0;
+    font-size: .8rem;
+    color: #c05621;
+  }
+
+  /* Generate / Regenerate button */
+  .btn-generate {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    font-size: .95rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+  }
+  .btn-generate-primary {
+    background: #4299e1;
+    color: #fff;
+  }
+  .btn-generate-primary:hover  { background: #3182ce; }
+  .btn-generate-primary:active { transform: scale(.98); }
+  .btn-generate-danger {
+    background: #fc8181;
+    color: #fff;
+  }
+  .btn-generate-danger:hover   { background: #f56565; }
+  .btn-generate-danger:active  { transform: scale(.98); }
+
+  .ak-back {
+    display: inline-block;
+    margin-top: 20px;
+    font-size: .875rem;
+    color: #4299e1;
+    text-decoration: none;
+  }
+  .ak-back:hover { text-decoration: underline; }
+
+  .ak-note {
+    margin-top: 20px;
+    font-size: .8rem;
+    color: #a0aec0;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="ak-container">
+  <div class="ak-card">
+    <h1>API Key</h1>
+    <p class="subtitle">Manage your client API key for external integrations.</p>
+
+    <!-- ── Status indicator ── -->
+    <div class="ak-status">
+      {% if has_key %}
+        <span class="dot dot-active"></span>
+        <span>An API key is currently active for your account.</span>
+      {% else %}
+        <span class="dot dot-inactive"></span>
+        <span>No API key has been generated yet.</span>
+      {% endif %}
+    </div>
+
+    <!-- ── One-time reveal after generation ── -->
+    {% if new_raw_key %}
+    <div class="ak-reveal" role="alert">
+      <p>&#9888; Copy this key now — it will never be shown again.</p>
+      <div class="key-value">
+        <span id="rawKey">{{ new_raw_key }}</span>
+        <button class="copy-btn" type="button" onclick="copyKey()">Copy</button>
+      </div>
+      <p class="warning">Store it in a safe location (e.g. a secrets manager). We only store a hash.</p>
+    </div>
+    {% endif %}
+
+    <!-- ── Generate / Regenerate form ── -->
+    <form method="POST" action="{{ url_for('main.api_key_dashboard') }}"
+          onsubmit="return confirmGenerate()">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if has_key %}
+        <button type="submit" class="btn-generate btn-generate-danger">
+          &#8635; Regenerate API Key
+        </button>
+      {% else %}
+        <button type="submit" class="btn-generate btn-generate-primary">
+          &#43; Generate API Key
+        </button>
+      {% endif %}
+    </form>
+
+    <a class="ak-back" href="{{ url_for('main.home') }}">&larr; Back to Dashboard</a>
+
+    <p class="ak-note">
+      Pass the key in the <code>Authorization: Bearer &lt;key&gt;</code> header when
+      calling <code>/v1/enroll</code> or <code>/v1/verify</code>.
+    </p>
+  </div>
+</div>
+
+<script>
+  function copyKey() {
+    const text = document.getElementById('rawKey')?.textContent?.trim();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
+  }
+
+  function confirmGenerate() {
+    {% if has_key %}
+    return confirm(
+      'Regenerating will invalidate your current API key immediately.\n' +
+      'Any integrations using it will stop working until updated.\n\n' +
+      'Continue?'
+    );
+    {% else %}
+    return true;
+    {% endif %}
+  }
+</script>
+{% endblock %}

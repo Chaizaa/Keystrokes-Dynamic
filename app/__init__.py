@@ -40,6 +40,12 @@ def create_app(config_name="development"):
     """
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
 
+    # ProxyFix: Railway (and most cloud platforms) sit behind a reverse proxy.
+    # Without this, Flask sees every request as HTTP and Flask-Talisman causes
+    # an infinite HTTPS redirect loop.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     # Load configuration
     import os
     import sys
@@ -52,7 +58,11 @@ def create_app(config_name="development"):
     if isinstance(config_name, dict):
         app.config.update(config_name)
     else:
-        app.config.from_object(get_config(config_name))
+        config_class = get_config(config_name)
+        # Validate production config before applying (avoids import-time crash)
+        if hasattr(config_class, "validate"):
+            config_class.validate()
+        app.config.from_object(config_class)
 
     # Set secret key for session management
     if not app.config.get("SECRET_KEY"):
@@ -154,6 +164,7 @@ def create_app(config_name="development"):
     from app.blueprints.admin import admin_bp
     from app.blueprints.api import api_bp
     from app.blueprints.auth import auth_bp
+    from app.blueprints.dataset import dataset_bp
     from app.blueprints.health import health_bp
     from app.blueprints.main import main_bp
 
@@ -161,6 +172,7 @@ def create_app(config_name="development"):
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(dataset_bp)
     # Health endpoints for admins/ops
     app.register_blueprint(health_bp, url_prefix="/health")
 

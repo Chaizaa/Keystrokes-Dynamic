@@ -28,6 +28,8 @@ from .keystroke_vector import KeystrokeVector, UsersVector           # noqa: E40
 from .feature_vector import EnrollmentVector, FeatureVector          # noqa: E402  (deprecated stubs)
 from .admin_audit import AdminAudit                                  # noqa: E402
 from .login_attempt import LoginAttempt                              # noqa: E402
+from .client import Client                                           # noqa: E402
+from .dataset import DatasetSubject, DatasetEntry                    # noqa: E402
 
 __all__ = [
     "db",
@@ -38,4 +40,6 @@ __all__ = [
     "EnrollmentVector",   # deprecated alias → UsersVector
     "AdminAudit",
     "LoginAttempt",
+    "DatasetSubject",
+    "DatasetEntry",
 ]
