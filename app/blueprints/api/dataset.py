@@ -27,30 +27,6 @@ from ._shared import api_bp
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Temporary admin: verify password hash (remove after use)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@api_bp.route("/dataset/verify-password", methods=["GET"])
-@limiter.limit("10 per minute")
-def dataset_verify_password():
-    """Temporary endpoint — verify a subject's password. Remove after debugging."""
-    from app.models.dataset import DatasetSubject
-    export_key = os.environ.get("EXPORT_KEY", "")
-    provided   = request.args.get("key", "")
-    if not export_key or not hmac.compare_digest(provided, export_key):
-        return jsonify({"error": "Unauthorized"}), 401
-    subject_code = request.args.get("subject_code", "")
-    password     = request.args.get("password", "")
-    if not subject_code or not password:
-        return jsonify({"error": "subject_code and password required"}), 400
-    subj = DatasetSubject.query.filter_by(subject_code=subject_code).first()
-    if not subj:
-        return jsonify({"error": "subject not found"}), 404
-    match = check_password_hash(subj.password_hash, password)
-    return jsonify({"subject_code": subject_code, "match": match})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Export
 # ─────────────────────────────────────────────────────────────────────────────
 
