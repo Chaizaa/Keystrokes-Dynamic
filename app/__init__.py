@@ -98,7 +98,12 @@ def create_app(config_name="development"):
     socketio.init_app(app)
 
     # Initialize extensions
-    CORS(app)
+    # Restrict CORS origins via ALLOWED_ORIGIN env var (Railway: set to your domain).
+    # Default is "*" (open) for local dev. In production set e.g.:
+    #   ALLOWED_ORIGIN=https://web-production-77b15.up.railway.app
+    import os as _cors_os
+    _cors_origins = _cors_os.environ.get("ALLOWED_ORIGIN", "*")
+    CORS(app, resources={r"/api/*": {"origins": _cors_origins}})
 
     # Flask-Login configuration
     login_manager.init_app(app)

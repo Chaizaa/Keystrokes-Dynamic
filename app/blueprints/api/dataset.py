@@ -10,11 +10,13 @@ GET  /api/dataset/export             — download full dataset as CSV or JSON (p
 """
 
 import csv
+import hmac
 import io
 import os
+import re
 import traceback
 
-from flask import Response, jsonify, request
+from flask import Response, current_app, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import limiter
@@ -29,6 +31,7 @@ from ._shared import api_bp
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_bp.route("/dataset/export", methods=["GET"])
+@limiter.limit("10 per minute")
 def dataset_export():
     """
     Download the full collected dataset.
@@ -44,7 +47,9 @@ def dataset_export():
     /api/dataset/export?key=mysecret&format=json
     """
     export_key = os.environ.get("EXPORT_KEY", "")
-    if not export_key or request.args.get("key") != export_key:
+    provided   = request.args.get("key", "")
+    # hmac.compare_digest prevents timing-based brute-force of the key.
+    if not export_key or not hmac.compare_digest(provided, export_key):
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.models.dataset import DatasetEntry, DatasetSubject
@@ -231,9 +236,9 @@ def dataset_register():
 
     except Exception as e:
         db.session.rollback()
-        print(f"[ERROR] dataset_register: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        err_msg = str(e) if current_app.debug else "Terjadi kesalahan internal."
+        return jsonify({"success": False, "error": err_msg}), 500
 
 
 @api_bp.route("/dataset/submit", methods=["POST"])
@@ -332,9 +337,9 @@ def dataset_submit():
 
     except Exception as e:
         db.session.rollback()
-        print(f"[ERROR] dataset_submit: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        err_msg = str(e) if current_app.debug else "Terjadi kesalahan internal."
+        return jsonify({"success": False, "error": err_msg}), 500
 
 
 @api_bp.route("/dataset/status/<subject_code>", methods=["GET"])
@@ -349,6 +354,10 @@ def dataset_status(subject_code):
         collected      int
         total_samples  int
     """
+    # Validate format: s followed by 3-6 digits (e.g. s001, s001234)
+    if not re.fullmatch(r's\d{3,6}', subject_code):
+        return jsonify({"success": False, "error": "Kode subjek tidak valid."}), 400
+
     try:
         from app.models.dataset import (
             DATASET_TOTAL_SAMPLES,
@@ -371,6 +380,6 @@ def dataset_status(subject_code):
         }), 200
 
     except Exception as e:
-        print(f"[ERROR] dataset_status: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        err_msg = str(e) if current_app.debug else "Terjadi kesalahan internal."
+        return jsonify({"success": False, "error": err_msg}), 500
