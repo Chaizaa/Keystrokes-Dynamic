@@ -248,6 +248,15 @@ function prepareInput() {
             return;
         }
 
+        // Block OS key-repeat for all keys except Backspace.
+        // - Non-backspace repeat: preventDefault() stops extra chars from entering
+        //   the field (e.g. holding "a" must not produce "aaaa").
+        // - Hold time (H_vector) is still correct: keystroke.js records only the
+        //   first keydown (repeat=false) and the single keyup → H = keyup.t - keydown.t
+        //   = full physical hold duration, regardless of how many repeat events fire.
+        // - Backspace is intentionally excluded so users can hold it to erase quickly.
+        if (e.repeat && e.key !== "Backspace") { e.preventDefault(); return; }
+
         // Exclude modifier keys (Shift, Ctrl, Alt, Meta, CapsLock)
         // These are NOT part of the biometric vector.
         if (MODIFIER_KEYS.includes(e.key)) return;
