@@ -10,13 +10,14 @@ GET  /api/dataset/export             — download full dataset as CSV or JSON (p
 """
 
 import csv
-import hashlib
 import io
 import os
 import traceback
 
 from flask import Response, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import limiter
 from app.models import db
 from app.utils.keystroke_processor import process_web_events
 
@@ -175,6 +176,7 @@ def _parse_device_info(user_agent: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_bp.route("/dataset/register", methods=["POST"])
+@limiter.limit("10 per hour")
 def dataset_register():
     """Register a new dataset respondent.
 
@@ -203,8 +205,11 @@ def dataset_register():
             return jsonify({"success": False, "error": "Password wajib diisi."}), 400
         if len(password) < 6:
             return jsonify({"success": False, "error": "Password minimal 6 karakter."}), 400
+        if len(password) > 128:
+            return jsonify({"success": False, "error": "Password maksimal 128 karakter."}), 400
+        name_initial = name_initial[:100] if name_initial else None
 
-        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        pw_hash = generate_password_hash(password)
 
         subject_code = DatasetSubject.next_subject_code()
         subject = DatasetSubject(
@@ -232,6 +237,7 @@ def dataset_register():
 
 
 @api_bp.route("/dataset/submit", methods=["POST"])
+@limiter.limit("200 per hour")
 def dataset_submit():
     """Submit one keystroke sample.
 
@@ -264,6 +270,8 @@ def dataset_submit():
             return jsonify({"success": False, "error": "subject_code wajib disertakan."}), 400
         if not raw_events:
             return jsonify({"success": False, "error": "raw_events wajib disertakan."}), 400
+        if not isinstance(raw_events, list) or len(raw_events) > 500:
+            return jsonify({"success": False, "error": "Format raw_events tidak valid."}), 400
 
         subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
         if subject is None:
@@ -283,8 +291,7 @@ def dataset_submit():
 
         # Verify password hash
         reconstructed = result.get("real_password_string", "")
-        reconstructed_hash = hashlib.sha256(reconstructed.encode()).hexdigest()
-        if subject.password_hash and reconstructed_hash != subject.password_hash:
+        if subject.password_hash and not check_password_hash(subject.password_hash, reconstructed):
             return jsonify({
                 "success": False,
                 "error": "Kata sandi tidak sesuai dengan yang didaftarkan. Ketik ulang kata sandi yang sama.",
@@ -331,6 +338,7 @@ def dataset_submit():
 
 
 @api_bp.route("/dataset/status/<subject_code>", methods=["GET"])
+@limiter.limit("60 per minute")
 def dataset_status(subject_code):
     """Return current progress for a subject.
 

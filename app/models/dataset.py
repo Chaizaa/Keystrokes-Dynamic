@@ -5,7 +5,7 @@ DatasetSubject  — one row per research respondent
 DatasetEntry    — one row per keystroke sample
 
 Each subject creates their own password once at registration.
-That password is hashed (SHA-256) and stored in DatasetSubject.password_hash.
+That password is hashed (pbkdf2:sha256 + salt via werkzeug) and stored in DatasetSubject.password_hash.
 All subsequent sample submissions are verified against that hash.
 
 Total samples per subject: 100
@@ -49,9 +49,9 @@ class DatasetSubject(db.Model):
     # Optional: name/initial provided by respondent
     name_initial = db.Column(db.String(50), nullable=True)
 
-    # SHA-256 hash of the password the subject chose at registration.
+    # pbkdf2:sha256 salted hash (werkzeug) of the password the subject chose at registration.
     # All sample submissions are verified against this hash for consistency.
-    password_hash = db.Column(db.String(64), nullable=True)
+    password_hash = db.Column(db.String(256), nullable=True)
 
     # Auto-detected from request User-Agent (e.g. "Chrome/Windows", "Safari/macOS")
     device_info = db.Column(db.String(255), nullable=True)
