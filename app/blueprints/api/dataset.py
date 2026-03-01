@@ -27,30 +27,6 @@ from ._shared import api_bp
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Temporary admin: delete entries for a subject (remove after use)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@api_bp.route("/dataset/admin/delete-entries", methods=["DELETE"])
-@limiter.limit("5 per minute")
-def dataset_delete_entries():
-    """Temporary endpoint — delete all keystroke entries for a subject. Remove after use."""
-    from app.models.dataset import DatasetEntry, DatasetSubject
-    export_key = os.environ.get("EXPORT_KEY", "")
-    provided   = request.args.get("key", "")
-    if not export_key or not hmac.compare_digest(provided, export_key):
-        return jsonify({"error": "Unauthorized"}), 401
-    subject_code = request.args.get("subject_code", "")
-    if not subject_code:
-        return jsonify({"error": "subject_code required"}), 400
-    subj = DatasetSubject.query.filter_by(subject_code=subject_code).first()
-    if not subj:
-        return jsonify({"error": "subject not found"}), 404
-    deleted = DatasetEntry.query.filter_by(subject_id=subj.id).delete()
-    db.session.commit()
-    return jsonify({"subject_code": subject_code, "entries_deleted": deleted})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Export
 # ─────────────────────────────────────────────────────────────────────────────
 
