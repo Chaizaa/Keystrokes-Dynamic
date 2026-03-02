@@ -110,6 +110,15 @@ def create_app(config_name="development"):
 
     csrf.exempt(api_blueprint)
 
+    # Also exempt v1 API routes if present (safe import)
+    try:
+        from app.api.routes import api_bp as api_routes_bp
+
+        csrf.exempt(api_routes_bp)
+    except Exception:
+        # If our new module isn't present yet, continue silently
+        pass
+
     # Rate Limiting
     # Respect application config to enable/disable rate limiting during tests
     if not app.config.get("RATELIMIT_ENABLED", True):
@@ -161,6 +170,16 @@ def create_app(config_name="development"):
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(admin_bp, url_prefix="/admin")
+
+    # Register API v1 blueprint from `app.api.routes` if available and not registered
+    try:
+        from app.api.routes import api_bp as api_v1_bp
+
+        if api_v1_bp.name not in app.blueprints:
+            app.register_blueprint(api_v1_bp, url_prefix="/api/v1")
+    except Exception:
+        # Don't block app startup if import fails
+        pass
     # Health endpoints for admins/ops
     app.register_blueprint(health_bp, url_prefix="/health")
 
@@ -170,5 +189,24 @@ def create_app(config_name="development"):
     # Create database tables
     with app.app_context():
         db.create_all()
+        # Ensure `api_secret_encrypted` column exists (runtime patch for older DBs).
+        try:
+            from sqlalchemy import inspect, text
+
+            insp = inspect(db.engine)
+            if insp.has_table("api_credentials"):
+                cols = [c["name"] for c in insp.get_columns("api_credentials")]
+                if "api_secret_encrypted" not in cols:
+                    # SQLite supports ADD COLUMN; use a safe BEGIN block so this
+                    # runs once at startup and doesn't require Alembic for quick fixes.
+                    try:
+                        with db.engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE api_credentials ADD COLUMN api_secret_encrypted TEXT"))
+                        print("[INFO] Added api_secret_encrypted column to api_credentials table")
+                    except Exception as _e:
+                        print("[WARN] Failed to add api_secret_encrypted column:", _e)
+        except Exception:
+            # If inspection fails, do not block app startup.
+            pass
 
     return app

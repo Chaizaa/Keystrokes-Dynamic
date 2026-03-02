@@ -271,3 +271,14 @@ All critical security bugs fixed. System is now:
 - ✅ Password strength enforcement
 
 **Next:** Restart Flask server and test all features!
+
+---
+
+## 🔐 Migration Note: API Credential Schema Change
+
+- The API credential storage was updated to improve HMAC security.
+- Column `api_secret_hash` was replaced by `api_secret_encrypted` (Fernet encrypted secret).
+- After deploying, existing API credentials must be rotated so clients receive a new raw secret.
+
+Generating a new credential will encrypt the secret and only return the raw secret once.
+

@@ -20,6 +20,7 @@ from app.utils.password_strength import (
     calculate_password_strength,
     get_strength_label,
 )
+from app.api.auth import require_api_auth
 
 api_bp = Blueprint("api", __name__)
 
@@ -378,6 +379,40 @@ def verify_reset():
         print(f"[ERROR] verify_reset: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+
+@api_bp.route("/api/v1/verify", methods=["POST"])
+@require_api_auth
+def api_verify():
+    """Example protected API endpoint.
+
+    This demonstrates using the API authentication decorator. The decorator
+    verifies the HMAC signature and attaches the credential at `g.api_credential`.
+    """
+    try:
+        from flask import g
+
+        # For demo purposes return a simple acknowledgement and last_used_at
+        cred = getattr(g, "api_credential", None)
+        if not cred:
+            return jsonify({"success": False, "message": "Credential missing"}), 401
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Request authenticated",
+                    "api_key": cred.api_key,
+                    "last_used_at": cred.last_used_at.isoformat() if cred.last_used_at else None,
+                }
+            ),
+            200,
+        )
+    except Exception as e:
+        print(f"[ERROR] api_verify: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Server error"}), 500
 
 
 @api_bp.route("/reset_password", methods=["POST"])

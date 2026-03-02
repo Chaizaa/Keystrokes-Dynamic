@@ -87,6 +87,19 @@ class Config:
     STATIC_FOLDER = "static"
     TEMPLATE_FOLDER = "templates"
 
+    # API Secret encryption key (base64 urlsafe). In production set via
+    # environment variable `API_SECRET_ENC_KEY`. For development we generate
+    # a temporary key to allow local testing (do NOT use generated key in prod).
+    API_SECRET_ENC_KEY = os.environ.get("API_SECRET_ENC_KEY")
+    if not API_SECRET_ENC_KEY:
+        try:
+            from cryptography.fernet import Fernet
+
+            API_SECRET_ENC_KEY = Fernet.generate_key().decode()
+        except Exception:
+            # If cryptography is not available at import time, default to None
+            API_SECRET_ENC_KEY = None
+
 
 class DevelopmentConfig(Config):
     """Development configuration"""

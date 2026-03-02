@@ -33,3 +33,4 @@ pytest-cov==4.1.0
 
 # Email (development + production options)
 Flask-Mail==0.9.1
+cryptography>=41.0

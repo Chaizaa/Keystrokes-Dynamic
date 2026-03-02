@@ -71,6 +71,39 @@
                 Logout
             </button>
         </div>
+
+        <!-- API Credentials Card (improved layout + copy buttons) -->
+        <div class="card api-card" id="apiCard">
+            <h2>API Credentials</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">API Key</div>
+                    <div class="value-row">
+                        <div class="value value-text" id="apiKey">-</div>
+                        <div class="value-actions">
+                            <button class="icon-btn btn-secondary" id="toggleApiKey" title="Show/Hide API Key">👁️</button>
+                            <button class="copy-btn btn-secondary" id="copyApiKey" title="Copy API Key">Copy</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="label">API Secret</div>
+                    <div class="value-row">
+                        <div class="value value-text" id="apiSecret">(hidden)</div>
+                        <div class="value-actions">
+                            <button class="icon-btn btn-secondary" id="toggleApiSecret" title="Show/Hide API Secret">👁️</button>
+                            <button class="copy-btn btn-secondary" id="copyApiSecret" title="Copy API Secret">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="api-actions" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="genBtn" class="btn btn-primary">Generate</button>
+                <button id="rotBtn" class="btn btn-secondary">Rotate</button>
+                <button id="revBtn" class="btn btn-danger">Revoke</button>
+            </div>
+            <p style="margin-top:12px;color:#c9d8fb;font-size:13px;">The API secret is displayed only once when generated. Use the copy button to save it securely.</p>
+        </div>
     </div>
 </div>
 
@@ -197,6 +230,174 @@
         .then(ok => { if (ok) window.location.href = '/logout'; });
     }
 
-    document.addEventListener('DOMContentLoaded', loadUserInfo);
+    // ------------------ API Credential UI actions ------------------
+    async function loadApiCredential() {
+        try {
+            const resp = await fetch('/dashboard/api/credential', { credentials: 'same-origin' });
+            if (!resp.ok) return;
+            const body = await resp.json().catch(() => ({}));
+            // Keep raw secrets in JS memory. Server may send decrypted secret
+            // if application is configured to store it encrypted (not recommended).
+            window.currentApiKeyRaw = body.api_key || null;
+            window.currentApiSecretRaw = body.api_secret_raw || null;
+
+            if (!body.has_credential) {
+                document.getElementById('apiKey').textContent = '-';
+                document.getElementById('apiSecret').textContent = '(hidden)';
+            } else {
+                // Show full API Key as returned by server
+                document.getElementById('apiKey').textContent = body.api_key || '-';
+
+                // Tampilkan API Secret penuh jika tersedia
+                document.getElementById('apiSecret').textContent = body.api_secret_raw || '-';
+                window.currentApiSecretRaw = body.api_secret_raw || null;
+            }
+        } catch (e) {
+            console.debug('Failed to load API credential metadata', e);
+        }
+    }
+
+    async function generateApiCredential() {
+        const btn = document.getElementById('genBtn');
+        const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Generating...';
+        try {
+            const resp = await fetch('/dashboard/api/credential/generate', { method: 'POST', credentials: 'same-origin' });
+            const body = await resp.json().catch(() => ({}));
+            if (resp.status === 201 && body.api_secret_raw) {
+                // Store raw values in memory for copy/unhide operations — never persist
+                window.currentApiKeyRaw = body.api_key;
+                window.currentApiSecretRaw = body.api_secret_raw;
+
+                // Display full values for the user one-time
+                document.getElementById('apiKey').textContent = window.currentApiKeyRaw;
+                document.getElementById('apiSecret').textContent = window.currentApiSecretRaw;
+                alert('API secret displayed once — copy it now and store it safely.');
+            } else {
+                alert(body.message || 'No changes');
+            }
+        } catch (e) {
+            console.error('Generate API credential failed', e);
+            alert('Failed to generate API credential');
+        } finally {
+            btn.disabled = false; btn.textContent = orig;
+            setTimeout(loadApiCredential, 1200);
+        }
+    }
+
+    async function rotateApiCredential() {
+        if (!confirm('Rotate API credential? This will revoke existing keys.')) return;
+        const btn = document.getElementById('rotBtn');
+        const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Rotating...';
+        try {
+            const resp = await fetch('/dashboard/api/credential/rotate', { method: 'POST', credentials: 'same-origin' });
+            const body = await resp.json().catch(() => ({}));
+            if (resp.ok && body.api_secret_raw) {
+                window.currentApiKeyRaw = body.api_key;
+                window.currentApiSecretRaw = body.api_secret_raw;
+                document.getElementById('apiKey').textContent = window.currentApiKeyRaw;
+                document.getElementById('apiSecret').textContent = window.currentApiSecretRaw;
+                alert('New API secret displayed once — copy it now and store it safely.');
+            } else {
+                alert(body.message || 'Rotation failed');
+            }
+        } catch (e) {
+            console.error('Rotate API credential failed', e);
+            alert('Failed to rotate API credential');
+        } finally {
+            btn.disabled = false; btn.textContent = orig; setTimeout(loadApiCredential, 1200);
+        }
+    }
+
+    async function revokeApiCredential() {
+        if (!confirm('Revoke active API credential(s)?')) return;
+        const btn = document.getElementById('revBtn');
+        const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Revoking...';
+        try {
+            const resp = await fetch('/dashboard/api/credential/revoke', { method: 'POST', credentials: 'same-origin' });
+            const body = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                window.currentApiKeyRaw = null;
+                window.currentApiSecretRaw = null;
+                document.getElementById('apiKey').textContent = '-';
+                document.getElementById('apiSecret').textContent = '(hidden)';
+                alert('API credentials revoked');
+            } else {
+                alert(body.message || 'Failed to revoke');
+            }
+        } catch (e) {
+            console.error('Revoke API credential failed', e);
+            alert('Failed to revoke API credential');
+        } finally {
+            btn.disabled = false; btn.textContent = orig; setTimeout(loadApiCredential, 1200);
+        }
+    }
+
+    // Toggle show/hide for API Key
+    function toggleApiKey() {
+        const el = document.getElementById('apiKey');
+        if (!window.currentApiKeyRaw) {
+            alert('No API key available to show');
+            return;
+        }
+        if (el.dataset.expanded === '1') {
+            // hide
+            const masked = window.currentApiKeyRaw.slice(0,6) + '•'.repeat(Math.max(8, window.currentApiKeyRaw.length-6));
+            el.textContent = masked;
+            el.dataset.expanded = '0';
+        } else {
+            el.textContent = window.currentApiKeyRaw;
+            el.dataset.expanded = '1';
+        }
+    }
+
+    // Toggle show/hide for API Secret (only possible if raw secret exists in memory)
+    function toggleApiSecret() {
+        const el = document.getElementById('apiSecret');
+        if (!window.currentApiSecretRaw) {
+            alert('The API secret is only shown once when generated. Rotate to get a new secret.');
+            return;
+        }
+        if (el.dataset.expanded === '1') {
+            // hide
+            el.textContent = '(hidden)';
+            el.dataset.expanded = '0';
+        } else {
+            el.textContent = window.currentApiSecretRaw;
+            el.dataset.expanded = '1';
+        }
+    }
+
+    // Wire buttons and copy actions
+    document.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'genBtn') generateApiCredential();
+        if (e.target && e.target.id === 'rotBtn') rotateApiCredential();
+        if (e.target && e.target.id === 'revBtn') revokeApiCredential();
+        if (e.target && e.target.id === 'copyApiKey') copyTextFromId('apiKey');
+        if (e.target && e.target.id === 'copyApiSecret') copyTextFromId('apiSecret');
+        if (e.target && e.target.id === 'toggleApiKey') toggleApiKey();
+        if (e.target && e.target.id === 'toggleApiSecret') toggleApiSecret();
+    });
+
+    async function copyTextFromId(elId) {
+        try {
+            const txt = document.getElementById(elId).textContent || '';
+            if (!txt || txt === '-' || txt === '(hidden)') {
+                alert('Nothing to copy');
+                return;
+            }
+            await navigator.clipboard.writeText(txt);
+            // small feedback
+            const prev = document.getElementById(elId).textContent;
+            const el = document.getElementById(elId);
+            el.textContent = 'Copied!';
+            setTimeout(() => { el.textContent = prev; }, 900);
+        } catch (e) {
+            console.error('Copy failed', e);
+            alert('Copy failed — please copy manually');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { loadUserInfo(); loadApiCredential(); });
 </script>
 {% endblock %}

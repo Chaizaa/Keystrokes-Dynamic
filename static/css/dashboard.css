@@ -120,6 +120,16 @@ body {
 /* Misc */
 .loading { text-align:center; padding:20px; color: #9fb2ea; }
 
+/* API credential specific styles */
+.api-card .value-row { display:flex; align-items:center; gap:10px; justify-content:space-between; }
+.api-card .value-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px; }
+.value-actions { display:flex; gap:8px; align-items:center; }
+.copy-btn { padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color:#e8f0fb; }
+.copy-btn:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(0,0,0,0.18); }
+.icon-btn { padding:8px 10px; border-radius:8px; font-weight:700; cursor:pointer; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color:#e8f0fb; }
+.icon-btn:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(0,0,0,0.18); }
+.api-actions .btn { min-width:110px; }
+
 @media (max-width: 768px) {
     body { padding: 20px; }
     .header { padding: 22px; }

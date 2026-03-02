@@ -56,6 +56,14 @@ class User(UserMixin, db.Model):
     login_attempts = db.relationship(
         "LoginAttempt", backref="user", lazy="dynamic", cascade="all, delete-orphan"
     )
+    # API credentials relationship: each user may have multiple API credentials
+    # lazy=True used so accessing `user.api_credentials` returns a list (suitable for templates)
+    api_credentials = db.relationship(
+        "APICredential",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<User {self.username}>"

@@ -9,6 +9,7 @@ db = SQLAlchemy()
 from .feature_vector import EnrollmentVector, FeatureVector
 from .keystroke_vector import KeystrokeVector
 from .login_attempt import LoginAttempt
+from .api_credential import APICredential
 
 # Import models for easy access
 from .user import User
@@ -22,4 +23,5 @@ __all__ = [
     "FeatureVector",
     "EnrollmentVector",
     "AdminAudit",
+    "APICredential",
 ]
