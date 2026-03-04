@@ -14,7 +14,7 @@ def test_registration_verify_email_and_enable_2fa(client, monkeypatch, db_sessio
     def fake_process_web_events(events, username):
         return {
             "status": "success",
-            "features": {"username": username, "data_type": "enrollment"},
+            "features": {"username": username, "event_type": "enrollment"},
             "real_password_string": "StrongPass123!",
             "password_hash": None,
         }

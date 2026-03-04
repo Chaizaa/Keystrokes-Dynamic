@@ -12,9 +12,9 @@ print("=" * 70)
 print(f"\n✅ Total Samples: {len(data)}")
 
 # Data type breakdown
-data_types = Counter([row.get("data_type", "unknown") for row in data])
-print(f"\n📁 Data Type Distribution:")
-for dtype, count in data_types.items():
+event_types = Counter([row.get("event_type", "unknown") for row in data])
+print(f"\n📁 Event Type Distribution:")
+for dtype, count in event_types.items():
     print(f"   - {dtype:15s}: {count:3d} samples")
 
 # Username breakdown
@@ -25,7 +25,7 @@ print(f"\n👥 Total Users: {len(usernames)}")
 users_detail = {}
 for row in data:
     username = row["username"]
-    dtype = row.get("data_type", "unknown")
+    dtype = row.get("event_type", "unknown")
 
     if username not in users_detail:
         users_detail[username] = {"enrollment": 0, "login": 0}
@@ -73,7 +73,7 @@ print(f"⚠️ Partial Users (10/10 + <10/10): {partial_users}")
 print(f"❌ Incomplete Users:                {incomplete_users}")
 
 # Check for collection mode data
-collection_samples = [row for row in data if row.get("data_type") == "login"]
+collection_samples = [row for row in data if row.get("event_type") == "login"]
 print(f"\n🎯 COLLECTION MODE DATA:")
 print(f"   - Login samples collected: {len(collection_samples)}")
 print(f"   - From {len(set(r['username'] for r in collection_samples))} different users")

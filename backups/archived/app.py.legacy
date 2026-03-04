@@ -519,7 +519,7 @@ def register_sample():
     
     if result['status'] == 'success':
         features = result['data']
-        features['data_type'] = 'enrollment' 
+        features['event_type'] = 'enrollment' 
         
         # Quality assessment (non-blocking)
         quality = assess_sample_quality(features)
@@ -752,7 +752,7 @@ def login_sample():
     # ========================================================================
     # 3. VERIFICATION PASSED - NOW SAVE VERIFIED DATA
     # ========================================================================
-    new_features['data_type'] = 'login'
+    new_features['event_type'] = 'login'
     new_features['verification_score'] = verification_result.get('score', 0)  # Store verification score
     
     # Quality assessment
@@ -1148,7 +1148,7 @@ def login_attempt():
     # 4. Simpan Log Hasilnya
     new_features['login_result'] = str(verification_result['result'])
     new_features['login_score'] = verification_result.get('score', 0)
-    new_features['data_type'] = 'login_attempt'
+    new_features['event_type'] = 'login_attempt'
     
     # [DEV ONLY] Hapus password asli sebelum simpan log
     new_features.pop('dev_real_password', None)
@@ -1205,8 +1205,8 @@ def debug_user(username):
         # Check user_vectors (old)
         cursor.execute("""
             SELECT COUNT(*) as total,
-                   SUM(CASE WHEN data_type = 'enrollment' THEN 1 ELSE 0 END) as enrollment,
-                   SUM(CASE WHEN data_type = 'login' THEN 1 ELSE 0 END) as login
+                   SUM(CASE WHEN event_type = 'enrollment' THEN 1 ELSE 0 END) as enrollment,
+                   SUM(CASE WHEN event_type = 'login' THEN 1 ELSE 0 END) as login
             FROM user_vectors WHERE username = ?
         """, (username,))
         vector_stats = cursor.fetchone()

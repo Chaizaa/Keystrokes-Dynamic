@@ -1,8 +1,8 @@
 """
 UsersVector Model - Unified biometric keystroke storage for both register and login.
 
-  data_type = 'enrollment'  → samples captured during registration
-  data_type = 'login'       → samples captured during login attempt
+  event_type = 'enrollment'  → samples captured during registration
+  event_type = 'login'       → samples captured during login attempt
 
 Schema mirrors biometric_system.db reference exactly.
 """
@@ -98,12 +98,14 @@ class UsersVector(db.Model):
     DU_cv = db.Column(db.Float, nullable=True)
 
     # --- Flow discriminator ---
-    data_type = db.Column(db.Text, nullable=True, index=True)  # 'enrollment' | 'login'
-    # event_type mirrors data_type so that legacy code using event_type continues to work
-    event_type = db.Column(db.Text, nullable=True, index=True)  # alias for data_type
+    # PRIMARY: Use event_type for all new code
+    event_type = db.Column(db.Text, nullable=True, index=True)  # 'enrollment' | 'login'
+    # DEPRECATED: data_type kept for backward compatibility, but always read from event_type
+    # data_type = db.Column(db.Text, nullable=True, index=True)  # DEPRECATED - use event_type instead
 
     def __repr__(self):
-        return f"<UsersVector {self.username!r} [{self.data_type}] @ {self.timestamp}>"
+        event = self.event_type or self.event_type or 'unknown'
+        return f"<UsersVector {self.username!r} [{event}] @ {self.timestamp}>"
 
     def get_vector(self, name: str) -> list:
         """Parse a named vector column (H/DD/UD/UU/DU) from JSON string.
@@ -147,12 +149,12 @@ class UsersVector(db.Model):
     @property
     def is_enrollment(self) -> bool:
         """True if this sample was captured during registration."""
-        return self.data_type == "enrollment"
+        return self.event_type == "enrollment"
 
     @property
     def is_login(self) -> bool:
         """True if this sample was captured during a login attempt."""
-        return self.data_type == "login"
+        return self.event_type == "login"
 
     def to_dict(self) -> dict:
         """Full dict representation including all statistics for API responses."""
@@ -160,7 +162,7 @@ class UsersVector(db.Model):
             "id": self.id,
             "username": self.username,
             "timestamp": self.timestamp,
-            "data_type": self.data_type,
+            "event_type": self.event_type,
             "total_duration": self.total_duration,
             "typing_speed": self.typing_speed,
             # Per-vector statistics

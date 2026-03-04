@@ -118,7 +118,7 @@ class BiometricService:
                 .select_from(UsersVector)
                 .where(
                     UsersVector.username == username,
-                    UsersVector.data_type == "enrollment",
+                    UsersVector.event_type == "enrollment",
                 )
             )
             count = int(sqlalchemy_db.session.execute(stmt).scalar_one())
@@ -141,7 +141,7 @@ class BiometricService:
                     try:
                         cursor.execute(
                             "SELECT COUNT(*) FROM user_vectors WHERE username = ? "
-                            "AND (data_type = 'enrollment' OR event_type = 'enrollment')",
+                            "AND (event_type = 'enrollment' OR event_type = 'enrollment')",
                             (username,),
                         )
                         count = cursor.fetchone()[0] or 0
