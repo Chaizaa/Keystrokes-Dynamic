@@ -83,6 +83,10 @@ class Config:
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
     LOG_FILE = os.environ.get("LOG_FILE", "app.log")
 
+    # Request size limit — prevents oversized payload attacks on /submit etc.
+    # 1 MB is generous for keystroke data (a full 100-rep session is ~50 KB JSON).
+    MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1 MB
+
     # Static & Template Paths
     STATIC_FOLDER = "static"
     TEMPLATE_FOLDER = "templates"

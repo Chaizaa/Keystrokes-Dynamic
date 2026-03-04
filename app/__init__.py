@@ -2,6 +2,7 @@
 Flask Application Factory with SQLAlchemy, Flask-Login, and Security Extensions
 """
 
+import os
 import secrets
 
 from flask import Flask
@@ -21,11 +22,14 @@ csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",
+    # Use Redis if available (prevents limit bypass in multi-worker deployments).
+    # Set REDIS_URL env var in Railway to enable. Falls back to in-memory.
+    storage_uri=os.environ.get("REDIS_URL", "memory://"),
 )
 migrate = Migrate()
 cache = Cache()
-socketio = SocketIO(cors_allowed_origins="*")
+# SocketIO CORS: use ALLOWED_ORIGIN env var so it matches the REST API CORS policy.
+socketio = SocketIO(cors_allowed_origins=os.environ.get("ALLOWED_ORIGIN", "*"))
 
 
 def create_app(config_name="development"):
@@ -149,7 +153,13 @@ def create_app(config_name="development"):
     # Inject development toggles into templates
     @app.context_processor
     def inject_dev_flags():
-        return {"DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False)}
+        flags = {"DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False)}
+        # In non-production mode Talisman is not initialized, so csp_nonce() would
+        # be undefined in templates. Provide a no-op fallback so templates that
+        # use {{ csp_nonce() }} still render correctly in development.
+        if config_name != "production":
+            flags["csp_nonce"] = lambda: ""
+        return flags
 
     # Security Headers (only in production)
     if config_name == "production":
@@ -158,11 +168,17 @@ def create_app(config_name="development"):
             force_https=True,
             strict_transport_security=True,
             session_cookie_secure=True,
+            # Nonce is auto-generated per request by Talisman and injected into
+            # templates as csp_nonce(). Inline <script> tags must carry
+            # nonce="{{ csp_nonce() }}" to be allowed. 'unsafe-inline' is removed
+            # so injected scripts (XSS) are blocked even if CSP is somehow bypassed.
             content_security_policy={
                 "default-src": "'self'",
-                "script-src": ["'self'", "'unsafe-inline'"],
-                "style-src": ["'self'", "'unsafe-inline'"],
+                "script-src":  "'self'",  # nonce added automatically via nonce_in
+                "style-src":   ["'self'", "'unsafe-inline'"],  # inline styles kept
+                "img-src":     ["'self'", "data:"],
             },
+            content_security_policy_nonce_in=["script-src"],
         )
 
     # Register blueprints
