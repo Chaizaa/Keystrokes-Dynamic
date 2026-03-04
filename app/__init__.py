@@ -2,6 +2,7 @@
 Flask Application Factory with SQLAlchemy, Flask-Login, and Security Extensions
 """
 
+import os
 import secrets
 
 from flask import Flask
@@ -21,11 +22,14 @@ csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",
+    # Use Redis if available (prevents limit bypass in multi-worker deployments).
+    # Set REDIS_URL env var in Railway to enable. Falls back to in-memory.
+    storage_uri=os.environ.get("REDIS_URL", "memory://"),
 )
 migrate = Migrate()
 cache = Cache()
-socketio = SocketIO(cors_allowed_origins="*")
+# SocketIO CORS: use ALLOWED_ORIGIN env var so it matches the REST API CORS policy.
+socketio = SocketIO(cors_allowed_origins=os.environ.get("ALLOWED_ORIGIN", "*"))
 
 
 def create_app(config_name="development"):
@@ -40,6 +44,12 @@ def create_app(config_name="development"):
     """
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
 
+    # ProxyFix: Railway (and most cloud platforms) sit behind a reverse proxy.
+    # Without this, Flask sees every request as HTTP and Flask-Talisman causes
+    # an infinite HTTPS redirect loop.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     # Load configuration
     import os
     import sys
@@ -52,7 +62,11 @@ def create_app(config_name="development"):
     if isinstance(config_name, dict):
         app.config.update(config_name)
     else:
-        app.config.from_object(get_config(config_name))
+        config_class = get_config(config_name)
+        # Validate production config before applying (avoids import-time crash)
+        if hasattr(config_class, "validate"):
+            config_class.validate()
+        app.config.from_object(config_class)
 
     # Set secret key for session management
     if not app.config.get("SECRET_KEY"):
@@ -88,7 +102,12 @@ def create_app(config_name="development"):
     socketio.init_app(app)
 
     # Initialize extensions
-    CORS(app)
+    # Restrict CORS origins via ALLOWED_ORIGIN env var (Railway: set to your domain).
+    # Default is "*" (open) for local dev. In production set e.g.:
+    #   ALLOWED_ORIGIN=https://web-production-77b15.up.railway.app
+    import os as _cors_os
+    _cors_origins = _cors_os.environ.get("ALLOWED_ORIGIN", "*")
+    CORS(app, resources={r"/api/*": {"origins": _cors_origins}})
 
     # Flask-Login configuration
     login_manager.init_app(app)
@@ -134,7 +153,13 @@ def create_app(config_name="development"):
     # Inject development toggles into templates
     @app.context_processor
     def inject_dev_flags():
-        return {"DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False)}
+        flags = {"DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False)}
+        # In non-production mode Talisman is not initialized, so csp_nonce() would
+        # be undefined in templates. Provide a no-op fallback so templates that
+        # use {{ csp_nonce() }} still render correctly in development.
+        if config_name != "production":
+            flags["csp_nonce"] = lambda: ""
+        return flags
 
     # Security Headers (only in production)
     if config_name == "production":
@@ -143,17 +168,24 @@ def create_app(config_name="development"):
             force_https=True,
             strict_transport_security=True,
             session_cookie_secure=True,
+            # Nonce is auto-generated per request by Talisman and injected into
+            # templates as csp_nonce(). Inline <script> tags must carry
+            # nonce="{{ csp_nonce() }}" to be allowed. 'unsafe-inline' is removed
+            # so injected scripts (XSS) are blocked even if CSP is somehow bypassed.
             content_security_policy={
                 "default-src": "'self'",
-                "script-src": ["'self'", "'unsafe-inline'"],
-                "style-src": ["'self'", "'unsafe-inline'"],
+                "script-src":  "'self'",  # nonce added automatically via nonce_in
+                "style-src":   ["'self'", "'unsafe-inline'"],  # inline styles kept
+                "img-src":     ["'self'", "data:"],
             },
+            content_security_policy_nonce_in=["script-src"],
         )
 
     # Register blueprints
     from app.blueprints.admin import admin_bp
     from app.blueprints.api import api_bp
     from app.blueprints.auth import auth_bp
+    from app.blueprints.dataset import dataset_bp
     from app.blueprints.health import health_bp
     from app.blueprints.main import main_bp
 
@@ -161,6 +193,7 @@ def create_app(config_name="development"):
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(dataset_bp)
     # Health endpoints for admins/ops
     app.register_blueprint(health_bp, url_prefix="/health")
 
@@ -170,5 +203,27 @@ def create_app(config_name="development"):
     # Create database tables
     with app.app_context():
         db.create_all()
+
+    # -------------------------------------------------------------------------
+    # Public-mode lockdown
+    # Set  DATASET_ONLY=1  in Railway env vars to expose ONLY /dataset publicly.
+    # All other routes return 404 so their existence is not revealed.
+    # Allowed prefixes:
+    #   /dataset        — the collection page
+    #   /api/dataset/   — AJAX endpoints used by dataset_capture.js
+    #   /static/        — CSS / JS / image assets
+    #   /health/        — Railway health-check pings
+    # -------------------------------------------------------------------------
+    import os as _os
+    if _os.environ.get("DATASET_ONLY") == "1":
+        _ALLOWED_PREFIXES = ("/dataset", "/api/dataset/", "/static/", "/health/")
+
+        @app.before_request
+        def _dataset_only_guard():
+            from flask import abort, request as _req
+            p = _req.path
+            if not any(p == prefix.rstrip("/") or p.startswith(prefix)
+                       for prefix in _ALLOWED_PREFIXES):
+                abort(404)
 
     return app

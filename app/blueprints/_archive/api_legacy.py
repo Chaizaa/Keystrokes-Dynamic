@@ -2056,3 +2056,263 @@ def reset_password():
         return jsonify({"error": str(e)}), 500
 
 
+# ============================================================================
+# DATASET COLLECTION API
+# ============================================================================
+
+@api_bp.route("/dataset/register", methods=["POST"])
+def dataset_register():
+    """Register a new dataset respondent and return their subject code.
+
+    Request JSON (all fields optional):
+        name_initial  str   Respondent's name or initials (optional, for researcher ref)
+
+    Response JSON:
+        subject_code  str   Auto-assigned code, e.g. "s001"
+        session_no    int   Session to start from (always 1 for new subjects)
+        repetition    int   Repetition to start from (always 1)
+        total_sessions  int
+        reps_per_session int
+        target_phrase str
+    """
+    try:
+        from app.models.dataset import (
+            DATASET_REPS_PER_SESSION,
+            DATASET_SESSIONS,
+            DATASET_TARGET_PHRASE,
+            DatasetSubject,
+        )
+
+        data = request.get_json(silent=True) or {}
+        name_initial = (data.get("name_initial") or "").strip() or None
+
+        # Auto-detect device info from User-Agent
+        ua = request.headers.get("User-Agent", "")
+        device_info = _parse_device_info(ua)
+
+        subject_code = DatasetSubject.next_subject_code()
+        subject = DatasetSubject(
+            subject_code=subject_code,
+            name_initial=name_initial,
+            device_info=device_info,
+        )
+        db.session.add(subject)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "subject_code": subject.subject_code,
+            "subject_id": subject.id,
+            "session_no": 1,
+            "repetition": 1,
+            "total_sessions": DATASET_SESSIONS,
+            "reps_per_session": DATASET_REPS_PER_SESSION,
+            "target_phrase": DATASET_TARGET_PHRASE,
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] dataset_register: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/dataset/submit", methods=["POST"])
+def dataset_submit():
+    """Submit one keystroke sample for a registered respondent.
+
+    Request JSON:
+        subject_code  str   (required) Subject code, e.g. "s001"
+        session_no    int   (required) 1-based session index
+        repetition    int   (required) 1-based repetition within session
+        raw_events    list  (required) Raw JS keystroke events from KeystrokeCapture
+
+    Response JSON:
+        success         bool
+        repetition      int   Next repetition number
+        session_no      int   Current (or next) session number
+        session_done    bool  True when current session is complete
+        all_done        bool  True when all sessions are complete
+        progress        dict  {collected, total}
+    """
+    try:
+        from app.models.dataset import (
+            DATASET_REPS_PER_SESSION,
+            DATASET_SESSIONS,
+            DATASET_TARGET_PHRASE,
+            DatasetEntry,
+            DatasetSubject,
+        )
+
+        data = request.get_json(silent=True) or {}
+        subject_code = data.get("subject_code", "").strip()
+        session_no   = int(data.get("session_no", 1))
+        repetition   = int(data.get("repetition", 1))
+        raw_events   = data.get("raw_events", [])
+
+        if not subject_code:
+            return jsonify({"success": False, "error": "subject_code is required"}), 400
+        if not raw_events:
+            return jsonify({"success": False, "error": "raw_events is required"}), 400
+
+        subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
+        if subject is None:
+            return jsonify({"success": False, "error": "Subject not found. Please register first."}), 404
+
+        # Process keystroke events into feature vectors
+        features = process_web_events(raw_events, username=f"dataset::{subject_code}")
+
+        entry = DatasetEntry(
+            subject_id=subject.id,
+            session_no=session_no,
+            repetition=repetition,
+            target_phrase=DATASET_TARGET_PHRASE,
+            total_duration=features.get("total_duration"),
+            typing_speed=features.get("typing_speed"),
+        )
+
+        # Store raw vectors
+        for vec_name in ("H", "DD", "UD", "UU", "DU"):
+            vec = features.get(f"{vec_name}_vector", [])
+            entry.set_vector(vec_name, vec)
+
+        # Store per-vector statistics
+        for vec_name in ("H", "DD", "UD", "UU", "DU"):
+            for stat in ("mean", "std", "min", "max", "cv"):
+                val = features.get(f"{vec_name}_{stat}")
+                if val is not None:
+                    setattr(entry, f"{vec_name}_{stat}", float(val))
+
+        db.session.add(entry)
+        db.session.commit()
+
+        # Determine next state
+        collected = subject.total_entries()
+        total     = DATASET_SESSIONS * DATASET_REPS_PER_SESSION
+        session_done = (repetition >= DATASET_REPS_PER_SESSION)
+        all_done     = (collected >= total)
+
+        next_session = session_no + 1 if session_done else session_no
+        next_rep     = 1 if session_done else repetition + 1
+
+        return jsonify({
+            "success": True,
+            "repetition": next_rep,
+            "session_no": next_session,
+            "session_done": session_done,
+            "all_done": all_done,
+            "progress": {
+                "collected": collected,
+                "total": total,
+            },
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] dataset_submit: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/dataset/status/<subject_code>", methods=["GET"])
+def dataset_status(subject_code):
+    """Return current progress for a subject.
+
+    Response JSON:
+        subject_code       str
+        total_entries      int
+        completed_sessions int
+        is_complete        bool
+        current_session    int  Next session to work on
+        current_rep        int  Next repetition within that session
+        total_sessions     int
+        reps_per_session   int
+        target_phrase      str
+    """
+    try:
+        from sqlalchemy import func
+
+        from app.models.dataset import (
+            DATASET_REPS_PER_SESSION,
+            DATASET_SESSIONS,
+            DATASET_TARGET_PHRASE,
+            DatasetEntry,
+            DatasetSubject,
+        )
+
+        subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
+        if subject is None:
+            return jsonify({"success": False, "error": "Subject not found"}), 404
+
+        # Work out where the respondent left off
+        last = (
+            DatasetEntry.query
+            .filter_by(subject_id=subject.id)
+            .order_by(DatasetEntry.session_no.desc(), DatasetEntry.repetition.desc())
+            .first()
+        )
+
+        if last is None:
+            current_session = 1
+            current_rep     = 1
+        elif last.repetition >= DATASET_REPS_PER_SESSION:
+            current_session = last.session_no + 1
+            current_rep     = 1
+        else:
+            current_session = last.session_no
+            current_rep     = last.repetition + 1
+
+        return jsonify({
+            "success": True,
+            "subject_code": subject.subject_code,
+            "total_entries": subject.total_entries(),
+            "completed_sessions": subject.completed_sessions(),
+            "is_complete": subject.is_complete(),
+            "current_session": current_session,
+            "current_rep": current_rep,
+            "total_sessions": DATASET_SESSIONS,
+            "reps_per_session": DATASET_REPS_PER_SESSION,
+            "target_phrase": DATASET_TARGET_PHRASE,
+        }), 200
+
+    except Exception as e:
+        print(f"[ERROR] dataset_status: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _parse_device_info(user_agent: str) -> str:
+    """Extract a concise device/browser label from a User-Agent string."""
+    ua = user_agent.lower()
+
+    # OS detection
+    if "android" in ua:
+        os_label = "Android"
+    elif "iphone" in ua or "ipad" in ua:
+        os_label = "iOS"
+    elif "windows" in ua:
+        os_label = "Windows"
+    elif "mac os" in ua or "macintosh" in ua:
+        os_label = "macOS"
+    elif "linux" in ua:
+        os_label = "Linux"
+    else:
+        os_label = "Unknown OS"
+
+    # Browser detection
+    if "edg/" in ua or "edge/" in ua:
+        browser = "Edge"
+    elif "opr/" in ua or "opera" in ua:
+        browser = "Opera"
+    elif "chrome/" in ua and "chromium" not in ua:
+        browser = "Chrome"
+    elif "firefox/" in ua:
+        browser = "Firefox"
+    elif "safari/" in ua and "chrome" not in ua:
+        browser = "Safari"
+    else:
+        browser = "Other"
+
+    return f"{browser}/{os_label}"
+
+
