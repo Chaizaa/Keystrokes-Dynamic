@@ -91,6 +91,9 @@ backup/
 tmp_register.html
 server.pid
 
+# Local admin scripts (contain secrets, never push)
+export_dataset.ps1
+
 #image
 *.png
 *.jpg
