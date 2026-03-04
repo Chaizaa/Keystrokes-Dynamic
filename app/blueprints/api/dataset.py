@@ -381,34 +381,6 @@ def dataset_submit():
         return jsonify({"success": False, "error": err_msg}), 500
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TEMP: admin delete-entries  ← REMOVE AFTER USE
-# ─────────────────────────────────────────────────────────────────────────────
-
-@api_bp.route("/dataset/admin/delete-entries", methods=["DELETE"])
-def dataset_admin_delete_entries():
-    """Temp admin endpoint — delete all entries for a subject. Remove after use."""
-    import hmac as _hmac
-    export_key = os.environ.get("EXPORT_KEY", "")
-    provided   = request.headers.get("X-Export-Key", "") or request.args.get("key", "")
-    if not export_key or not _hmac.compare_digest(provided, export_key):
-        return jsonify({"error": "Unauthorized"}), 401
-
-    subject_code = request.args.get("subject_code", "").strip()
-    if not re.fullmatch(r"s\d{3,6}", subject_code):
-        return jsonify({"error": "subject_code tidak valid"}), 400
-
-    from app.models.dataset import DatasetEntry, DatasetSubject
-    subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
-    if subject is None:
-        return jsonify({"error": "Subjek tidak ditemukan"}), 404
-
-    deleted = DatasetEntry.query.filter_by(subject_id=subject.id).delete()
-    db.session.commit()
-    logger.warning("ADMIN_DELETE_ENTRIES subject=%s deleted=%d ip=%s", subject_code, deleted, request.remote_addr)
-    return jsonify({"success": True, "subject_code": subject_code, "deleted": deleted}), 200
-
-
 @api_bp.route("/dataset/status/<subject_code>", methods=["GET"])
 @limiter.limit("60 per minute")
 def dataset_status(subject_code):
