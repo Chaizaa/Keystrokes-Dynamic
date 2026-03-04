@@ -19,7 +19,7 @@ print("\n" + "=" * 70)
 print("1️⃣ MISSING VALUES CHECK")
 print("=" * 70)
 
-critical_fields = ["username", "H_vector", "DD_vector", "data_type"]
+critical_fields = ["username", "H_vector", "DD_vector", "event_type"]
 missing_count = {field: 0 for field in critical_fields}
 
 for row in data:
@@ -158,8 +158,8 @@ user_samples = Counter([row["username"] for row in data])
 complete_users = []
 for username, total in user_samples.items():
     user_data = [r for r in data if r["username"] == username]
-    enroll = sum(1 for r in user_data if r.get("data_type") == "enrollment")
-    login = sum(1 for r in user_data if r.get("data_type") == "login")
+    enroll = sum(1 for r in user_data if r.get("event_type") == "enrollment")
+    login = sum(1 for r in user_data if r.get("event_type") == "login")
     if enroll >= 10 and login >= 10:
         complete_users.append((username, enroll, login))
 

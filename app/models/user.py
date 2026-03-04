@@ -3,6 +3,7 @@ User Model - User accounts with password management
 """
 
 from datetime import datetime, timezone
+import hashlib
 
 from flask_login import UserMixin
 from sqlalchemy import select, func, event as _sa_event
@@ -73,16 +74,24 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         """
-        Set user password (hashed with bcrypt)
+        Set user password (hashed with scrypt - modern algorithm)
 
         Args:
             password: Plain text password
+            
+        Note:
+            New passwords use scrypt algorithm.
+            Existing SHA-256 hashes from CSV are still supported for verification.
         """
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         """
         Verify password against hash
+        
+        Supports multiple hash formats:
+        - Scrypt (new): "scrypt:32768:8:1$..."
+        - SHA-256 (legacy from CSV): "5e884898da28047151d0e56f8dc629..." (64 hex chars)
 
         Args:
             password: Plain text password to verify
@@ -90,9 +99,20 @@ class User(UserMixin, db.Model):
         Returns:
             bool: True if password matches
         """
-        if self.password_hash:
+        if not self.password_hash:
+            return False
+        
+        # Detect hash format
+        if self.password_hash.startswith('scrypt:'):
+            # Modern scrypt format - use werkzeug
             return check_password_hash(self.password_hash, password)
-        return False
+        elif len(self.password_hash) == 64 and all(c in '0123456789abcdef' for c in self.password_hash):
+            # Legacy SHA-256 format (from CSV)
+            sha256_hash = hashlib.sha256(password.encode()).hexdigest()
+            return sha256_hash == self.password_hash
+        else:
+            # Unknown format - return False
+            return False
 
     def get_enrollment_count(self) -> int:
         """
@@ -107,7 +127,7 @@ class User(UserMixin, db.Model):
             count = db.session.execute(
                 select(func.count()).select_from(UsersVector).where(
                     UsersVector.username == self.username,
-                    UsersVector.data_type == "enrollment",
+                    UsersVector.event_type == "enrollment",
                 )
             ).scalar_one()
             return int(count)
@@ -127,7 +147,7 @@ class User(UserMixin, db.Model):
             rows = db.session.execute(
                 select(UsersVector).where(
                     UsersVector.username == self.username,
-                    UsersVector.data_type == "enrollment",
+                    UsersVector.event_type == "enrollment",
                 ).order_by(UsersVector.id.desc())
             ).scalars().all()
             return [r.to_dict() for r in rows]

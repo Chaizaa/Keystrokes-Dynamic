@@ -161,7 +161,7 @@ def register_sample():
 
         features = result["features"]
         features["username"] = username
-        features["data_type"] = "enrollment"
+        features["event_type"] = "enrollment"
 
         quality = assess_sample_quality(features)
         features["quality_label"] = quality["quality_label"]
@@ -276,7 +276,7 @@ def register_sample():
 
             if uid is not None:
                 features["user_id"] = int(uid)
-                ev = EnrollmentVector(username=username, data_type="enrollment")
+                ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
                 ev.timestamp = datetime.now(timezone.utc).isoformat()
                 ev.total_duration = features.get("total_duration")
                 ev.typing_speed = features.get("typing_speed")

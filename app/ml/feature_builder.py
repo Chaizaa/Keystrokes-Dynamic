@@ -25,15 +25,31 @@ def _stats(vec: np.ndarray) -> List[float]:
     # 7 statistik per vector: mean, std, min, max, median, skew, kurtosis
     if vec.size == 0:
         return [0.0] * 7
-    return [
-        float(np.mean(vec)),
-        float(np.std(vec)),
-        float(np.min(vec)),
-        float(np.max(vec)),
-        float(np.median(vec)),
-        float(skew(vec)) if vec.size > 2 else 0.0,
-        float(kurtosis(vec)) if vec.size > 3 else 0.0,
-    ]
+    
+    try:
+        mean_val = float(np.mean(vec))
+        std_val = float(np.std(vec))
+        min_val = float(np.min(vec))
+        max_val = float(np.max(vec))
+        median_val = float(np.median(vec))
+        
+        skew_val = 0.0
+        if vec.size > 2:
+            try:
+                skew_val = float(skew(vec, bias=False))
+            except:
+                skew_val = 0.0
+        
+        kurt_val = 0.0
+        if vec.size > 3:
+            try:
+                kurt_val = float(kurtosis(vec, bias=False))
+            except:
+                kurt_val = 0.0
+        
+        return [mean_val, std_val, min_val, max_val, median_val, skew_val, kurt_val]
+    except Exception as e:
+        return [0.0] * 7
 
 
 def build_feature_vector(sample: Dict[str, Any]) -> List[float]:

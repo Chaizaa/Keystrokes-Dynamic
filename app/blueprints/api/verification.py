@@ -335,12 +335,10 @@ def reset_password_public():
             if uid is not None:
                 features["user_id"] = int(uid)
 
-            ev = EnrollmentVector(username=username, data_type="enrollment")
+            ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
             ev.timestamp = datetime.now(timezone.utc).isoformat()
             ev.total_duration = features.get("total_duration")
             ev.typing_speed = features.get("typing_speed")
-            if uid is not None:
-                ev.user_id = int(uid)
 
             # Raw timing vectors
             for vec_name in ("H", "DD", "UD", "UU", "DU"):

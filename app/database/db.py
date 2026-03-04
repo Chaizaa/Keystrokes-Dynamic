@@ -108,8 +108,7 @@ class Database:
             if user_id:
                 # Create an EnrollmentVector for enrollment data
                 if (
-                    data_dict.get("data_type") == "enrollment"
-                    or data_dict.get("event_type") == "enrollment"
+                    data_dict.get("event_type") == "enrollment"
                     or data_dict.get("event_type") is None
                 ):
                     ev = EnrollmentVector(
@@ -121,8 +120,7 @@ class Database:
                     ev = FeatureVector(
                         user_id=user_id,
                         username=data_dict.get("username"),
-                        event_type=data_dict.get("event_type")
-                        or data_dict.get("data_type", "enrollment"),
+                        event_type=data_dict.get("event_type"),
                     )
 
                 # Map common fields
@@ -250,7 +248,7 @@ class Database:
                     CREATE TABLE {table_name} (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         username TEXT,
-                        data_type TEXT,
+                        event_type TEXT,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         password TEXT,
                         H_vector TEXT,
@@ -466,7 +464,7 @@ class Database:
             # Fallback to user_vectors (old table)
             try:
                 cursor.execute(
-                    "SELECT * FROM user_vectors WHERE username = ? AND data_type = 'enrollment' ORDER BY id DESC",
+                    "SELECT * FROM user_vectors WHERE username = ? AND event_type = 'enrollment' ORDER BY id DESC",
                     (username,),
                 )
                 rows = cursor.fetchall()
@@ -499,10 +497,10 @@ class Database:
         cursor = conn.cursor()
         try:
             for table, condition in [
+                ("users_vectors", "username = ?"),  # PRIMARY: new canonical table
                 ("enrollment_vectors", "username = ?"),
-                ("user_vectors", "username = ? AND data_type = 'enrollment'"),
-                ("users_vectors", "username = ?"),
-                ("feature_vectors", "username = ? AND event_type = 'enrollment'"),
+                ("user_vectors", "username = ? AND event_type = 'enrollment'"),
+                ("feature_vectors", "username = ? AND event_type = 'enrollment'"),  # deprecated
             ]:
                 try:
                     cursor.execute(f"DELETE FROM {table} WHERE {condition}", (username,))
@@ -529,26 +527,26 @@ class Database:
     def get_enrollment_count(self, username):
         """
         Get jumlah enrollment samples untuk user
-        Supports multiple schema versions:
-          - feature_vectors (new): uses user_id and event_type
+        Supports multiple schema versions (tries in order):
+          - users_vectors (PRIMARY - new canonical table)
           - enrollment_vectors (older)
-          - user_vectors (legacy): uses data_type
+          - user_vectors (legacy)
+          - feature_vectors (deprecated fallback)
         """
-        # Prefer SQLAlchemy EnrollmentVector if available (canonical)
+        # Prefer SQLAlchemy UsersVector if available
         try:
-            from app.models import EnrollmentVector
+            from app.models import UsersVector
             from app.models import db as sqlalchemy_db
 
             try:
                 count = sqlalchemy_db.session.execute(
                     sqlalchemy_db.select(sqlalchemy_db.func.count())
-                    .select_from(EnrollmentVector)
-                    .where(EnrollmentVector.username == username)
+                    .select_from(UsersVector)
+                    .where((UsersVector.username == username) & (UsersVector.event_type == 'enrollment'))
                 ).scalar_one()
-                print(f"[DB] Enrollment count from EnrollmentVector: {count}")
+                print(f"[DB] Enrollment count from UsersVector: {count}")
                 return int(count)
             except Exception:
-                # If SQLAlchemy access fails, continue to file DB fallbacks
                 pass
         except Exception:
             pass
@@ -556,67 +554,63 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         try:
-            # First try feature_vectors (new schema) using user_id
-            try:
-                # Get user id
-                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-                row = cursor.fetchone()
-                user_id = row[0] if row else None
-                if user_id is not None:
-                    try:
-                        cursor.execute(
-                            "SELECT COUNT(*) FROM feature_vectors WHERE user_id = ? AND event_type = 'enrollment'",
-                            (user_id,),
-                        )
-                        count = cursor.fetchone()[0]
-                        if count > 0:
-                            print(f"[DB] Enrollment count from feature_vectors: {count}")
-                            return count
-                    except sqlite3.OperationalError:
-                        # feature_vectors might not exist or columns differ
-                        pass
-            except sqlite3.OperationalError:
-                # users table missing or other issue - continue to next fallback
-                pass
-
-            # Try new table first (enrollment_vectors)
+            # PRIMARY: Try users_vectors (new canonical table)
             try:
                 cursor.execute(
-                    """
-                    SELECT COUNT(*) FROM enrollment_vectors
-                    WHERE username = ?
-                """,
+                    "SELECT COUNT(*) FROM users_vectors WHERE username = ? AND event_type = 'enrollment'",
                     (username,),
                 )
                 count = cursor.fetchone()[0]
+                if count > 0:
+                    print(f"[DB] Enrollment count from users_vectors: {count}")
+                    return count
+            except sqlite3.OperationalError:
+                pass
 
+            # Try enrollment_vectors
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM enrollment_vectors WHERE username = ?",
+                    (username,),
+                )
+                count = cursor.fetchone()[0]
                 if count > 0:
                     print(f"[DB] Enrollment count from enrollment_vectors: {count}")
                     return count
             except sqlite3.OperationalError:
-                # Table doesn't exist, fallback to old table
                 pass
 
             # Fallback to old table (user_vectors)
             try:
                 cursor.execute(
-                    """
-                    SELECT COUNT(*) FROM user_vectors
-                    WHERE username = ? AND data_type = 'enrollment'
-                """,
+                    "SELECT COUNT(*) FROM user_vectors WHERE username = ? AND event_type = 'enrollment'",
                     (username,),
                 )
                 count = cursor.fetchone()[0]
-                print(f"[DB] Enrollment count from user_vectors: {count}")
-                return count
+                if count > 0:
+                    print(f"[DB] Enrollment count from user_vectors: {count}")
+                    return count
             except sqlite3.OperationalError:
-                # No suitable table found
-                return 0
+                pass
+
+            # Deprecated: Try feature_vectors as last fallback
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM feature_vectors WHERE username = ? AND event_type = 'enrollment'",
+                    (username,),
+                )
+                count = cursor.fetchone()[0]
+                if count > 0:
+                    print(f"[DB] Enrollment count from feature_vectors: {count}")
+                    return count
+            except sqlite3.OperationalError:
+                pass
+
+            return 0
 
         except Exception as e:
             print(f"[DB ERROR] Get Enrollment Count: {e}")
             import traceback
-
             traceback.print_exc()
             return 0
         finally:
@@ -911,7 +905,7 @@ class Database:
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM user_vectors
-                    WHERE username = ? AND data_type = 'login'
+                    WHERE username = ? AND event_type = 'login'
                 """,
                     (username,),
                 )
