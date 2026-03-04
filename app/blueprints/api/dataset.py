@@ -12,6 +12,7 @@ GET  /api/dataset/export             — download full dataset as CSV or JSON (p
 import csv
 import hmac
 import io
+import logging
 import os
 import re
 import traceback
@@ -25,6 +26,8 @@ from app.utils.keystroke_processor import process_web_events
 
 from ._shared import api_bp
 
+logger = logging.getLogger(__name__)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Export
@@ -36,22 +39,43 @@ def dataset_export():
     """
     Download the full collected dataset.
 
+    Authentication
+    --------------
+    Preferred : HTTP header  X-Export-Key: <key>
+    Fallback  : query param  ?key=<key>  (deprecated — key ends up in server logs)
+
     Query params
     ------------
-    key     : (required) must match EXPORT_KEY env var
     format  : "csv" (default) | "json"
 
     Examples
     --------
-    /api/dataset/export?key=mysecret
-    /api/dataset/export?key=mysecret&format=json
+    curl -H "X-Export-Key: mysecret" /api/dataset/export
+    curl -H "X-Export-Key: mysecret" /api/dataset/export?format=json
     """
     export_key = os.environ.get("EXPORT_KEY", "")
-    provided   = request.args.get("key", "")
+
+    # Prefer header (key never appears in server logs or browser history).
+    # Fall back to query param for backward-compat but log a deprecation warning.
+    provided_header = request.headers.get("X-Export-Key", "")
+    provided_query  = request.args.get("key", "")
+    if provided_header:
+        provided = provided_header
+    elif provided_query:
+        logger.warning(
+            "EXPORT_KEY sent via query param (deprecated, use X-Export-Key header). ip=%s",
+            request.remote_addr,
+        )
+        provided = provided_query
+    else:
+        provided = ""
+
     # hmac.compare_digest prevents timing-based brute-force of the key.
     if not export_key or not hmac.compare_digest(provided, export_key):
+        logger.warning("EXPORT_UNAUTHORIZED ip=%s", request.remote_addr)
         return jsonify({"error": "Unauthorized"}), 401
 
+    logger.info("EXPORT_START format=%s ip=%s", request.args.get("format", "csv"), request.remote_addr)
     from app.models.dataset import DatasetEntry, DatasetSubject
 
     rows = (
@@ -226,6 +250,10 @@ def dataset_register():
         db.session.add(subject)
         db.session.commit()
 
+        logger.info(
+            "REGISTER subject=%s device=%s ip=%s",
+            subject.subject_code, device_info, request.remote_addr,
+        )
         return jsonify({
             "success":       True,
             "subject_code": subject.subject_code,
@@ -297,6 +325,10 @@ def dataset_submit():
         # Verify password hash
         reconstructed = result.get("real_password_string", "")
         if subject.password_hash and not check_password_hash(subject.password_hash, reconstructed):
+            logger.warning(
+                "SUBMIT_WRONG_PW subject=%s rep=%d ip=%s",
+                subject_code, global_rep, request.remote_addr,
+            )
             return jsonify({
                 "success": False,
                 "error": "Kata sandi tidak sesuai dengan yang didaftarkan. Ketik ulang kata sandi yang sama.",
@@ -326,6 +358,13 @@ def dataset_submit():
 
         collected = subject.total_entries()
         all_done  = (collected >= DATASET_TOTAL_SAMPLES)
+
+        logger.info(
+            "SUBMIT_OK subject=%s rep=%d collected=%d/%d ip=%s",
+            subject_code, global_rep, collected, DATASET_TOTAL_SAMPLES, request.remote_addr,
+        )
+        if all_done:
+            logger.info("COLLECT_COMPLETE subject=%s ip=%s", subject_code, request.remote_addr)
 
         return jsonify({
             "success":       True,

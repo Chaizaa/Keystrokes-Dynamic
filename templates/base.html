@@ -11,8 +11,7 @@
 <body>
     {% block body %}{% endblock %}
     {% block extra_js %}{% endblock %}
-    <script>
-        // Global CSRF token configuration for fetch API
+    <script nonce="{{ csp_nonce() }}">
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         
         // Override fetch to automatically include CSRF token
@@ -44,7 +43,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce() }}">
     (function(){
         const modal = document.getElementById('confirmModal');
         const titleEl = document.getElementById('confirmModalTitle');
