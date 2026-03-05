@@ -22,7 +22,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import limiter
 from app.models import db
-from app.utils.keystroke_processor import process_web_events
 
 from ._shared import api_bp
 
@@ -318,7 +317,9 @@ def dataset_submit():
         global_rep = collected_so_far + 1
 
         # Process keystroke events
-        result = process_web_events(raw_events, username=f"dataset::{subject_code}")
+        import app.blueprints.api as api_mod
+
+        result = api_mod.process_web_events(raw_events, username=f"dataset::{subject_code}")
         if result["status"] != "success":
             return jsonify({"success": False, "error": result.get("msg", "Gagal memproses data ketikan.")}), 400
 

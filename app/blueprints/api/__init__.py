@@ -11,7 +11,16 @@ Usage (in app/__init__.py)::
     app.register_blueprint(api_blueprint, url_prefix="/api")
 """
 
-from ._shared import api_bp  # noqa: F401 – re-exported for app/__init__.py
+# Re-export shared instances for app wiring and for tests that import them.
+from app.utils.keystroke_processor import process_web_events  # noqa: F401
+from app.utils.keystroke_processor import assess_sample_quality  # noqa: F401
+
+from ._shared import (  # noqa: F401
+    api_bp,
+    auth_service,
+    biometric_service,
+    db_manager,
+)
 
 # Import order is irrelevant; all modules decorate the same api_bp object.
 from . import enrollment  # noqa: F401
