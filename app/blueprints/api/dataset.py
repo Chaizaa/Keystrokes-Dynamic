@@ -17,7 +17,7 @@ import os
 import re
 import traceback
 
-from flask import Response, current_app, jsonify, request
+from flask import Response, current_app, jsonify, request, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import limiter
@@ -27,6 +27,37 @@ from app.utils.keystroke_processor import process_web_events
 from ._shared import api_bp
 
 logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEMP: download raw DB file  ← REMOVE AFTER USE
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_bp.route("/dataset/admin/download-db", methods=["GET"])
+def dataset_admin_download_db():
+    """Temp admin endpoint — download raw SQLite DB. Remove after use."""
+    export_key = os.environ.get("EXPORT_KEY", "")
+    provided   = request.headers.get("X-Export-Key", "") or request.args.get("key", "")
+    if not export_key or not hmac.compare_digest(provided, export_key):
+        logger.warning("DOWNLOAD_DB_UNAUTHORIZED ip=%s", request.remote_addr)
+        return jsonify({"error": "Unauthorized"}), 401
+
+    import sys
+    basedir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    db_path = os.environ.get("DATABASE_PATH", "data/biometric_auth.db")
+    if not os.path.isabs(db_path):
+        db_path = os.path.join(basedir, db_path)
+
+    if not os.path.exists(db_path):
+        return jsonify({"error": f"DB not found at {db_path}"}), 404
+
+    logger.warning("DOWNLOAD_DB ip=%s path=%s", request.remote_addr, db_path)
+    return send_file(
+        db_path,
+        as_attachment=True,
+        download_name="biometric_auth.db",
+        mimetype="application/octet-stream",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
