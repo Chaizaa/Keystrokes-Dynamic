@@ -12,16 +12,180 @@ import json
 import traceback
 from datetime import datetime, timezone
 
+import numpy as _np
 from flask import current_app, jsonify, request, session
 from flask_login import login_required, logout_user
 from sqlalchemy import select
 
 from app import limiter as _limiter
 from app.models import AdminAudit, EnrollmentVector, KeystrokeVector, User, db
-from app.services.ml_biometric_service import MLBiometricService
 from app.utils.keystroke_processor import process_web_events
 
 from ._shared import api_bp, auth_service, biometric_service, db_manager
+
+
+# ---------------------------------------------------------------------------
+# Internal helper
+# ---------------------------------------------------------------------------
+
+def _fetch_enrollment_templates(username: str) -> list:
+    """Return parsed enrollment templates from SQLAlchemy models.
+
+    Tries EnrollmentVector first, then KeystrokeVector as fallback.
+    Each template dict contains at minimum ``H_vector`` and ``DD_vector``.
+    """
+
+    def _parse(row) -> dict:
+        t: dict = {}
+        for key in ("H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"):
+            val = getattr(row, key, None)
+            if val:
+                try:
+                    t[key] = json.loads(val)
+                except Exception:
+                    try:
+                        t[key] = eval(val)  # noqa: S307
+                    except Exception:
+                        t[key] = []
+            else:
+                t[key] = []
+        # Carry the SHA-256 password hash for Verifier's hash pre-check
+        ph = getattr(row, "password_hash", None)
+        if ph:
+            t["password_hash"] = ph
+        return t
+
+    templates: list = []
+
+    try:
+        rows = db.session.execute(
+            select(EnrollmentVector).where(EnrollmentVector.username == username)
+        ).scalars().all()
+        templates = [_parse(r) for r in rows]
+    except Exception:
+        templates = []
+
+    if not templates:
+        try:
+            rows = db.session.execute(
+                select(KeystrokeVector).where(
+                    KeystrokeVector.username == username,
+                    (KeystrokeVector.event_type == "enrollment")
+                    | (KeystrokeVector.data_type == "enrollment"),
+                )
+            ).scalars().all()
+            templates = [_parse(r) for r in rows]
+        except Exception:
+            templates = []
+
+    return templates
+
+
+# ---------------------------------------------------------------------------
+# Biometric verification using all 5 timing vectors via Verifier
+# ---------------------------------------------------------------------------
+
+def _verify_biometric(username: str, login_sample: dict, templates: list) -> dict:
+    """Verify identity using Verifier.extract_statistical_features on all 5 vectors.
+
+    Produces a 35-feature vector (7 stats × 5 timing vectors: H, DD, UD, UU, DU)
+    for both the login sample and every enrollment template, then measures the
+    Euclidean distance of the login vector to the mean enrollment profile.
+
+    Threshold is adaptive: mean intra-class distance + 2σ (covers ~95% of genuine
+    users without hard-coding a constant).
+    """
+    from verifier import Verifier as _Verifier
+
+    min_needed = biometric_service.MIN_SAMPLES_FOR_VERIFICATION
+    if not templates or len(templates) < min_needed:
+        return {
+            "success": False,
+            "verified": False,
+            "score": 0.0,
+            "reason": "insufficient_samples",
+            "message": f"Need at least {min_needed} enrollment samples",
+        }
+
+    verifier = _Verifier()
+
+    # 35-feature statistical vectors from enrollment templates
+    enrollment_vecs = []
+    for t in templates:
+        try:
+            fv = verifier.extract_statistical_features(t)
+            if fv is not None and len(fv) == 35:
+                # Replace NaN (e.g. skew/kurtosis of constant vectors) with 0
+                fv = _np.where(_np.isnan(fv), 0.0, fv)
+                enrollment_vecs.append(fv)
+        except Exception:
+            continue
+
+    if len(enrollment_vecs) < min_needed:
+        return {
+            "success": False,
+            "verified": False,
+            "score": 0.0,
+            "reason": "insufficient_valid_templates",
+            "message": "Insufficient valid enrollment templates after feature extraction",
+        }
+
+    # 35-feature statistical vector from login sample
+    try:
+        login_vec = verifier.extract_statistical_features(login_sample)
+    except Exception as e:
+        print(f"[ERROR] _verify_biometric feature extraction: {e}")
+        return {"success": False, "verified": False, "score": 0.0,
+                "reason": "feature_extraction_failed"}
+
+    if login_vec is None or len(login_vec) != 35:
+        return {"success": False, "verified": False, "score": 0.0,
+                "reason": "invalid_login_features"}
+    # Replace NaN in login vector too
+    login_vec = _np.where(_np.isnan(login_vec), 0.0, login_vec)
+
+    Y_train = _np.array(enrollment_vecs, dtype=float)
+    mean_vec = _np.mean(Y_train, axis=0)
+
+    # Adaptive threshold: mean intra-class distance + 2 standard deviations
+    intra_dists = [float(_np.linalg.norm(row - mean_vec)) for row in Y_train]
+    mean_intra = float(_np.mean(intra_dists))
+    std_intra = float(_np.std(intra_dists))
+    threshold_dist = mean_intra + 2.0 * std_intra
+
+    login_dist = float(_np.linalg.norm(login_vec - mean_vec))
+
+    # Normalised score: higher = more similar to enrollment profile
+    score = float(1.0 / (1.0 + login_dist))
+    is_genuine = login_dist <= threshold_dist
+
+    confidence_label = (
+        "high" if login_dist <= mean_intra
+        else "medium" if login_dist <= mean_intra + std_intra
+        else "low" if is_genuine
+        else "failed"
+    )
+
+    print(
+        f"[BIOMETRIC] {username} | dist={login_dist:.4f} | "
+        f"threshold={threshold_dist:.4f} (mean={mean_intra:.4f} std={std_intra:.4f}) | "
+        f"score={score:.4f} | {'PASS' if is_genuine else 'FAIL'}"
+    )
+
+    return {
+        "success": True,
+        "verified": is_genuine,
+        "score": round(score, 4),
+        "distance": round(login_dist, 4),
+        "threshold_dist": round(threshold_dist, 4),
+        "confidence": confidence_label,
+        "templates_used": len(enrollment_vecs),
+        "message": (
+            "Biometric verification successful"
+            if is_genuine
+            else "Biometric verification failed"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -160,46 +324,12 @@ def login():
             return jsonify({"success": False, "message": "User not registered",
                             "reason": "no_enrollment"}), 404
 
-        # ML-based biometric verification
-        if enrollment_status.get("ready_for_login"):
-            try:
-                db_path = current_app.config.get("DATABASE_PATH")
-                ml_service = MLBiometricService(db_path)
-
-                ml_result = ml_service.verify(
-                    username=username,
-                    sample=features,
-                )
-
-                verification_result = {
-                    "success": True,
-                    "verified": bool(ml_result.get("verified", False)),
-                    "score": float(ml_result.get("score", 0.0)),
-                    "confidence": ml_result.get("confidence"),
-                    "method": "random_forest",
-                    "templates_used": ml_result.get("samples_used", enrollment_count),
-                }
-
-            except Exception as e:
-                print(f"[ML VERIFY ERROR] {e}")
-                verification_result = {
-                    "success": False,
-                    "verified": False,
-                    "score": 0.0,
-                    "error": "ml_verification_error",
-                }
-        else:
-            verification_result = {
-                "success": False,
-                "verified": False,
-                "score": 0.0,
-                "error": "insufficient_enrollment",
-                "reason": "insufficient_enrollment",
-            }
-
+        # Biometric verification using all 5 timing vectors (H, DD, UD, UU, DU)
+        templates = _fetch_enrollment_templates(username)
+        verification_result = _verify_biometric(username, features, templates)
         print(f"[LOGIN] {username} biometric => verified={verification_result.get('verified')} "
               f"score={verification_result.get('score')} "
-              f"method={verification_result.get('method', 'unknown')}")
+              f"templates={verification_result.get('templates_used')}")
 
         if not verification_result.get("verified"):
             conf_score = float(verification_result.get("score", 0.0))
@@ -362,7 +492,7 @@ def verify_user():
             "username": username,
             "login_result": str(verification_result["verified"]),
             "login_score": verification_result["score"],
-            "event_type": "verification",
+            "data_type": "verification",
         })
         db_manager.save_data(new_features)
 
