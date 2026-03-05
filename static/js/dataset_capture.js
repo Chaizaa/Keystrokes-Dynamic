@@ -13,6 +13,7 @@
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 let subjectCode        = null;
+let sessionToken       = null;  // HMAC session token — wajib di-attach pada setiap /submit
 let collectedSamples   = 0;
 let totalSamples       = 0;
 let registeredPassword = null;  // kata sandi yang dipilih subjek saat registrasi
@@ -142,6 +143,7 @@ async function registerSubject() {
         }
 
         subjectCode        = data.subject_code;
+        sessionToken       = data.session_token || null;
         collectedSamples   = data.collected;
         totalSamples       = data.total_samples;
         registeredPassword = pwVal;
@@ -180,6 +182,7 @@ async function resumeSession() {
         }
 
         subjectCode      = data.subject_code;
+        sessionToken     = data.session_token || null;
         collectedSamples = data.collected;
         totalSamples     = data.total_samples;
         // registeredPassword stays null on resume — backend hash check handles consistency
@@ -330,7 +333,10 @@ async function submitSample() {
     try {
         const res  = await fetch("/api/dataset/submit", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type":    "application/json",
+                ...(sessionToken ? { "X-Session-Token": sessionToken } : {}),
+            },
             // session_no and repetition are computed server-side — not sent
             body: JSON.stringify({
                 subject_code: subjectCode,

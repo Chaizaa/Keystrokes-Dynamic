@@ -30,6 +30,24 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Session token
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_session_token(subject_code: str) -> str:
+    """Stateless per-subject HMAC token.
+
+    Deterministic: HMAC-SHA256(subject_code, SECRET_KEY).
+    Returned from /register and /status so the JS client can store it and
+    include it as ``X-Session-Token`` on every /submit call.
+
+    This prevents unauthorized agents from submitting data to arbitrary
+    subject codes even if they know (or enumerate) a valid subject_code.
+    """
+    secret = current_app.config.get("SECRET_KEY", "dev-secret").encode()
+    return hmac.new(secret, subject_code.encode(), "sha256").hexdigest()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TEMP: download raw DB file  ← REMOVE AFTER USE
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -287,10 +305,11 @@ def dataset_register():
         )
         return jsonify({
             "success":       True,
-            "subject_code": subject.subject_code,
-            "subject_id":   subject.id,
-            "collected":    0,
+            "subject_code":  subject.subject_code,
+            "subject_id":    subject.id,
+            "collected":     0,
             "total_samples": DATASET_TOTAL_SAMPLES,
+            "session_token": _make_session_token(subject.subject_code),
         }), 201
 
     except Exception as e:
@@ -336,6 +355,20 @@ def dataset_submit():
             return jsonify({"success": False, "error": "raw_events wajib disertakan."}), 400
         if not isinstance(raw_events, list) or len(raw_events) > 500:
             return jsonify({"success": False, "error": "Format raw_events tidak valid."}), 400
+
+        # Verify session token — prevents unauthorized agents from submitting
+        # to arbitrary subject codes. Token is HMAC-SHA256(subject_code, SECRET_KEY).
+        provided_token = request.headers.get("X-Session-Token", "")
+        expected_token = _make_session_token(subject_code)
+        if not provided_token or not hmac.compare_digest(provided_token, expected_token):
+            logger.warning(
+                "SUBMIT_INVALID_TOKEN subject=%s ip=%s",
+                subject_code, request.remote_addr,
+            )
+            return jsonify({
+                "success": False,
+                "error":   "Token sesi tidak valid. Muat ulang halaman dan mulai sesi baru.",
+            }), 401
 
         subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
         if subject is None:
@@ -442,11 +475,12 @@ def dataset_status(subject_code):
 
         return jsonify({
             "success":       True,
-            "subject_code": subject.subject_code,
+            "subject_code":  subject.subject_code,
             "total_entries": collected,
             "is_complete":   subject.is_complete(),
             "collected":     collected,
             "total_samples": DATASET_TOTAL_SAMPLES,
+            "session_token": _make_session_token(subject.subject_code),
         }), 200
 
     except Exception as e:
