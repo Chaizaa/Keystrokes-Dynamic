@@ -201,9 +201,29 @@ def create_app(config_name="development"):
     # Exempt admin API from CSRF (for AJAX requests)
     csrf.exempt(admin_bp)
 
-    # Create database tables
-    with app.app_context():
-        db.create_all()
+    # Create database tables (guarded so migrations/stamping can run cleanly).
+    # When running `flask db ...`, pre-creating tables can break migrations.
+    import sys as _sys
+    _argv = " ".join(_sys.argv).lower()
+    _running_db_cli = (" db " in f" {_argv} ") and any(
+        cmd in _argv
+        for cmd in (
+            "upgrade",
+            "downgrade",
+            "revision",
+            "migrate",
+            "merge",
+            "stamp",
+            "heads",
+            "history",
+            "current",
+            "show",
+        )
+    )
+
+    if not (app.config.get("SKIP_CREATE_ALL", False) or _running_db_cli):
+        with app.app_context():
+            db.create_all()
 
     # -------------------------------------------------------------------------
     # Public-mode lockdown

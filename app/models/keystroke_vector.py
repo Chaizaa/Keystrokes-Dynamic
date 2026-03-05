@@ -7,11 +7,15 @@ UsersVector Model - Unified biometric keystroke storage for both register and lo
 Schema mirrors biometric_system.db reference exactly.
 """
 
+from __future__ import annotations
+
+from datetime import datetime, timezone
 import json
 
-from sqlalchemy import Index
+from sqlalchemy import Index, event, select
 
 from . import db
+from .user import User
 
 
 class UsersVector(db.Model):
@@ -47,9 +51,20 @@ class UsersVector(db.Model):
     )
 
     # --- Identity ---
-    username      = db.Column(db.Text, nullable=True, index=True)
-    timestamp     = db.Column(db.Text, nullable=True)
+    username = db.Column(db.Text, nullable=True, index=True)
+    # Keep TEXT to match existing DBs; ensure it is never NULL.
+    timestamp = db.Column(
+        db.Text,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).isoformat(),
+        index=True,
+    )
     password_hash = db.Column(db.Text, nullable=True)
+
+    # --- Legacy compatibility ---
+    # Older code/tests used `is_successful` and `data_type`.
+    is_successful = db.Column(db.Boolean, nullable=False, default=True)
+    data_type = db.Column(db.Text, nullable=True, index=True)
 
     # --- Aggregate timing ---
     total_duration = db.Column(db.Float, nullable=True)
@@ -103,9 +118,94 @@ class UsersVector(db.Model):
     # DEPRECATED: data_type kept for backward compatibility, but always read from event_type
     # data_type = db.Column(db.Text, nullable=True, index=True)  # DEPRECATED - use event_type instead
 
+    def __init__(self, **kwargs):
+        """Constructor with backward-compatible kwarg aliases.
+
+        Many older scripts/tests used lowercase vector kwargs like `h_vector`.
+        The canonical columns are `H_vector`, `DD_vector`, etc.
+        """
+        # Map legacy kwarg names -> canonical column names
+        legacy_map = {
+            "h_vector": "H_vector",
+            "dd_vector": "DD_vector",
+            "ud_vector": "UD_vector",
+            "uu_vector": "UU_vector",
+            "du_vector": "DU_vector",
+        }
+        for old, new in legacy_map.items():
+            if old in kwargs and new not in kwargs:
+                kwargs[new] = kwargs.pop(old)
+
+        # Keep event_type and data_type in sync (best-effort)
+        if "event_type" not in kwargs and "data_type" in kwargs:
+            kwargs["event_type"] = kwargs.get("data_type")
+        if "data_type" not in kwargs and "event_type" in kwargs:
+            kwargs["data_type"] = kwargs.get("event_type")
+
+        super().__init__(**kwargs)
+
     def __repr__(self):
-        event = self.event_type or self.event_type or 'unknown'
+        event = self.event_type or self.data_type or "unknown"
         return f"<UsersVector {self.username!r} [{event}] @ {self.timestamp}>"
+
+    # ---------------------------------------------------------------------
+    # Convenience accessors expected by some tests / legacy callers
+    # ---------------------------------------------------------------------
+
+    def get_H_vector(self) -> list:
+        return self.get_vector("H")
+
+    def get_DD_vector(self) -> list:
+        return self.get_vector("DD")
+
+    def get_UD_vector(self) -> list:
+        return self.get_vector("UD")
+
+    def get_UU_vector(self) -> list:
+        return self.get_vector("UU")
+
+    def get_DU_vector(self) -> list:
+        return self.get_vector("DU")
+
+    @property
+    def h_vector(self) -> list:
+        return self.get_H_vector()
+
+    @h_vector.setter
+    def h_vector(self, values) -> None:
+        self.set_vector("H", values)
+
+    @property
+    def dd_vector(self) -> list:
+        return self.get_DD_vector()
+
+    @dd_vector.setter
+    def dd_vector(self, values) -> None:
+        self.set_vector("DD", values)
+
+    @property
+    def ud_vector(self) -> list:
+        return self.get_UD_vector()
+
+    @ud_vector.setter
+    def ud_vector(self, values) -> None:
+        self.set_vector("UD", values)
+
+    @property
+    def uu_vector(self) -> list:
+        return self.get_UU_vector()
+
+    @uu_vector.setter
+    def uu_vector(self, values) -> None:
+        self.set_vector("UU", values)
+
+    @property
+    def du_vector(self) -> list:
+        return self.get_DU_vector()
+
+    @du_vector.setter
+    def du_vector(self, values) -> None:
+        self.set_vector("DU", values)
 
     def get_vector(self, name: str) -> list:
         """Parse a named vector column (H/DD/UD/UU/DU) from JSON string.
@@ -158,10 +258,16 @@ class UsersVector(db.Model):
 
     def to_dict(self) -> dict:
         """Full dict representation including all statistics for API responses."""
+        ts = self.timestamp
+        try:
+            if isinstance(ts, datetime):
+                ts = ts.isoformat()
+        except Exception:
+            pass
         return {
             "id": self.id,
             "username": self.username,
-            "timestamp": self.timestamp,
+            "timestamp": ts,
             "event_type": self.event_type,
             "total_duration": self.total_duration,
             "typing_speed": self.typing_speed,
@@ -182,6 +288,27 @@ class UsersVector(db.Model):
             "DU_min": self.DU_min,   "DU_max": self.DU_max,
             "DU_cv": self.DU_cv,
         }
+
+
+@event.listens_for(UsersVector, "before_insert")
+def _autofill_username_from_user_id(mapper, connection, target: UsersVector):
+    """Auto-populate username when only user_id is provided.
+
+    This supports tests and legacy data flows where KeystrokeVector rows were
+    created with only user_id.
+    """
+    try:
+        if getattr(target, "username", None):
+            return
+        uid = getattr(target, "user_id", None)
+        if not uid:
+            return
+        row = connection.execute(select(User.username).where(User.id == uid)).first()
+        if row and row[0]:
+            target.username = row[0]
+    except Exception:
+        # Best-effort only
+        return
 
 
 # Backward-compatibility alias

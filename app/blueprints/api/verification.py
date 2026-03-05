@@ -23,7 +23,6 @@ from werkzeug.security import generate_password_hash
 from app.models import EnrollmentVector, User, db
 from app.models import db as sqlalchemy_db
 from app.services.email_service import email_service
-from app.utils.keystroke_processor import process_web_events
 from app.utils.password_strength import calculate_password_strength
 
 from ._shared import api_bp, auth_service, biometric_service, db_manager
@@ -287,7 +286,9 @@ def reset_password_public():
                             "error_code": "invalid_token"}), 400
 
         # Process keystroke events FIRST — before any DB mutation
-        result = process_web_events(events, username)
+        import app.blueprints.api as api_mod
+
+        result = api_mod.process_web_events(events, username)
         if result["status"] != "success":
             return jsonify({"status": "error",
                             "message": "Failed to process keystroke data"}), 400
