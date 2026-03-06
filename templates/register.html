@@ -96,14 +96,6 @@
             <p class="progress-message" id="motivationalMsg">Take your time, type naturally</p>
         </div>
         
-        <div class="typing-timer" id="typingTimer">
-            <div class="label">Typing Rhythm</div>
-            <div class="time">
-                <span id="timerDisplay">0.000</span><span class="unit">s</span>
-            </div>
-            <small>Recording keystroke pattern...</small>
-        </div>
-        
         <div class="form-group">
             <label for="typingField">Type Password & Press Enter</label>
             <div class="input-wrapper">
@@ -167,7 +159,6 @@
     let activeKeys = {};
     let usernameAvailable = false;
     let typingStartTime = null;
-    let timerInterval = null;
     let isFirstKeystroke = true;
     let passwordMismatchCount = 0; // Track consecutive password mismatches
     // Flag: true when user has completed enrollment (20/20)
@@ -183,8 +174,6 @@
     const countDisplay = document.getElementById('countDisplay');
     const usernameStatusEl = document.getElementById('usernameStatus');
     const enrollmentSection = document.getElementById('enrollmentSection');
-    const typingTimerEl = document.getElementById('typingTimer');
-    const timerDisplayEl = document.getElementById('timerDisplay');
     const emailInput = document.getElementById('regEmail');
 
     // Send verification button: requires username + email
@@ -225,30 +214,16 @@
     const USERNAME_DEBOUNCE = DEV_LENIENT ? 200 : 500;
     const SCHEDULED_REFRESH_AFTER_SAVE = DEV_LENIENT ? 400 : 1200;
     
-    // Timer Functions
     function startTimer() {
         if (!typingStartTime) {
             typingStartTime = performance.now();
-            typingTimerEl.style.display = 'block';
-            timerInterval = setInterval(() => {
-                if (typingStartTime) {
-                    const elapsed = (performance.now() - typingStartTime) / 1000;
-                    timerDisplayEl.textContent = elapsed.toFixed(3);
-                }
-            }, 50);
         }
     }
-    
+
     function stopTimer() {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
         typingStartTime = null;
-        typingTimerEl.style.display = 'none';
-        timerDisplayEl.textContent = '0.000';
     }
-    
+
     function resetTimer() {
         stopTimer();
         isFirstKeystroke = true;

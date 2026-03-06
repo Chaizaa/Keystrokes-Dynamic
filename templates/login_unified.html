@@ -53,14 +53,6 @@
             </div>
         </div>
         
-        <div id="typingTimer">
-            <div class="label">Typing Rhythm</div>
-            <div class="time">
-                <span id="timerDisplay">0.000</span><span class="unit">s</span>
-            </div>
-            <small>Capturing keystroke pattern...</small>
-        </div>
-        
         <button type="submit" id="submitBtn">
             Sign In
         </button>
@@ -119,7 +111,6 @@
     let rawEvents = [];
     let activeKeys = {};
     let typingStartTime = null;
-    let timerInterval = null;
     let isFirstKeystroke = true;
     let usernameCheckTimeout = null;
     let isSubmitting = false;
@@ -129,9 +120,6 @@
     const submitBtn = document.getElementById('submitBtn');
     const resultBox = document.getElementById('resultBox');
     const usernameStatus = document.getElementById('usernameStatus');
-    const typingTimer = document.getElementById('typingTimer');
-    const timerDisplay = document.getElementById('timerDisplay');
-    
     // ============================================================================
     // USERNAME VALIDATION (Live Check)
     // ============================================================================
@@ -201,8 +189,6 @@
         if (isFirstKeystroke) {
             typingStartTime = now;
             isFirstKeystroke = false;
-            typingTimer.style.display = 'block';
-            startTimer();
         }
 
         // Handle auto-repeat: prevent the browser from inserting repeated
@@ -247,31 +233,11 @@
         }
     });
     
-    // ============================================================================
-    // TIMER DISPLAY
-    // ============================================================================
-    function startTimer() {
-        timerInterval = setInterval(() => {
-            const elapsed = (performance.now() - typingStartTime) / 1000;
-            timerDisplay.textContent = elapsed.toFixed(3);
-        }, 10); // Update every 10ms for smooth display
-    }
-    
-    function stopTimer() {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-    }
-    
     function resetTimer() {
-        stopTimer();
         typingStartTime = null;
         isFirstKeystroke = true;
-        timerDisplay.textContent = '0.000';
-        typingTimer.style.display = 'none';
     }
-    
+
     // ============================================================================
     // PASSWORD VISIBILITY TOGGLE
     // ============================================================================
