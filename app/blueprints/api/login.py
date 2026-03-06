@@ -188,9 +188,10 @@ def login():
             if not enrollment_status["ready_for_login"]:
                 db_manager.log_failed_login(username, "insufficient_enrollment",
                                             ip_address, user_agent)
+                _rec = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
                 payload = {
                     "success": False,
-                    "message": f"Enrollment belum lengkap ({enrollment_count}/20)",
+                    "message": f"Enrollment belum lengkap ({enrollment_count}/{_rec})",
                     "reason": "insufficient_enrollment",
                 }
                 if (request.json or {}).get("debug") or DEV_LENIENT:
