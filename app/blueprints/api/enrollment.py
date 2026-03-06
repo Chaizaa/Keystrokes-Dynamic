@@ -94,11 +94,12 @@ def check_username():
                 "exists": True, "can_login": login_ready,
                 "enrollment_complete": login_ready, "enrollment_count": enrollment_count,
                 "message": (f"User {username} ditemukan" if login_ready
-                            else f"Enrollment belum lengkap ({enrollment_count}/20)"),
+                            else f"Enrollment belum lengkap ({enrollment_count}/{getattr(biometric_service, 'RECOMMENDED_SAMPLES', 100)})"),
             }), 200
 
         # REGISTER MODE
-        if availability.get("exists") and 0 < enrollment_count < 20:
+        _recommended = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
+        if availability.get("exists") and 0 < enrollment_count < _recommended:
             status_str = "resumable"
         elif not availability["available"] and availability.get("reason") == "resumable":
             status_str = "resumable"
@@ -152,8 +153,9 @@ def register_sample():
         enrollment_status = biometric_service.get_enrollment_status(username)
         enrollment_count = enrollment_status["count"]
 
+        _recommended_reg = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
         if enrollment_count > 0:
-            print(f"[INFO] User '{username}' continuing registration ({enrollment_count}/20)")
+            print(f"[INFO] User '{username}' continuing registration ({enrollment_count}/{_recommended_reg})")
 
         import app.blueprints.api as api_mod
 
