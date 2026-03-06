@@ -93,6 +93,7 @@ server.pid
 
 # Local admin scripts (contain secrets, never push)
 export_dataset.ps1
+download_db.ps1
 
 #image
 *.png
