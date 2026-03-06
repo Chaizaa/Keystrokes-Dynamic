@@ -290,6 +290,7 @@ def dataset_register():
 
 @api_bp.route("/dataset/submit", methods=["POST"])
 @limiter.limit("200 per hour")
+@limiter.limit("200 per hour", key_func=lambda: (request.get_json(silent=True) or {}).get("subject_code", "") or request.remote_addr)
 def dataset_submit():
     """Submit one keystroke sample.
 
