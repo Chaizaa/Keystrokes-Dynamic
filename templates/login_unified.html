@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block body %}
-<div class="auth-container bg-gradient">
+<div id="loginRoot" class="auth-container bg-gradient" data-dev-lenient="{{ DEV_LENIENT_RATELIMIT | tojson }}">
     <div class="auth-box">
         <div class="logo">
             <div class="logo-text">SecureAuth</div>
@@ -263,7 +263,7 @@
     // DEV toggle: read injected flag from DOM (injected via context processor)
     const LOGIN_DEV_LENIENT = (function() {
         try {
-            const root = document.getElementById('registerRoot');
+            const root = document.getElementById('loginRoot');
             return root ? root.dataset.devLenient === 'true' : false;
         } catch (e) { return false; }
     })();
