@@ -13,6 +13,9 @@ from .login_attempt import LoginAttempt
 # Import models for easy access
 from .user import User
 from .admin_audit import AdminAudit
+from .api_key import APIKey
+from .enrollment_log import EnrollmentLog
+from .verification_log import VerificationLog
 
 __all__ = [
     "db",
@@ -22,4 +25,7 @@ __all__ = [
     "FeatureVector",
     "EnrollmentVector",
     "AdminAudit",
+    "APIKey",
+    "EnrollmentLog",
+    "VerificationLog",
 ]

@@ -5,7 +5,7 @@ API Blueprint - RESTful API endpoints for biometric authentication
 import json
 
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request, session
 from flask_login import current_user, login_required, logout_user
@@ -13,7 +13,7 @@ from flask_login import current_user, login_required, logout_user
 from app import limiter  # Import rate limiter
 from app.database import Database
 from app.models import User, db  # Import User model and db
-from app.services import AuthService, BiometricService  # Import service layer
+from app.services import APIKeyService, AuthService, BiometricService  # Import service layer
 from app.services.email_service import email_service
 from app.utils.keystroke_processor import assess_sample_quality, process_web_events
 from app.utils.password_strength import (
@@ -2146,24 +2146,40 @@ def get_user_info():
     try:
         username = current_user.username  # Use Flask-Login current_user
         user_data = db_manager.get_user_by_username(username)
+        from sqlalchemy import select
 
-        if not user_data:
+        user = db.session.execute(select(User).where(User.username == username)).scalars().first()
+
+        if not user_data and not user:
             return jsonify({"error": "User not found"}), 404
 
         # Use BiometricService for enrollment status
         enrollment_status = biometric_service.get_enrollment_status(username)
         verified_logins = db_manager.get_verified_login_count(username)
+        active_api_keys = APIKeyService.list_api_keys(
+            user_id=current_user.id,
+            active_only=True,
+        )
+
+        created_at = user.created_at.isoformat() if user and user.created_at else None
+        email = user.email if user else user_data.get("email", "N/A")
+        email_verified = bool(user.email_verified) if user else False
+        has_password = bool(user.password_hash) if user else False
 
         return (
             jsonify(
                 {
                     "username": username,
-                    "email": user_data.get("email", "N/A"),
+                    "email": email,
+                    "email_verified": email_verified,
+                    "created_at": created_at,
                     "last_login": user_data.get("last_login"),
                     "session_start": session.get("login_time"),
                     "enrollment_count": enrollment_status["count"],
                     "enrollment_ready": enrollment_status["ready_for_login"],
                     "verified_logins": verified_logins,
+                    "has_password": has_password,
+                    "api_key_count": len(active_api_keys),
                 }
             ),
             200,
@@ -2173,6 +2189,153 @@ def get_user_info():
         print(f"[ERROR] get_user_info: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/user/api-keys", methods=["GET"])
+@login_required
+def list_user_api_keys():
+    """List API keys created by the currently logged-in user."""
+    try:
+        include_inactive = request.args.get("include_inactive", "false").lower() == "true"
+        api_keys = APIKeyService.list_api_keys(
+            user_id=current_user.id,
+            active_only=not include_inactive,
+        )
+
+        payload = []
+        for key in api_keys:
+            stats = APIKeyService.get_key_stats(key.id)
+            payload.append(
+                {
+                    "id": key.id,
+                    "partner_name": key.partner_name,
+                    "description": key.description,
+                    "key_prefix": key.key_prefix,
+                    "is_active": bool(key.is_active),
+                    "rate_limit": key.rate_limit,
+                    "allowed_origins": key.allowed_origins,
+                    "created_at": key.created_at.isoformat() if key.created_at else None,
+                    "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
+                    "expires_at": key.expires_at.isoformat() if key.expires_at else None,
+                    "stats": stats,
+                }
+            )
+
+        return jsonify({"success": True, "keys": payload, "count": len(payload)}), 200
+    except Exception as e:
+        print(f"[ERROR] list_user_api_keys: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_bp.route("/user/api-keys/generate", methods=["POST"])
+@login_required
+@limiter.limit("5 per hour")
+def generate_user_api_key():
+    """Generate a new API key for partner integration from dashboard."""
+    try:
+        data = request.get_json(silent=True) or {}
+
+        partner_name = (data.get("partner_name") or "").strip()
+        description = (data.get("description") or "").strip() or None
+        allowed_origins = (data.get("allowed_origins") or "").strip() or None
+
+        if not partner_name:
+            return jsonify({"success": False, "message": "partner_name is required"}), 400
+        if len(partner_name) < 3:
+            return (
+                jsonify({"success": False, "message": "partner_name minimal 3 characters"}),
+                400,
+            )
+        if len(partner_name) > 255:
+            return (
+                jsonify({"success": False, "message": "partner_name maximal 255 characters"}),
+                400,
+            )
+
+        rate_limit_raw = data.get("rate_limit", 100)
+        try:
+            rate_limit = int(rate_limit_raw)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "rate_limit must be a number"}), 400
+        if rate_limit < 1 or rate_limit > 100000:
+            return (
+                jsonify({"success": False, "message": "rate_limit must be between 1 and 100000"}),
+                400,
+            )
+
+        expires_days = data.get("expires_days")
+        if expires_days in (None, ""):
+            expires_days = None
+        else:
+            try:
+                expires_days = int(expires_days)
+            except (TypeError, ValueError):
+                return jsonify({"success": False, "message": "expires_days must be a number"}), 400
+            if expires_days < 1 or expires_days > 3650:
+                return (
+                    jsonify({"success": False, "message": "expires_days must be between 1 and 3650"}),
+                    400,
+                )
+
+        full_key, key_model = APIKeyService.generate_new_key(
+            user_id=current_user.id,
+            partner_name=partner_name,
+            description=description,
+            rate_limit=rate_limit,
+            allowed_origins=allowed_origins,
+        )
+
+        if expires_days is not None:
+            key_model.expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+            db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "API key generated successfully",
+                    "api_key": full_key,
+                    "key": {
+                        "id": key_model.id,
+                        "partner_name": key_model.partner_name,
+                        "description": key_model.description,
+                        "key_prefix": key_model.key_prefix,
+                        "rate_limit": key_model.rate_limit,
+                        "is_active": bool(key_model.is_active),
+                        "created_at": key_model.created_at.isoformat()
+                        if key_model.created_at
+                        else None,
+                        "expires_at": key_model.expires_at.isoformat()
+                        if key_model.expires_at
+                        else None,
+                    },
+                    "warning": "Save this API key now. It will not be shown again.",
+                }
+            ),
+            201,
+        )
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] generate_user_api_key: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_bp.route("/user/api-keys/<int:key_id>/deactivate", methods=["POST"])
+@login_required
+def deactivate_user_api_key(key_id):
+    """Deactivate an API key owned by the current user."""
+    try:
+        ok = APIKeyService.deactivate_key(key_id, user_id=current_user.id)
+        if not ok:
+            return jsonify({"success": False, "message": "API key not found"}), 404
+
+        return jsonify({"success": True, "message": "API key deactivated"}), 200
+    except Exception as e:
+        print(f"[ERROR] deactivate_user_api_key: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @api_bp.route("/user/reset_password", methods=["POST"])
