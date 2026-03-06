@@ -14,20 +14,55 @@ Public API
 """
 
 import hashlib
+import json
 import statistics
 from typing import Dict, List, Tuple
 
 
-def compute_vector_stats(vec: List[float]) -> Dict[str, float]:
+def round_to_decimals(value: float, decimals: int = 4) -> float:
+    """
+    Round a float value to a specific number of decimal places.
+    
+    Args:
+        value: float value to round
+        decimals: number of decimal places (default 5)
+    
+    Returns:
+        rounded float value, or None if input is None
+    """
+    if value is None:
+        return None
+    return round(float(value), decimals)
+
+
+def round_vector(vec: List[float], decimals: int = 4) -> List[float]:
+    """
+    Round all values in a timing vector to specified decimal places.
+    
+    Args:
+        vec: list of float timing values
+        decimals: number of decimal places (default 5)
+    
+    Returns:
+        list of rounded float values
+    """
+    if not vec:
+        return vec
+    return [round(v, decimals) for v in vec]
+
+
+def compute_vector_stats(vec: List[float], decimals: int = 4) -> Dict[str, float]:
     """
     Compute descriptive statistics for a timing vector.
 
     Args:
         vec: list of float timing values (seconds)
+        decimals: number of decimal places to round to (default 5)
 
     Returns:
         dict with keys: mean, std, min, max, cv
             - cv (coefficient of variation) = std / mean, or 0 when mean == 0
+            - All values rounded to specified decimal places
     """
     if not vec:
         return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "cv": 0.0}
@@ -35,11 +70,11 @@ def compute_vector_stats(vec: List[float]) -> Dict[str, float]:
     std  = statistics.stdev(vec) if len(vec) > 1 else 0.0
     cv   = (std / mean) if mean != 0.0 else 0.0
     return {
-        "mean": mean,
-        "std":  std,
-        "min":  min(vec),
-        "max":  max(vec),
-        "cv":   cv,
+        "mean": round_to_decimals(mean, decimals),
+        "std":  round_to_decimals(std, decimals),
+        "min":  round_to_decimals(min(vec), decimals),
+        "max":  round_to_decimals(max(vec), decimals),
+        "cv":   round_to_decimals(cv, decimals),
     }
 
 
@@ -273,13 +308,21 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
     UU_stats = compute_vector_stats(UU_vector)
     DU_stats = compute_vector_stats(DU_vector)
 
+    # Round raw vectors to 5 decimal places
+    DECIMALS = 4
+    H_vector_rounded  = round_vector(H_vector, DECIMALS)
+    DD_vector_rounded = round_vector(DD_vector, DECIMALS)
+    UD_vector_rounded = round_vector(UD_vector, DECIMALS)
+    UU_vector_rounded = round_vector(UU_vector, DECIMALS)
+    DU_vector_rounded = round_vector(DU_vector, DECIMALS)
+
     features = {
-        # Raw timing vectors
-        "H_vector":  H_vector,
-        "DD_vector": DD_vector,
-        "UD_vector": UD_vector,
-        "UU_vector": UU_vector,
-        "DU_vector": DU_vector,
+        # Raw timing vectors (rounded to 5 decimal places)
+        "H_vector":  H_vector_rounded,
+        "DD_vector": DD_vector_rounded,
+        "UD_vector": UD_vector_rounded,
+        "UU_vector": UU_vector_rounded,
+        "DU_vector": DU_vector_rounded,
         # Nested stats dicts (convenient for downstream processing)
         "H_stats":   H_stats,
         "DD_stats":  DD_stats,
@@ -297,11 +340,11 @@ def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
         "UU_min":  UU_stats["min"],  "UU_max": UU_stats["max"], "UU_cv": UU_stats["cv"],
         "DU_mean": DU_stats["mean"], "DU_std": DU_stats["std"],
         "DU_min":  DU_stats["min"],  "DU_max": DU_stats["max"], "DU_cv": DU_stats["cv"],
-        # Aggregate metrics
+        # Aggregate metrics (also rounded to 5 decimals for consistency)
         "char_count":            char_count,
-        "total_duration":        total_duration_sec,
-        "typing_speed":          round(typing_speed, 4),
-        "typing_rollover_ratio": rollover_ratio,
+        "total_duration":        round_to_decimals(total_duration_sec, DECIMALS),
+        "typing_speed":          round_to_decimals(typing_speed, DECIMALS),
+        "typing_rollover_ratio": round_to_decimals(rollover_ratio, DECIMALS),
         "backspace_count":       backspace_count,
         "char_sequence":         char_sequence,
         "masked_sequence":       masked_sequence,

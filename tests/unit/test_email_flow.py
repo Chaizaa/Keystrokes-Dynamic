@@ -15,7 +15,7 @@ def test_register_sample_email_send_failure_does_not_fail(client, monkeypatch, d
     def fake_process_web_events(events, username):
         return {
             "status": "success",
-            "features": {"username": username, "data_type": "enrollment"},
+            "features": {"username": username, "event_type": "enrollment"},
             "real_password_string": "TestPass123!",
             "password_hash": None,
         }
@@ -67,7 +67,7 @@ def test_register_sample_email_send_success_records_timestamp_and_token(
     def fake_process_web_events(events, username):
         return {
             "status": "success",
-            "features": {"username": username, "data_type": "enrollment"},
+            "features": {"username": username, "event_type": "enrollment"},
             "real_password_string": "TestPass123!",
             "password_hash": None,
         }

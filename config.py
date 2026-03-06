@@ -145,3 +145,7 @@ def get_config(config_name=None):
         config_name = os.environ.get("FLASK_ENV", "development")
 
     return config_by_name.get(config_name, DevelopmentConfig)
+
+
+RF_MODEL_ENABLED = os.getenv("RF_MODEL_ENABLED", "false").lower() == "true"
+RF_MODEL_PATH = os.getenv("RF_MODEL_PATH", "models/rf_default.joblib")

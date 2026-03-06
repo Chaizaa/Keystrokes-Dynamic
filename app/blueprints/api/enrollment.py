@@ -16,7 +16,6 @@ from flask import jsonify, request
 from app import limiter as _limiter
 from app.models import AdminAudit, EnrollmentVector, User, db
 from app.services.email_service import email_service
-from app.utils.keystroke_processor import assess_sample_quality, process_web_events
 from app.utils.password_strength import calculate_password_strength, get_strength_label
 
 from ._shared import api_bp, auth_service, biometric_service, db_manager
@@ -155,15 +154,17 @@ def register_sample():
         if enrollment_count > 0:
             print(f"[INFO] User '{username}' continuing registration ({enrollment_count}/20)")
 
-        result = process_web_events(events, username)
+        import app.blueprints.api as api_mod
+
+        result = api_mod.process_web_events(events, username)
         if result["status"] != "success":
             return jsonify({"status": "error", "message": result["msg"]}), 400
 
         features = result["features"]
         features["username"] = username
-        features["data_type"] = "enrollment"
+        features["event_type"] = "enrollment"
 
-        quality = assess_sample_quality(features)
+        quality = api_mod.assess_sample_quality(features)
         features["quality_label"] = quality["quality_label"]
         features["quality_score"] = quality["quality_score"]
 
@@ -276,7 +277,7 @@ def register_sample():
 
             if uid is not None:
                 features["user_id"] = int(uid)
-                ev = EnrollmentVector(username=username, data_type="enrollment")
+                ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
                 ev.timestamp = datetime.now(timezone.utc).isoformat()
                 ev.total_duration = features.get("total_duration")
                 ev.typing_speed = features.get("typing_speed")
@@ -309,6 +310,18 @@ def register_sample():
         new_status = biometric_service.get_enrollment_status(username)
         new_count = new_status["count"]
 
+        ml_training = None
+        # Auto-train per-user model when enrollment completes (ML-only flow).
+        try:
+            if new_count == getattr(biometric_service, "RECOMMENDED_SAMPLES", 20):
+                ml_training = biometric_service.train_user_model(username, force=False)
+        except Exception as _exc:
+            ml_training = {
+                "success": False,
+                "reason": "auto_train_exception",
+                "message": str(_exc),
+            }
+
         resp_payload = {
             "status": "success",
             "message": f"Sample {new_count}/20 saved successfully",
@@ -323,6 +336,8 @@ def register_sample():
                 "label": get_strength_label(strength_result["score"]) if real_pass else "Unknown",
             },
         }
+        if ml_training is not None:
+            resp_payload["ml_training"] = ml_training
         if password_event:
             resp_payload["password_event"] = password_event
 

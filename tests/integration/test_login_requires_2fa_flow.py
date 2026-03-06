@@ -12,7 +12,7 @@ def test_registration_to_login_with_2fa_required(client, monkeypatch, db_session
     def fake_process_web_events_reg(events, username):
         return {
             "status": "success",
-            "features": {"username": username, "data_type": "enrollment"},
+            "features": {"username": username, "event_type": "enrollment"},
             "real_password_string": "StrongPass123!",
             "password_hash": None,
         }
@@ -84,7 +84,7 @@ def test_registration_to_login_with_2fa_required(client, monkeypatch, db_session
             H_vector="[0.1, 0.2, 0.3]",
             DD_vector="[0.05,0.06,0.07]",
             UD_vector="[0.15,0.16,0.17]",
-            data_type="enrollment",
+            event_type="enrollment",
         )
         db_session.add(kv)
     db_session.commit()
@@ -98,7 +98,7 @@ def test_registration_to_login_with_2fa_required(client, monkeypatch, db_session
                 "H_vector": [0.1, 0.2, 0.3],
                 "DD_vector": [0.05, 0.06, 0.07],
                 "UD_vector": [0.15, 0.16, 0.17],
-                "data_type": "verification",
+                "event_type": "verification",
                 "real_password_string": "StrongPass123!",
             },
             "real_password_string": "StrongPass123!",

@@ -30,6 +30,7 @@ from .admin_audit import AdminAudit                                  # noqa: E40
 from .login_attempt import LoginAttempt                              # noqa: E402
 from .client import Client                                           # noqa: E402
 from .dataset import DatasetSubject, DatasetEntry                    # noqa: E402
+from .user_ml_model import UserMLModel                               # noqa: E402
 
 __all__ = [
     "db",
@@ -42,4 +43,5 @@ __all__ = [
     "LoginAttempt",
     "DatasetSubject",
     "DatasetEntry",
+    "UserMLModel",
 ]

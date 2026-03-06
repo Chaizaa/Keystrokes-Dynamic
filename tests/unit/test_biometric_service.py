@@ -146,7 +146,7 @@ class TestBiometricServiceEnrollmentStatus:
                 h_vector=f"[0.{i}, 0.2, 0.3]",
                 dd_vector="[0.05, 0.06, 0.07]",
                 ud_vector="[0.15, 0.16, 0.17]",
-                data_type="enrollment",
+                event_type="enrollment",
             )
             db_session.add(sample)
         db_session.commit()
@@ -170,7 +170,7 @@ class TestBiometricServiceEnrollmentStatus:
                 h_vector=f"[0.{i}, 0.2, 0.3]",
                 dd_vector="[0.05, 0.06, 0.07]",
                 ud_vector="[0.15, 0.16, 0.17]",
-                data_type="enrollment",
+                event_type="enrollment",
             )
             db_session.add(sample)
         db_session.commit()
@@ -223,7 +223,7 @@ class TestBiometricServiceVerification:
             "H_vector": [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
             "DD_vector": [0.5, 0.4, 0.3, 0.2, 0.1, 0.15, 0.25, 0.35],
             "UD_vector": [0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
-            "data_type": "verification",
+            "event_type": "verification",
         }
 
         result = biometric_service.verify_keystroke_sample(impostor_sample, sample_enrollment_data)

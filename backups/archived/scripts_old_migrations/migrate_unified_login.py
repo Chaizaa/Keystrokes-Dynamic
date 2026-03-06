@@ -183,7 +183,7 @@ def migrate_existing_data():
         cursor.execute("PRAGMA table_info(user_vectors)")
         columns = [row[1] for row in cursor.fetchall()]
 
-        if "data_type" in columns:
+        if "event_type" in columns:
             # Migrate enrollment data
             cursor.execute(
                 """

@@ -506,7 +506,7 @@ def reset_password_public():
             from app.models import db as sqlalchemy_db
 
             uid = getattr(user, "id", None)
-            ev = EnrollmentVector(username=username, data_type="enrollment")
+            ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
             if "H_vector" in features:
                 ev.H_vector = json.dumps(features["H_vector"])
             if "DD_vector" in features:
@@ -893,7 +893,7 @@ def register_sample():
         if result["status"] == "success":
             features = result["features"]
             features["username"] = username
-            features["data_type"] = "enrollment"
+            features["event_type"] = "enrollment"
 
             # Quality assessment
             quality = assess_sample_quality(features)
@@ -1080,7 +1080,7 @@ def register_sample():
                     from app.models import EnrollmentVector
                     from app.models import db as sqlalchemy_db
 
-                    ev = EnrollmentVector(username=username, data_type="enrollment")
+                    ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
 
                     # --- Timestamp & duration ---
                     ev.timestamp     = datetime.now(timezone.utc).isoformat()
@@ -1342,7 +1342,7 @@ def _fetch_enrollment_templates(username):
                 select(KeystrokeVector).where(
                     KeystrokeVector.username == username,
                     (KeystrokeVector.event_type == "enrollment")
-                    | (KeystrokeVector.data_type == "enrollment"),
+                    | (KeystrokeVector.event_type == "enrollment_legacy"),
                 )
             ).scalars().all()
             templates = [_parse_row(r) for r in rows]
@@ -1931,7 +1931,7 @@ def verify_user():
         new_features["username"] = username
         new_features["login_result"] = str(verification_result["verified"])
         new_features["login_score"] = verification_result["score"]
-        new_features["data_type"] = "verification"
+        new_features["event_type"] = "verification"
         db_manager.save_data(new_features)
 
         if verification_result["verified"]:

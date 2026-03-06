@@ -136,7 +136,7 @@ def sample_keystroke_features():
         "H_vector": [0.1, 0.2, 0.15, 0.18, 0.12, 0.16, 0.14, 0.13],
         "DD_vector": [0.08, 0.09, 0.07, 0.085, 0.078, 0.082, 0.076, 0.081],
         "UD_vector": [0.18, 0.19, 0.17, 0.185, 0.175, 0.182, 0.176, 0.183],
-        "data_type": "enrollment",
+        "event_type": "enrollment",
         "quality_score": 0.85,
         "quality_label": "Good",
     }
@@ -161,7 +161,7 @@ def sample_enrollment_data():
             "H_vector": [h + variation for h in base_h],
             "DD_vector": [dd + variation for dd in base_dd],
             "UD_vector": [ud + variation for ud in base_ud],
-            "data_type": "enrollment",
+            "event_type": "enrollment",
         }
         samples.append(sample)
 

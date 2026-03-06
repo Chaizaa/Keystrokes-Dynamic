@@ -140,7 +140,7 @@ class Database:
                     CREATE TABLE {table_name} (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         username TEXT,
-                        data_type TEXT,
+                        event_type TEXT,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         password TEXT,
                         H_vector TEXT,
@@ -256,7 +256,7 @@ class Database:
             cursor.execute(
                 """
                 SELECT * FROM user_vectors 
-                WHERE username = ? AND data_type = 'enrollment'
+                WHERE username = ? AND event_type = 'enrollment'
                 ORDER BY id DESC
             """,
                 (username,),
@@ -353,7 +353,7 @@ class Database:
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM user_vectors 
-                    WHERE username = ? AND (event_type = 'enrollment' OR data_type = 'enrollment')
+                    WHERE username = ? AND (event_type = 'enrollment')
                 """,
                     (username,),
                 )
@@ -366,12 +366,12 @@ class Database:
                     cursor.execute(
                         """
                         SELECT COUNT(*) FROM user_vectors 
-                        WHERE username = ? AND data_type = 'enrollment'
+                        WHERE username = ? AND event_type = 'enrollment'
                     """,
                         (username,),
                     )
                     count = cursor.fetchone()[0]
-                    print(f"[DB] Enrollment count (legacy data_type) from user_vectors: {count}")
+                    print(f"[DB] Enrollment count (legacy event_type) from user_vectors: {count}")
                     return count
                 except Exception:
                     return 0
@@ -396,7 +396,7 @@ class Database:
                     """
                     SELECT COUNT(*) 
                     FROM user_vectors 
-                    WHERE username = ? AND (event_type = 'login' OR data_type = 'login')
+                    WHERE username = ? AND (event_type = 'login')
                 """,
                     (username,),
                 )
@@ -409,7 +409,7 @@ class Database:
                         """
                         SELECT COUNT(*) 
                         FROM user_vectors 
-                        WHERE username = ? AND data_type = 'login'
+                        WHERE username = ? AND event_type = 'login'
                     """,
                         (username,),
                     )
@@ -701,7 +701,7 @@ class Database:
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM user_vectors
-                    WHERE username = ? AND data_type = 'login'
+                    WHERE username = ? AND event_type = 'login'
                 """,
                     (username,),
                 )
