@@ -118,8 +118,9 @@ def check_username():
         }
 
         if status_str == "resumable" and availability.get("exists"):
+            _target = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
             response_data["message"] = (
-                f"Resume registration: {enrollment_count}/20 samples collected"
+                f"Resume registration: {enrollment_count}/{_target} samples collected"
             )
 
         return jsonify(response_data)
@@ -313,7 +314,7 @@ def register_sample():
         ml_training = None
         # Auto-train per-user model when enrollment completes (ML-only flow).
         try:
-            if new_count == getattr(biometric_service, "RECOMMENDED_SAMPLES", 20):
+            if new_count == getattr(biometric_service, "RECOMMENDED_SAMPLES", 100):
                 ml_training = biometric_service.train_user_model(username, force=False)
         except Exception as _exc:
             ml_training = {
@@ -324,9 +325,9 @@ def register_sample():
 
         resp_payload = {
             "status": "success",
-            "message": f"Sample {new_count}/20 saved successfully",
+            "message": f"Sample {new_count}/{getattr(biometric_service, 'RECOMMENDED_SAMPLES', 100)} saved successfully",
             "progress": {
-                "current": new_count, "target": 20,
+                "current": new_count, "target": getattr(biometric_service, "RECOMMENDED_SAMPLES", 100),
                 "complete": new_status["ready_for_login"],
             },
             "quality": quality,

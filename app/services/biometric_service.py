@@ -23,7 +23,7 @@ class BiometricService:
 
     # Keep these to maintain existing UX expectations in the UI
     MIN_SAMPLES_FOR_VERIFICATION = 3
-    RECOMMENDED_SAMPLES = 20
+    RECOMMENDED_SAMPLES = 100
 
     # Legacy confidence thresholds (kept for compatibility/tests; not used by ML-only flow)
     EXACT_MATCH_THRESHOLD = 0.95

@@ -83,12 +83,12 @@
     <!-- Step 2: Enrollment -->
     <div id="enrollmentSection" class="section disabled">
         <div class="section-title">Step 2: Biometric Enrollment</div>
-        <p class="hint-text" style="margin-bottom: 20px;">Type your password naturally 20 times to train the system</p>
+        <p class="hint-text" style="margin-bottom: 20px;">Type your password naturally 100 times to train the system</p>
         
         <div class="progress-card">
             <div class="progress-header">
                 <span class="progress-label">Enrollment Progress</span>
-                <span class="progress-count"><span id="countDisplay">0</span>/20</span>
+                <span class="progress-count"><span id="countDisplay">0</span>/100</span>
             </div>
             <div class="progress-bar-wrapper">
                 <div class="progress-bar" id="progressBar"></div>
@@ -154,14 +154,14 @@
 
     // Global Variables
     let sampleCount = 0;
-    const targetSamples = 20;
+    const targetSamples = 100;
     let rawEvents = [];
     let activeKeys = {};
     let usernameAvailable = false;
     let typingStartTime = null;
     let isFirstKeystroke = true;
     let passwordMismatchCount = 0; // Track consecutive password mismatches
-    // Flag: true when user has completed enrollment (20/20)
+    // Flag: true when user has completed enrollment (100/100)
     let registrationComplete = false;
     // Flag: true after email-verified redirect has set the locked verified state.
     // Prevents a delayed second checkUsername() call from overwriting the verified status.
@@ -480,7 +480,7 @@
 
                     // Accent the progress message
                     const msgEl = document.getElementById('motivationalMsg');
-                    msgEl.textContent = `Continue enrollment: ${sampleCount}/20 completed`;
+                    msgEl.textContent = `Continue enrollment: ${sampleCount}/${targetSamples} completed`;
 
                     // Attach click + keyboard handler to Resume CTA for accessibility
                     setTimeout(() => {
@@ -1023,9 +1023,9 @@
         
         const msgEl = document.getElementById('motivationalMsg');
         if (sampleCount <= 10) {
-            msgEl.textContent = "Progress: " + sampleCount + "/20 samples recorded";
-        } else if (sampleCount < 20) {
-            msgEl.textContent = sampleCount + "/20 samples - " + (20 - sampleCount) + " remaining";
+            msgEl.textContent = "Progress: " + sampleCount + "/" + targetSamples + " samples recorded";
+        } else if (sampleCount < targetSamples) {
+            msgEl.textContent = sampleCount + "/" + targetSamples + " samples - " + (targetSamples - sampleCount) + " remaining";
         }
     }
 
