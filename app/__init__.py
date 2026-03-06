@@ -179,6 +179,7 @@ def create_app(config_name="development"):
                 "img-src":     ["'self'", "data:"],
             },
             content_security_policy_nonce_in=["script-src"],
+            referrer_policy="strict-origin-when-cross-origin",
         )
 
     # Register blueprints
