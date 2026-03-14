@@ -3,6 +3,7 @@ API Blueprint - RESTful API endpoints for biometric authentication
 """
 
 import json
+import secrets
 
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,242 @@ db_manager = Database()
 auth_service = AuthService()
 # Pass the legacy db manager to BiometricService so it can read enrollment samples
 biometric_service = BiometricService(db=db_manager)
+
+
+def _get_client_ip():
+    """Resolve client IP, preferring X-Forwarded-For when behind a proxy."""
+    forwarded_for = (request.headers.get("X-Forwarded-For") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.remote_addr
+
+
+def _extract_partner_api_key():
+    """Extract API key from Authorization header or X-API-Key fallback."""
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header:
+        if auth_header.lower().startswith("bearer "):
+            return auth_header.split(" ", 1)[1].strip()
+        return auth_header
+
+    return (request.headers.get("X-API-Key") or "").strip()
+
+
+def _authenticate_partner_api_request():
+    """Validate API key, origin policy, and per-key quota for partner endpoints."""
+    provided_key = _extract_partner_api_key()
+    is_valid, api_key, error_message = APIKeyService.verify_api_key(provided_key)
+    if not is_valid:
+        lowered_error = (error_message or "").lower()
+        status_code = 401
+        if "expired" in lowered_error or "inactive" in lowered_error:
+            status_code = 403
+
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "message": error_message or "Unauthorized",
+                    "error_code": "INVALID_API_KEY",
+                }
+            ),
+            status_code,
+        )
+
+    origin = (request.headers.get("Origin") or "").strip()
+    if not origin:
+        origin = (request.headers.get("Referer") or "").strip()
+
+    if not APIKeyService.check_origin_allowed(api_key, origin):
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Request origin is not allowed for this API key",
+                    "error_code": "ORIGIN_NOT_ALLOWED",
+                }
+            ),
+            403,
+        )
+
+    is_allowed, remaining_quota, error_message = APIKeyService.check_rate_limit(api_key)
+    if not is_allowed:
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "message": error_message,
+                    "error_code": "RATE_LIMIT_EXCEEDED",
+                    "remaining_quota": 0,
+                }
+            ),
+            429,
+        )
+
+    return (
+        {
+            "api_key": api_key,
+            "origin": origin or None,
+            "client_ip": _get_client_ip(),
+            "user_agent": request.headers.get("User-Agent", "Unknown"),
+            "remaining_quota": remaining_quota,
+        },
+        None,
+    )
+
+
+def _normalize_numeric_vector(raw_vector, field_name):
+    """Normalize vector values to floats and validate payload shape."""
+    if raw_vector is None:
+        return []
+    if not isinstance(raw_vector, list):
+        raise ValueError(f"{field_name} must be an array of numbers")
+
+    normalized = []
+    for value in raw_vector:
+        try:
+            normalized.append(float(value))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field_name} contains non-numeric value") from exc
+    return normalized
+
+
+def _build_partner_features(payload, username):
+    """Build feature vectors either from raw events or directly provided vectors."""
+    events = payload.get("events")
+    if events is not None:
+        if not isinstance(events, list) or not events:
+            return None, None, None, "events must be a non-empty array"
+        processed = process_web_events(events, username)
+        if processed.get("status") != "success":
+            return None, None, None, processed.get("msg", "Failed to process keystroke events")
+
+        features = processed.get("features") or {}
+        return (
+            features,
+            processed.get("real_password_string"),
+            processed.get("password_hash"),
+            None,
+        )
+
+    raw_features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
+    merged = dict(raw_features)
+
+    for key in ("H_vector", "DD_vector", "UD_vector", "UU_vector", "DU_vector"):
+        if key in payload and key not in merged:
+            merged[key] = payload.get(key)
+
+    try:
+        features = {
+            "H_vector": _normalize_numeric_vector(merged.get("H_vector"), "H_vector"),
+            "DD_vector": _normalize_numeric_vector(merged.get("DD_vector"), "DD_vector"),
+            "UD_vector": _normalize_numeric_vector(merged.get("UD_vector"), "UD_vector"),
+            "UU_vector": _normalize_numeric_vector(merged.get("UU_vector"), "UU_vector"),
+            "DU_vector": _normalize_numeric_vector(merged.get("DU_vector"), "DU_vector"),
+        }
+    except ValueError as exc:
+        return None, None, None, str(exc)
+
+    if not features["H_vector"] or not features["DD_vector"]:
+        return None, None, None, "events or H_vector/DD_vector are required"
+
+    password = payload.get("password") if isinstance(payload.get("password"), str) else None
+    password_hash = (
+        payload.get("password_hash") if isinstance(payload.get("password_hash"), str) else None
+    )
+    return features, password, password_hash, None
+
+
+def _safe_parse_vector(raw_value):
+    """Parse serialized vector values from database rows."""
+    if raw_value is None:
+        return []
+    if isinstance(raw_value, list):
+        return raw_value
+    if isinstance(raw_value, tuple):
+        return list(raw_value)
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
+
+        try:
+            import ast
+
+            parsed = ast.literal_eval(raw_value)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
+
+    return []
+
+
+def _load_partner_enrollment_templates(username):
+    """Load enrollment templates from SQLAlchemy-backed tables for partner verification."""
+    from sqlalchemy import select
+
+    from app.models import EnrollmentVector, KeystrokeVector
+
+    templates = []
+
+    enrollment_rows = (
+        db.session.execute(
+            select(EnrollmentVector)
+            .where(EnrollmentVector.username == username)
+            .order_by(EnrollmentVector.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    for row in enrollment_rows:
+        h_vector = _safe_parse_vector(getattr(row, "H_vector", None))
+        dd_vector = _safe_parse_vector(getattr(row, "DD_vector", None))
+        if not h_vector or not dd_vector:
+            continue
+        templates.append(
+            {
+                "H_vector": h_vector,
+                "DD_vector": dd_vector,
+                "UD_vector": _safe_parse_vector(getattr(row, "UD_vector", None)),
+            }
+        )
+
+    if templates:
+        return templates
+
+    vector_rows = (
+        db.session.execute(
+            select(KeystrokeVector)
+            .where(
+                KeystrokeVector.username == username,
+                KeystrokeVector.event_type == "enrollment",
+                KeystrokeVector.is_successful.is_(True),
+            )
+            .order_by(KeystrokeVector.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    for row in vector_rows:
+        h_vector = _safe_parse_vector(getattr(row, "H_vector", None))
+        dd_vector = _safe_parse_vector(getattr(row, "DD_vector", None))
+        if not h_vector or not dd_vector:
+            continue
+        templates.append(
+            {
+                "H_vector": h_vector,
+                "DD_vector": dd_vector,
+                "UD_vector": _safe_parse_vector(getattr(row, "UD_vector", None)),
+            }
+        )
+
+    return templates
 
 # ============================================================================
 # USERNAME VALIDATION
@@ -2336,6 +2573,378 @@ def deactivate_user_api_key(key_id):
         print(f"[ERROR] deactivate_user_api_key: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_bp.route("/partner/enroll", methods=["POST"])
+@limiter.limit("120 per minute")
+def partner_enroll():
+    """Enroll partner keystroke sample using API key authentication."""
+    auth_context, auth_error = _authenticate_partner_api_request()
+    if auth_error:
+        return auth_error
+
+    api_key = auth_context["api_key"]
+    client_ip = auth_context["client_ip"]
+    user_agent = auth_context["user_agent"]
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    raw_email = data.get("email")
+    email = raw_email.strip() if isinstance(raw_email, str) else None
+
+    if not username:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "username is required",
+                    "error_code": "INVALID_INPUT",
+                }
+            ),
+            400,
+        )
+
+    validation = auth_service.validate_username(username)
+    if not validation["valid"]:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": validation["message"],
+                    "error_code": "INVALID_USERNAME",
+                }
+            ),
+            400,
+        )
+
+    log_entry = APIKeyService.log_enrollment(
+        api_key_id=api_key.id,
+        username=username,
+        email=email,
+        samples_count=1,
+        client_ip=client_ip,
+        user_agent=user_agent,
+        status="processing",
+    )
+
+    try:
+        features, typed_password, typed_password_hash, parse_error = _build_partner_features(
+            data, username
+        )
+        if parse_error:
+            log_entry.mark_failed(parse_error)
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": parse_error,
+                        "error_code": "INVALID_KEYSTROKE_DATA",
+                    }
+                ),
+                400,
+            )
+
+        quality = assess_sample_quality(features)
+        features["username"] = username
+        features["event_type"] = "enrollment"
+        features["quality_label"] = quality["quality_label"]
+        features["quality_score"] = quality["quality_score"]
+
+        user = auth_service.get_user_by_username(username)
+        created_new_user = False
+
+        if user and email and not getattr(user, "email", None):
+            user.email = email
+
+        if user and typed_password and getattr(user, "password_hash", None):
+            if not user.check_password(typed_password):
+                log_entry.mark_failed("Incorrect password")
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "Incorrect password",
+                            "error_code": "PASSWORD_MISMATCH",
+                        }
+                    ),
+                    403,
+                )
+
+        if user and typed_password and not getattr(user, "password_hash", None):
+            user.set_password(typed_password)
+
+        if not user:
+            create_password = typed_password or f"partner_{secrets.token_urlsafe(24)}"
+            user_result = auth_service.create_user(username, create_password, email=email)
+            if not user_result.get("success") or not user_result.get("user"):
+                log_entry.mark_failed(user_result.get("message", "Unable to create user"))
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": user_result.get("message", "Unable to create user"),
+                            "error_code": "USER_CREATION_FAILED",
+                        }
+                    ),
+                    400,
+                )
+
+            user = user_result["user"]
+            created_new_user = True
+
+        from app.models import EnrollmentVector
+
+        enrollment_row = EnrollmentVector(
+            user_id=user.id,
+            username=username,
+            event_type="enrollment",
+        )
+        enrollment_row.H_vector = json.dumps(features.get("H_vector", []))
+        enrollment_row.DD_vector = json.dumps(features.get("DD_vector", []))
+        enrollment_row.UD_vector = json.dumps(features.get("UD_vector", []))
+        enrollment_row.UU_vector = json.dumps(features.get("UU_vector", []))
+        enrollment_row.DU_vector = json.dumps(features.get("DU_vector", []))
+        enrollment_row.quality_label = quality["quality_label"]
+        enrollment_row.quality_score = quality["quality_score"]
+        if typed_password_hash:
+            enrollment_row.password = typed_password_hash
+
+        db.session.add(enrollment_row)
+        db.session.commit()
+
+        enrollment_status = biometric_service.get_enrollment_status(username)
+        enrollment_id = f"enr_{api_key.id}_{log_entry.id}_{int(datetime.now(timezone.utc).timestamp())}"
+
+        log_entry.user_id = user.id
+        log_entry.samples_count = 1
+        log_entry.mark_success(enrollment_id)
+
+        api_key.total_enrollments = int(api_key.total_enrollments or 0) + 1
+        if created_new_user:
+            api_key.enrolled_users = int(api_key.enrolled_users or 0) + 1
+        api_key.last_used_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Enrollment sample accepted",
+                    "enrollment_id": enrollment_id,
+                    "username": username,
+                    "api_key_prefix": api_key.key_prefix,
+                    "progress": {
+                        "current": enrollment_status.get("count", 0),
+                        "target": 20,
+                        "complete": bool(enrollment_status.get("ready_for_login", False)),
+                    },
+                    "quality": quality,
+                    "remaining_quota": api_key.get_remaining_quota(),
+                }
+            ),
+            201,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        try:
+            log_entry.mark_failed(str(e))
+        except Exception:
+            pass
+        print(f"[ERROR] partner_enroll: {e}")
+        traceback.print_exc()
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Failed to process enrollment request",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
+
+
+@api_bp.route("/partner/verify", methods=["POST"])
+@limiter.limit("180 per minute")
+def partner_verify():
+    """Verify partner keystroke sample using API key authentication."""
+    auth_context, auth_error = _authenticate_partner_api_request()
+    if auth_error:
+        return auth_error
+
+    api_key = auth_context["api_key"]
+    client_ip = auth_context["client_ip"]
+    user_agent = auth_context["user_agent"]
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+
+    if not username:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "username is required",
+                    "error_code": "INVALID_INPUT",
+                }
+            ),
+            400,
+        )
+
+    validation = auth_service.validate_username(username)
+    if not validation["valid"]:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": validation["message"],
+                    "error_code": "INVALID_USERNAME",
+                }
+            ),
+            400,
+        )
+
+    user = auth_service.get_user_by_username(username)
+    user_id = user.id if user else None
+
+    try:
+        features, _, _, parse_error = _build_partner_features(data, username)
+        if parse_error:
+            APIKeyService.log_verification(
+                api_key_id=api_key.id,
+                user_id=user_id,
+                username=username,
+                verified=False,
+                confidence_score=0.0,
+                error_message=parse_error,
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": parse_error,
+                        "error_code": "INVALID_KEYSTROKE_DATA",
+                    }
+                ),
+                400,
+            )
+
+        templates = _load_partner_enrollment_templates(username)
+        min_templates = int(
+            getattr(biometric_service, "MIN_SAMPLES_FOR_VERIFICATION", 3) or 3
+        )
+        if len(templates) < min_templates:
+            message = (
+                f"Insufficient enrollment samples ({len(templates)}/{min_templates})"
+            )
+            APIKeyService.log_verification(
+                api_key_id=api_key.id,
+                user_id=user_id,
+                username=username,
+                verified=False,
+                confidence_score=0.0,
+                error_message=message,
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": message,
+                        "error_code": "INSUFFICIENT_ENROLLMENT",
+                    }
+                ),
+                404,
+            )
+
+        verification_result = biometric_service.verify_keystroke_sample(features, templates)
+
+        verified = False
+        confidence_score = None
+        confidence_label = None
+        decision = "impostor"
+
+        if isinstance(verification_result, dict) and "decision" in verification_result:
+            decision = verification_result.get("decision", "impostor")
+            verified = decision == "genuine"
+            confidence_score = verification_result.get("confidence_score")
+            confidence_label = verification_result.get("confidence_label")
+        else:
+            verified = bool((verification_result or {}).get("verified", False))
+            confidence_score = (verification_result or {}).get("score")
+            confidence_label = (verification_result or {}).get("confidence")
+            decision = "genuine" if verified else "impostor"
+
+        verification_error = None
+        if not verified:
+            verification_error = (verification_result or {}).get(
+                "error", "Biometric verification failed"
+            )
+
+        verification_log = APIKeyService.log_verification(
+            api_key_id=api_key.id,
+            user_id=user_id,
+            username=username,
+            verified=verified,
+            confidence_score=confidence_score,
+            error_message=verification_error,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
+
+        api_key.total_verifications = int(api_key.total_verifications or 0) + 1
+        api_key.last_used_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "verified": bool(verified),
+                    "decision": decision,
+                    "username": username,
+                    "confidence_score": confidence_score,
+                    "confidence_label": confidence_label,
+                    "templates_used": len(templates),
+                    "verification_id": verification_log.id,
+                    "api_key_prefix": api_key.key_prefix,
+                    "remaining_quota": api_key.get_remaining_quota(),
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        try:
+            APIKeyService.log_verification(
+                api_key_id=api_key.id,
+                user_id=user_id,
+                username=username,
+                verified=False,
+                confidence_score=0.0,
+                error_message=str(e),
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+        except Exception:
+            pass
+        print(f"[ERROR] partner_verify: {e}")
+        traceback.print_exc()
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Failed to process verification request",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 @api_bp.route("/user/reset_password", methods=["POST"])

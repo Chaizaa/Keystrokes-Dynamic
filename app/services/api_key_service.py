@@ -194,7 +194,16 @@ class APIKeyService:
         return True
 
     @staticmethod
-    def log_enrollment(api_key_id, username, email, samples_count, client_ip=None):
+    def log_enrollment(
+        api_key_id,
+        username,
+        email,
+        samples_count,
+        client_ip=None,
+        user_agent=None,
+        user_id=None,
+        status="pending",
+    ):
         """
         Log an enrollment request
         
@@ -204,17 +213,22 @@ class APIKeyService:
             email: Email address
             samples_count: Number of keystroke samples
             client_ip: Client IP address
+            user_agent: User agent string
+            user_id: Optional user ID if known
+            status: Enrollment status (default: pending)
             
         Returns:
             EnrollmentLog: The created log entry
         """
         log = EnrollmentLog(
             api_key_id=api_key_id,
+            user_id=user_id,
             username=username,
             email=email,
             samples_count=samples_count,
             client_ip=client_ip,
-            status="pending"
+            user_agent=user_agent,
+            status=status,
         )
         db.session.add(log)
         db.session.commit()
@@ -222,7 +236,16 @@ class APIKeyService:
         return log
 
     @staticmethod
-    def log_verification(api_key_id, username, verified, confidence_score=None, error_message=None, client_ip=None):
+    def log_verification(
+        api_key_id,
+        username,
+        verified,
+        confidence_score=None,
+        error_message=None,
+        client_ip=None,
+        user_agent=None,
+        user_id=None,
+    ):
         """
         Log a verification request
         
@@ -233,17 +256,21 @@ class APIKeyService:
             confidence_score: Float (0.0-1.0) - match confidence
             error_message: If verification failed, error details
             client_ip: Client IP address
+            user_agent: User agent string
+            user_id: Optional user ID if known
             
         Returns:
             VerificationLog: The created log entry
         """
         log = VerificationLog(
             api_key_id=api_key_id,
+            user_id=user_id,
             username=username,
             verified=verified,
             confidence_score=confidence_score,
             error_message=error_message,
-            client_ip=client_ip
+            client_ip=client_ip,
+            user_agent=user_agent,
         )
         db.session.add(log)
         db.session.commit()

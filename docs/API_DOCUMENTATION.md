@@ -1,7 +1,7 @@
 # API Documentation
 **Keystrokes-Dynamic Biometric Authentication API**  
-**Version**: 2.0  
-**Date**: December 24, 2024
+**Version**: 2.1  
+**Date**: March 9, 2026
 
 ---
 
@@ -10,7 +10,7 @@
 RESTful API for keystroke dynamics biometric authentication. Supports user registration with behavioral biometric enrollment and continuous authentication through typing pattern analysis.
 
 **Base URL**: `http://localhost:5000/api`  
-**Authentication**: Session-based with Flask-Login  
+**Authentication**: Session-based (Flask-Login) and API key-based for partner endpoints  
 **Content-Type**: `application/json`
 
 ---
@@ -25,6 +25,11 @@ RESTful API for keystroke dynamics biometric authentication. Supports user regis
 ### Login & Verification
 ```
 1. Check Username → 2. Submit Keystroke Sample → 3. Biometric Verification → 4. Session Created
+```
+
+### Partner API Key Flow
+```
+1. Generate API key from dashboard → 2. Partner captures keystroke events → 3. Call /api/partner/enroll or /api/partner/verify with Bearer key
 ```
 
 ---
@@ -564,6 +569,187 @@ curl -X GET http://localhost:5000/api/user/info \
 
 ---
 
+### 8. Partner Integration API (API Key)
+
+These endpoints are intended for external partner websites/apps that integrate biometric enrollment and verification.
+
+**Prerequisites**:
+- Generate API key from dashboard endpoint: `POST /api/user/api-keys/generate`
+- Send API key in one of these headers:
+  - `Authorization: Bearer sk_live_xxx`
+  - `X-API-Key: sk_live_xxx`
+- Optional origin lock is enforced when `allowed_origins` is set on the API key.
+
+#### 8.1 Partner Enrollment
+
+**Endpoint**: `POST /api/partner/enroll`  
+**Authentication**: API Key  
+**Rate Limit**: `120 per minute` (route limit) + per-key hourly quota (`api_key.rate_limit`)  
+
+##### Request Body
+```json
+{
+  "username": "partner_user_01",
+  "email": "partner-user@example.com",
+  "events": [
+    {"evt": "d", "key": "a", "code": "KeyA", "t": 1023.11},
+    {"evt": "u", "key": "a", "code": "KeyA", "t": 1142.89}
+  ]
+}
+```
+
+You can also send vector payload directly (without `events`):
+```json
+{
+  "username": "partner_user_01",
+  "H_vector": [0.121, 0.134, 0.119],
+  "DD_vector": [0.081, 0.077, 0.090],
+  "UD_vector": [0.022, 0.025]
+}
+```
+
+##### Success Response (201)
+```json
+{
+  "success": true,
+  "message": "Enrollment sample accepted",
+  "enrollment_id": "enr_2_10_1741490000",
+  "username": "partner_user_01",
+  "api_key_prefix": "sk_live_abc123def456",
+  "progress": {
+    "current": 4,
+    "target": 20,
+    "complete": true
+  },
+  "quality": {
+    "quality_label": "good",
+    "quality_score": 92,
+    "quality_warnings": []
+  },
+  "remaining_quota": 97
+}
+```
+
+#### 8.2 Partner Verification
+
+**Endpoint**: `POST /api/partner/verify`  
+**Authentication**: API Key  
+**Rate Limit**: `180 per minute` (route limit) + per-key hourly quota (`api_key.rate_limit`)  
+
+##### Request Body
+```json
+{
+  "username": "partner_user_01",
+  "events": [
+    {"evt": "d", "key": "a", "code": "KeyA", "t": 2023.11},
+    {"evt": "u", "key": "a", "code": "KeyA", "t": 2142.89}
+  ]
+}
+```
+
+##### Success Response (200)
+```json
+{
+  "success": true,
+  "verified": true,
+  "decision": "genuine",
+  "username": "partner_user_01",
+  "confidence_score": 0.93,
+  "confidence_label": "High Confidence",
+  "templates_used": 8,
+  "verification_id": 35,
+  "api_key_prefix": "sk_live_abc123def456",
+  "remaining_quota": 96
+}
+```
+
+##### Common Partner Errors
+- `401 INVALID_API_KEY`: Missing/invalid API key
+- `403 ORIGIN_NOT_ALLOWED`: Origin header not allowed by key policy
+- `429 RATE_LIMIT_EXCEEDED`: Key quota exhausted
+- `404 INSUFFICIENT_ENROLLMENT`: Verification requested before minimum templates
+
+#### 8.3 JavaScript Keystroke Recorder for Partner
+
+**File**: `static/js/partner_keystroke_recorder.js`
+
+This file provides a single recorder API:
+- `Keystroke` (singleton-style constructor)
+
+`Keystroke` follows a singleton init guard pattern:
+
+```javascript
+function Keystroke(options) {
+  if (Keystroke.initialized !== true) {
+    // initialize once, then reuse the same instance
+  }
+  return Keystroke.instance;
+}
+```
+
+`Keystroke` provides SDK-style methods for partner integration:
+- `start()` and `stop()`
+- `reset(all)`
+- `addTarget(selectorOrElement)` and `removeTarget(selectorOrElement)`
+- `removeEventListeners()`
+- `getTypingPattern({type, text, length, asObject})`
+- `getQuality(pattern)` and `getLength(pattern)`
+- `isMobile()` and `checkEnvironment()`
+- `buildPayload({username, email, password, passwordHash})`
+- `getEvents()` and `hasEnoughData(minEvents)`
+- `createPartnerApiClient({baseUrl, apiKey, fetchImpl})`
+- `bind(inputOrSelector, options)`
+
+##### Example Integration
+```html
+<script src="/static/js/partner_keystroke_recorder.js"></script>
+<script>
+  const ks = new Keystroke({
+    minEvents: 4,
+    normalizeTime: false
+  });
+
+  ks.addTarget('#passwordInput');
+  ks.start();
+
+  const partnerApi = ks.createPartnerApiClient({
+    baseUrl: 'https://your-host/api/partner',
+    apiKey: 'sk_live_your_key_here'
+  });
+
+  async function enrollPartnerUser(username) {
+    if (!ks.hasEnoughData()) {
+      throw new Error('Insufficient keystroke events');
+    }
+
+    // Optional: obtain a local SDK-style typing pattern for client-side quality checks.
+    const typingPattern = ks.getTypingPattern({ type: 2, text: document.querySelector('#passwordInput').value });
+    const quality = ks.getQuality(typingPattern);
+    if (quality < 0.3) {
+      throw new Error('Typing quality too low, please type naturally');
+    }
+
+    const payload = ks.buildPayload({ username: username });
+    const result = await partnerApi.enroll(payload);
+    ks.reset();
+    return result;
+  }
+
+  async function verifyPartnerUser(username) {
+    if (!ks.hasEnoughData()) {
+      throw new Error('Insufficient keystroke events');
+    }
+
+    const payload = ks.buildPayload({ username: username });
+    const result = await partnerApi.verify(payload);
+    ks.reset();
+    return result;
+  }
+</script>
+```
+
+---
+
 ## Error Handling
 
 ### HTTP Status Codes
@@ -605,6 +791,11 @@ All errors follow this format:
 | `RATE_LIMIT_EXCEEDED` | Too many requests |
 | `INVALID_VECTOR_FORMAT` | Malformed biometric data |
 | `SESSION_EXPIRED` | Authentication session expired |
+| `INVALID_API_KEY` | Missing, invalid, expired, or inactive API key |
+| `ORIGIN_NOT_ALLOWED` | Request origin is not whitelisted for API key |
+| `INVALID_KEYSTROKE_DATA` | Partner payload does not contain valid events/vectors |
+| `PASSWORD_MISMATCH` | Enrollment request password does not match existing user |
+| `USER_CREATION_FAILED` | Partner enrollment could not create target user |
 
 ---
 
@@ -619,6 +810,8 @@ All errors follow this format:
 | `/api/register_sample` | 10 requests | 1 minute | Per user |
 | `/api/verify` | 5 requests | 1 minute | Per IP |
 | `/api/reset_password` | 3 requests | 1 hour | Per user |
+| `/api/partner/enroll` | 120 requests | 1 minute | Per IP + per key quota |
+| `/api/partner/verify` | 180 requests | 1 minute | Per IP + per key quota |
 
 ### Rate Limit Headers
 
@@ -646,6 +839,7 @@ X-RateLimit-Reset: 1703419200
 ### Authentication
 - **Password Hashing**: Bcrypt (cost factor 12)
 - **Session Management**: Flask-Login with secure cookies
+- **API Key Auth**: Bearer token or `X-API-Key` for partner endpoints
 - **CSRF Protection**: Enabled for all state-changing operations (except API with exemption)
 
 ### Data Protection
@@ -760,6 +954,11 @@ result = client.register('john_doe', 'SecurePass123!')
 
 ## Changelog
 
+### Version 2.1 (March 2026)
+- Added API key-based partner endpoints: `/api/partner/enroll`, `/api/partner/verify`
+- Added partner integration documentation (headers, payloads, and response examples)
+- Added reusable partner JS recorder/client utility: `static/js/partner_keystroke_recorder.js`
+
 ### Version 2.0 (December 2024)
 - ✅ Migrated to service layer architecture
 - ✅ Added comprehensive error handling
@@ -784,6 +983,6 @@ result = client.register('john_doe', 'SecurePass123!')
 
 ---
 
-**Last Updated**: December 24, 2024  
-**API Version**: 2.0  
+**Last Updated**: March 9, 2026  
+**API Version**: 2.1  
 **Status**: Production Ready ✅
