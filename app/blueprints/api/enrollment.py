@@ -18,7 +18,7 @@ from app.models import AdminAudit, EnrollmentVector, User, db
 from app.services.email_service import email_service
 from app.utils.password_strength import calculate_password_strength, get_strength_label
 
-from ._shared import api_bp, auth_service, biometric_service, db_manager
+from ._shared import api_bp, auth_service, biometric_service
 
 
 # ---------------------------------------------------------------------------
@@ -280,29 +280,24 @@ def register_sample():
 
             if uid is not None:
                 features["user_id"] = int(uid)
-                ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
-                ev.timestamp = datetime.now(timezone.utc).isoformat()
-                ev.total_duration = features.get("total_duration")
-                ev.typing_speed = features.get("typing_speed")
+            ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
+            ev.timestamp = datetime.now(timezone.utc).isoformat()
+            ev.total_duration = features.get("total_duration")
+            ev.typing_speed = features.get("typing_speed")
 
-                # Raw vectors
-                for vec_name in ("H", "DD", "UD", "UU", "DU"):
-                    setattr(ev, f"{vec_name}_vector",
-                            json.dumps(features.get(f"{vec_name}_vector", [])))
+            # Raw vectors
+            for vec_name in ("H", "DD", "UD", "UU", "DU"):
+                setattr(ev, f"{vec_name}_vector",
+                        json.dumps(features.get(f"{vec_name}_vector", [])))
 
-                # Flat stats (mean, std, min, max, cv) – filled by _apply_vector_stats
-                _apply_vector_stats(ev, features)
+            # Flat stats (mean, std, min, max, cv) – filled by _apply_vector_stats
+            _apply_vector_stats(ev, features)
 
-                if password_hash:
-                    ev.password_hash = password_hash
+            if password_hash:
+                ev.password_hash = password_hash
 
-                db.session.add(ev)
-                db.session.commit()
-            else:
-                if db_manager.save_data(features) is False:
-                    print(f"[ERROR] register_sample: DB save failed for user {username}")
-                    return jsonify({"status": "error",
-                                    "message": "Database error saving sample"}), 500
+            db.session.add(ev)
+            db.session.commit()
 
         except Exception as e:
             print(f"[ERROR] register_sample save_data: {e}")
@@ -315,9 +310,23 @@ def register_sample():
 
         ml_training = None
         # Auto-train per-user model when enrollment completes (ML-only flow).
+        # Training runs in a background thread — the grid search over 72 RF
+        # configurations takes 10-60 s and must not block the HTTP response.
         try:
             if new_count == getattr(biometric_service, "RECOMMENDED_SAMPLES", 100):
-                ml_training = biometric_service.train_user_model(username, force=False)
+                from flask import current_app
+                from app.services.ml_model_service import schedule_background_training
+                app = current_app._get_current_object()
+                started = schedule_background_training(app, username, force=False)
+                ml_training = {
+                    "success": True,
+                    "reason": "training_started" if started else "training_in_progress",
+                    "message": (
+                        "Model training started in background."
+                        if started
+                        else "Model training already in progress."
+                    ),
+                }
         except Exception as _exc:
             ml_training = {
                 "success": False,

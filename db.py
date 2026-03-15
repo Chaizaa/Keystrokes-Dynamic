@@ -3,7 +3,7 @@
 .. deprecated::
     This module wraps raw SQLite/CSV access.
     New code should use SQLAlchemy models from ``app.models`` instead.
-    See ``app/database/db.py`` for the app-level wrapper.
+    See ``app/database/_archive/db.py`` for the app-level wrapper.
     This file is retained only for backward-compatibility with legacy scripts.
 """
 import csv

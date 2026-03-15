@@ -12,15 +12,75 @@ import json
 import traceback
 from datetime import datetime, timezone
 
-import numpy as _np
 from flask import current_app, jsonify, request, session
-from flask_login import login_required, logout_user
 from sqlalchemy import select
 
 from app import limiter as _limiter
-from app.models import AdminAudit, User, db
+from app.models import AdminAudit, LoginAttempt, User, UsersVector, db
 
-from ._shared import api_bp, auth_service, biometric_service, db_manager
+from ._shared import api_bp, auth_service, biometric_service
+
+
+def _log_login_attempt(
+    username,
+    *,
+    success,
+    failure_reason=None,
+    ip_address=None,
+    user_agent=None,
+    verification_score=None,
+    verification_method=None,
+    rate_limit_hit=False,
+):
+    """Persist one login attempt using ORM (replacement for legacy db_manager logs)."""
+    try:
+        user = db.session.execute(
+            select(User).where(User.username == username)
+        ).scalars().first()
+        LoginAttempt.log_attempt(
+            username=username,
+            success=bool(success),
+            user_id=getattr(user, "id", None),
+            verification_score=verification_score,
+            verification_method=verification_method,
+            failure_reason=failure_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            rate_limit_hit=rate_limit_hit,
+        )
+    except Exception as exc:
+        print(f"[WARN] Failed to persist login attempt for {username}: {exc}")
+
+
+def _save_verification_vector(username, features, verified, score):
+    """Store verification sample in users_vectors via ORM."""
+    user = db.session.execute(
+        select(User).where(User.username == username)
+    ).scalars().first()
+
+    rec = UsersVector(
+        username=username,
+        user_id=getattr(user, "id", None),
+        event_type="login",
+        data_type="verification",
+        is_successful=bool(verified),
+    )
+    rec.timestamp = datetime.now(timezone.utc).isoformat()
+    rec.total_duration = features.get("total_duration")
+    rec.typing_speed = features.get("typing_speed")
+
+    for vec_name in ("H", "DD", "UD", "UU", "DU"):
+        setattr(rec, f"{vec_name}_vector", json.dumps(features.get(f"{vec_name}_vector", [])))
+
+    for prefix in ("H", "DD", "UD", "UU", "DU"):
+        for stat in ("mean", "std", "min", "max", "cv"):
+            key = f"{prefix}_{stat}"
+            val = features.get(key)
+            if val is not None:
+                setattr(rec, key, val)
+
+    db.session.add(rec)
+    db.session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +98,8 @@ def pre_verify_password():
         if not username or not raw_events:
             return jsonify({"valid": False, "message": "Data tidak lengkap"}), 400
 
-        enrollment_data = db_manager.get_enrollment_samples(username)
-        if not enrollment_data or len(enrollment_data) == 0:
+        enrollment_status = biometric_service.get_enrollment_status(username)
+        if int(enrollment_status.get("count", 0)) == 0:
             return jsonify({"valid": False, "message": "User not registered"}), 404
 
         import app.blueprints.api as api_mod
@@ -50,15 +110,15 @@ def pre_verify_password():
                             "message": "Failed to process keystroke data"}), 400
 
         features = result["features"]
-        password_hash = result.get("password_hash", "")
-        stored_hash = db_manager.get_password_hash(username)
+        real_pass = result.get("real_password_string")
+        user_obj = auth_service.get_user_by_identifier(username)
 
-        if stored_hash:
-            print(f"[Pre-Verify] User '{username}' → Hash check enabled")
-            if password_hash != stored_hash:
+        if user_obj and getattr(user_obj, "password_hash", None):
+            print(f"[Pre-Verify] User '{username}' → Password check enabled")
+            if real_pass is None or not user_obj.check_password(real_pass):
                 return jsonify({"valid": False,
                                 "message": "Incorrect password",
-                                "reason": "hash_mismatch"}), 403
+                                "reason": "password_mismatch"}), 403
 
         verification_result = biometric_service.verify_keystroke_sample(username, features)
         if not verification_result.get("success"):
@@ -103,20 +163,32 @@ def login():
         user_agent = request.headers.get("User-Agent", "Unknown")
 
         if not username or not events:
-            return jsonify({"success": False, "message": "Data tidak lengkap",
+            return jsonify({"success": False, "message": "Incomplete request data",
                             "reason": "invalid_input"}), 400
 
         # Application-level rate limiting
-        recent_failed = db_manager.get_failed_login_count_recent(username, minutes=15)
+        recent_failed = LoginAttempt.get_recent_failed_attempts(username, minutes=15)
         DEV_LENIENT = current_app.config.get("DEV_LENIENT_RATELIMIT", False)
         if recent_failed >= 5 and not DEV_LENIENT:
-            db_manager.log_failed_login(username, "rate_limit_exceeded",
-                                        ip_address, user_agent)
-            return jsonify({"success": False, "message": "Coba lagi nanti",
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="rate_limit_exceeded",
+                ip_address=ip_address,
+                user_agent=user_agent,
+                rate_limit_hit=True,
+            )
+            return jsonify({"success": False, "message": "Too many failed attempts. Try again later.",
                             "reason": "rate_limit_exceeded"}), 429
         if recent_failed >= 5 and DEV_LENIENT:
-            db_manager.log_failed_login(username, "rate_limit_skipped_dev",
-                                        ip_address, user_agent)
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="rate_limit_skipped_dev",
+                ip_address=ip_address,
+                user_agent=user_agent,
+                rate_limit_hit=True,
+            )
             print(f"[DEV] Skipping rate-limit lockout for {username} in DEV_LENIENT mode")
 
         # Extract keystroke features
@@ -124,9 +196,14 @@ def login():
 
         result = api_mod.process_web_events(events, username)
         if result["status"] == "error":
-            db_manager.log_failed_login(username, "invalid_keystroke_data",
-                                        ip_address, user_agent)
-            return jsonify({"success": False, "message": "Keystroke data tidak valid",
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="invalid_keystroke_data",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return jsonify({"success": False, "message": "Invalid keystroke data",
                             "reason": "invalid_data"}), 400
 
         features = result["features"]
@@ -135,8 +212,13 @@ def login():
         real_pass = result.get("real_password_string")
         if user_obj and getattr(user_obj, "password_hash", None):
             if real_pass is None or not user_obj.check_password(real_pass):
-                db_manager.log_failed_login(username, "password_mismatch",
-                                            ip_address, user_agent)
+                _log_login_attempt(
+                    username,
+                    success=False,
+                    failure_reason="password_mismatch",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
                 return jsonify({"success": False, "message": "Incorrect password",
                                 "reason": "PASSWORD_MISMATCH"}), 403
 
@@ -145,7 +227,13 @@ def login():
         enrollment_count = enrollment_status["count"]
 
         if enrollment_count == 0:
-            db_manager.log_failed_login(username, "no_enrollment", ip_address, user_agent)
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="no_enrollment",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
             return jsonify({"success": False, "message": "User not registered",
                             "reason": "no_enrollment"}), 404
 
@@ -163,11 +251,12 @@ def login():
 
         # If ML could not be executed (no model / auto-train failure), surface it clearly.
         if not verification_result.get("success"):
-            db_manager.log_failed_login(
+            _log_login_attempt(
                 username,
-                verification_result.get("reason", "ml_unavailable"),
-                ip_address,
-                user_agent,
+                success=False,
+                failure_reason=verification_result.get("reason", "ml_unavailable"),
+                ip_address=ip_address,
+                user_agent=user_agent,
             )
             payload = {
                 "success": False,
@@ -177,7 +266,7 @@ def login():
                 ),
                 "reason": verification_result.get("reason", "ml_unavailable"),
             }
-            if (request.json or {}).get("debug") or DEV_LENIENT:
+            if DEV_LENIENT:
                 payload["debug"] = verification_result
             return jsonify(payload), 400
         print(f"[LOGIN] {username} biometric => verified={verification_result.get('verified')} "
@@ -186,48 +275,68 @@ def login():
 
         if not verification_result.get("verified"):
             if not enrollment_status["ready_for_login"]:
-                db_manager.log_failed_login(username, "insufficient_enrollment",
-                                            ip_address, user_agent)
+                _log_login_attempt(
+                    username,
+                    success=False,
+                    failure_reason="insufficient_enrollment",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
                 _rec = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
                 payload = {
                     "success": False,
-                    "message": f"Enrollment belum lengkap ({enrollment_count}/{_rec})",
+                    "message": f"Enrollment incomplete ({enrollment_count}/{_rec})",
                     "reason": "insufficient_enrollment",
                 }
-                if (request.json or {}).get("debug") or DEV_LENIENT:
+                if DEV_LENIENT:
                     payload["debug"] = verification_result
                 return jsonify(payload), 400
 
-            db_manager.log_failed_login(username, "impostor_detected",
-                                        ip_address, user_agent)
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="impostor_detected",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
             payload = {"success": False, "message": "Verification failed",
                        "reason": "impostor_detected"}
-            if (request.json or {}).get("debug") or DEV_LENIENT:
+            if DEV_LENIENT:
                 payload["debug"] = verification_result
-            status = 400 if (request.json or {}).get("debug") else 403
-            return jsonify(payload), status
+            return jsonify(payload), 403
 
         # Re-fetch User for flask-login session creation
         user = db.session.execute(
             select(User).where(User.username == username)
         ).scalars().first()
         if not user:
-            db_manager.log_failed_login(username, "user_not_found", ip_address, user_agent)
-            return jsonify({"success": False, "message": "User tidak ditemukan",
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="user_not_found",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return jsonify({"success": False, "message": "User not found",
                             "reason": "user_not_found"}), 404
 
-        # 2FA check before full login
-        if user.two_factor_enabled and enrollment_status.get("ready_for_login"):
+        # 2FA check — must happen BEFORE login_user_session so no session is
+        # established until the second factor is confirmed.
+        if user.two_factor_enabled:
             session["2fa_user_id"] = user.id
-            logout_user()
             return jsonify({"success": True, "requires_2fa": True,
                             "message": "2FA verification required",
                             "redirect": "/auth/2fa/verify"}), 200
 
         # Email verification required (non-admin)
         if not user.is_admin() and user.email and not user.email_verified:
-            db_manager.log_failed_login(username, "email_not_verified",
-                                        ip_address, user_agent)
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="email_not_verified",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
             return jsonify({"success": False,
                             "message": "Email not verified. Check your inbox",
                             "reason": "email_not_verified",
@@ -241,27 +350,19 @@ def login():
         confidence_score = float(verification_result.get("score", 0.0))
 
         if is_genuine:
-            db_manager.save_verified_login({
-                "username": username,
-                "password_hash": user.password_hash,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "verification_score": confidence_score,
-                "recommended_method": verification_result.get("confidence", "medium"),
-                "ip_address": ip_address,
-                "user_agent": user_agent,
-            })
+            _log_login_attempt(
+                username,
+                success=True,
+                verification_score=confidence_score,
+                verification_method=verification_result.get("confidence", "medium"),
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
             login_result = auth_service.login_user_session(user)
             if not login_result:
                 return jsonify({"success": False, "message": "Failed to create session",
                                 "reason": "session_error"}), 500
-
-            if user.two_factor_enabled:
-                session["2fa_user_id"] = user.id
-                logout_user()
-                return jsonify({"success": True, "requires_2fa": True,
-                                "message": "2FA verification required",
-                                "redirect": "/auth/2fa/verify"}), 200
 
             user.last_login = datetime.now(timezone.utc)
             user.last_login_ip = ip_address
@@ -286,9 +387,14 @@ def login():
             }), 200
 
         else:
-            db_manager.log_failed_login(username, "impostor_detected",
-                                        ip_address, user_agent,
-                                        verification_score=confidence_score)
+            _log_login_attempt(
+                username,
+                success=False,
+                failure_reason="impostor_detected",
+                ip_address=ip_address,
+                user_agent=user_agent,
+                verification_score=confidence_score,
+            )
             return jsonify({
                 "success": False, "message": "Login failed",
                 "reason": "impostor_detected",
@@ -299,7 +405,7 @@ def login():
     except Exception as e:
         print(f"[ERROR] Login failed: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "message": f"Server Error: {str(e)}",
+        return jsonify({"success": False, "message": "Internal server error",
                         "reason": "server_error"}), 500
 
 
@@ -322,13 +428,12 @@ def verify_user():
                             "message": process_result["msg"]}), 400
 
         new_features = process_result["features"]
-        enrollment_data = db_manager.get_enrollment_samples(username)
-
-        if len(enrollment_data) < 5:
+        enrollment_status = biometric_service.get_enrollment_status(username)
+        if int(enrollment_status.get("count", 0)) < 5:
             return jsonify({
                 "status": "error",
                 "message": (f"User not registered or enrollment data insufficient "
-                            f"({len(enrollment_data)} samples)"),
+                            f"({int(enrollment_status.get('count', 0))} samples)"),
             }), 404
 
         verification_result = biometric_service.verify_keystroke_sample(username, new_features)
@@ -337,14 +442,13 @@ def verify_user():
                             "message": verification_result.get("message",
                                                                "Verification error")}), 400
 
-        # Save verification record
-        new_features.update({
-            "username": username,
-            "login_result": str(verification_result["verified"]),
-            "login_score": verification_result["score"],
-            "data_type": "verification",
-        })
-        db_manager.save_data(new_features)
+        # Save verification record via ORM
+        _save_verification_vector(
+            username,
+            new_features,
+            verification_result.get("verified"),
+            verification_result.get("score"),
+        )
 
         if verification_result["verified"]:
             return jsonify({

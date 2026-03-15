@@ -10,12 +10,12 @@ This service keeps the same public method names used by routes (`get_enrollment_
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import func, select
 
 from app.models import UsersVector, db
-from app.services.ml_model_service import ml_model_service
+from app.services.ml_model_service import is_training_in_progress, ml_model_service, schedule_background_training
 
 
 class BiometricService:
@@ -31,10 +31,8 @@ class BiometricService:
     MEDIUM_CONFIDENCE_THRESHOLD = 0.70
     LOW_CONFIDENCE_THRESHOLD = 0.55
 
-    def __init__(self, db: Optional[object] = None):
-        # `db` was previously the legacy Database() manager.
-        # It is kept only for backwards compatibility; ML paths use SQLAlchemy.
-        self.db = db
+    def __init__(self):
+        pass
 
     # ------------------------------------------------------------------
     # Legacy helpers (compatibility)
@@ -163,20 +161,8 @@ class BiometricService:
             "metrics": res.metrics,
         }
 
-    def verify_keystroke_sample(self, arg1, arg2=None, use_statistical: bool = True) -> Dict[str, Any]:
-        """Verify a keystroke sample using ML only.
-
-        Supported call styles (kept for backwards compatibility):
-        - (username: str, features: dict)
-        - (features: dict, _ignored_templates: list)
-        """
-        if isinstance(arg1, str):
-            username = arg1
-            features = arg2 or {}
-        else:
-            features = arg1 or {}
-            username = (features or {}).get("username")
-
+    def verify_keystroke_sample(self, username: str, features: dict) -> Dict[str, Any]:
+        """Verify a keystroke sample for *username* using the ML model."""
         username = (username or "").strip()
         if not username:
             return {
@@ -187,20 +173,33 @@ class BiometricService:
                 "message": "Missing username",
             }
 
-        # Attempt auto-train if the user has no stored model.
+        # If no model is available, trigger training in a background thread so
+        # the login request is not blocked by the 72-model grid search (which can
+        # take 10-60 s).  The user will be asked to retry once training completes.
         if ml_model_service.get_model_row(username) is None:
-            train_res = ml_model_service.train_user_model(username, force=False)
-            if not train_res.success:
+            from flask import current_app
+            already_running = is_training_in_progress(username)
+            if not already_running:
+                try:
+                    app = current_app._get_current_object()
+                    schedule_background_training(app, username, force=False)
+                except RuntimeError:
+                    # Outside of application context (e.g. tests) — fall back to sync train
+                    ml_model_service.train_user_model(username, force=False)
+
+            # Re-check: maybe sync fallback just finished
+            if ml_model_service.get_model_row(username) is None:
+                status = "training_started" if not already_running else "training_in_progress"
                 return {
                     "success": False,
                     "verified": False,
                     "score": 0.0,
-                    "reason": "model_not_found",
+                    "reason": status,
                     "message": (
-                        train_res.message
-                        or "Model not available yet; please complete enrollment/training"
+                        "Model training has started. Please try again in a moment."
+                        if not already_running
+                        else "Model training is in progress. Please try again shortly."
                     ),
-                    "train_reason": train_res.reason,
                 }
 
         pred = ml_model_service.verify(username, features)

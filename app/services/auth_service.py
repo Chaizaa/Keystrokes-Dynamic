@@ -7,11 +7,12 @@ from typing import Dict, Optional, Tuple
 
 from flask import session
 from flask_login import login_user, logout_user
+from sqlalchemy import func, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app.models import UsersVector
 from app.models import User
 from app.models import db as sqlalchemy_db
-from db import Database
 
 
 class AuthService:
@@ -22,8 +23,6 @@ class AuthService:
 
     def __init__(self):
         """Initialize authentication service with database connection"""
-        self.db = Database()  # Legacy database manager
-
         # Password requirements (keystroke-based: allow short passwords)
         self.MIN_PASSWORD_LENGTH = 1
         self.MAX_PASSWORD_LENGTH = 128
@@ -112,7 +111,6 @@ class AuthService:
             }
 
         # Check if user exists (use session-based select to avoid legacy Query)
-        from sqlalchemy import select
         from sqlalchemy.exc import OperationalError
 
         try:
@@ -120,6 +118,21 @@ class AuthService:
             row = sqlalchemy_db.session.execute(
                 select(User.id).where(User.username == username)
             ).first()
+
+            # Count existing enrollment samples with ORM (event_type or legacy data_type marker)
+            enrollment_count = int(
+                sqlalchemy_db.session.execute(
+                    select(func.count())
+                    .select_from(UsersVector)
+                    .where(UsersVector.username == username)
+                    .where(
+                        or_(
+                            UsersVector.event_type == "enrollment",
+                            UsersVector.data_type == "enrollment",
+                        )
+                    )
+                ).scalar_one()
+            )
         except OperationalError as e:
             # Database schema mismatch (e.g., migrations not applied); fail safe and report inability to verify
             print(f"[WARNING] AuthService.check_username_availability DB error: {e}")
@@ -130,8 +143,6 @@ class AuthService:
                 "enrollment_count": 0,
                 "message": "Unable to verify username availability (database schema mismatch)",
             }
-
-        enrollment_count = self.db.get_enrollment_count(username)
 
         if row is not None:
             return {
