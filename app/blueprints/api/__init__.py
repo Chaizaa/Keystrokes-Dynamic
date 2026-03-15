@@ -19,7 +19,6 @@ from ._shared import (  # noqa: F401
     api_bp,
     auth_service,
     biometric_service,
-    db_manager,
 )
 
 # Import order is irrelevant; all modules decorate the same api_bp object.

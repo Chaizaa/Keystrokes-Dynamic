@@ -25,7 +25,7 @@ from app.models import db as sqlalchemy_db
 from app.services.email_service import email_service
 from app.utils.password_strength import calculate_password_strength
 
-from ._shared import api_bp, auth_service, biometric_service, db_manager
+from ._shared import api_bp, auth_service, biometric_service
 
 
 # ---------------------------------------------------------------------------

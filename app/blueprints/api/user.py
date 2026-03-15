@@ -11,10 +11,12 @@ import traceback
 
 from flask import jsonify, request, session
 from flask_login import current_user, login_required, logout_user
+from sqlalchemy import delete, func, select
 
 from app import limiter as _limiter
+from app.models import LoginAttempt, UsersVector, db
 
-from ._shared import api_bp, auth_service, biometric_service, db_manager
+from ._shared import api_bp, auth_service, biometric_service
 
 
 @api_bp.route("/user/info", methods=["GET"])
@@ -35,7 +37,13 @@ def get_user_info():
         last_login = getattr(current_user, "last_login", None)
 
         enrollment_status = biometric_service.get_enrollment_status(username)
-        verified_logins = db_manager.get_verified_login_count(username)
+        verified_logins = int(
+            db.session.execute(
+                select(func.count())
+                .select_from(LoginAttempt)
+                .where(LoginAttempt.username == username, LoginAttempt.success == True)  # noqa: E712
+            ).scalar() or 0
+        )
 
         return jsonify({
             "username": username,
@@ -76,7 +84,14 @@ def reset_password():
         if not success:
             return jsonify({"error": message}), 400
 
-        db_manager.delete_enrollment_data(username)
+        db.session.execute(
+            delete(UsersVector).where(
+                UsersVector.username == username,
+                (UsersVector.event_type == "enrollment")
+                | (UsersVector.data_type == "enrollment"),
+            )
+        )
+        db.session.commit()
 
         logout_user()
         session.clear()
@@ -87,6 +102,7 @@ def reset_password():
         }), 200
 
     except Exception as e:
+        db.session.rollback()
         print(f"[ERROR] reset_password: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

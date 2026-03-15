@@ -97,3 +97,19 @@ download_db.ps1
 #image
 *.png
 *.jpg
+
+#serena
+.serena
+
+# Local ML experiment artifacts (generated locally)
+ml/models_v2/
+ml/result_v2/
+ml/dataset_railway_*.csv
+biometric_auth_railway_*.db
+
+# Local ad-hoc research scripts (do not track)
+scripts/_fix_paper.py
+scripts/query_db_stats.py
+scripts/run_ml_local.py
+scripts/show_metrics.py
+scripts/update_paper.py
