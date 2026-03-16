@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -439,3 +440,49 @@ class MLModelService:
 
 
 ml_model_service = MLModelService()
+
+# --- Background training helpers -----------------------------------------
+# Tracks usernames whose model is currently being trained in a daemon thread.
+# Prevents duplicate concurrent grid-search runs for the same user.
+_training_in_progress: set = set()
+_training_lock = threading.Lock()
+
+
+def schedule_background_training(app, username: str, *, force: bool = False) -> bool:
+    """Kick off model training for *username* in a background daemon thread.
+
+    Returns True if a new training thread was started, False if one was already
+    running for that user (or if the model already exists and force=False).
+
+    The caller must pass the current Flask ``app`` instance (obtained with
+    ``current_app._get_current_object()``) so the thread can push an app
+    context around the SQLAlchemy calls.
+    """
+    username = (username or "").strip()
+    if not username:
+        return False
+
+    with _training_lock:
+        if username in _training_in_progress:
+            return False  # already training
+        _training_in_progress.add(username)
+
+    def _run():
+        try:
+            with app.app_context():
+                ml_model_service.train_user_model(username, force=force)
+        except Exception as exc:
+            print(f"[BG-TRAIN] Error training model for {username}: {exc}")
+        finally:
+            with _training_lock:
+                _training_in_progress.discard(username)
+
+    t = threading.Thread(target=_run, daemon=True, name=f"ml-train-{username}")
+    t.start()
+    return True
+
+
+def is_training_in_progress(username: str) -> bool:
+    """Return True if a background training thread is active for *username*."""
+    with _training_lock:
+        return username in _training_in_progress
