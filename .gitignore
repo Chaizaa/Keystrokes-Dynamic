@@ -113,3 +113,14 @@ scripts/query_db_stats.py
 scripts/run_ml_local.py
 scripts/show_metrics.py
 scripts/update_paper.py
+
+# Research paper drafts and generated docs (not for version control)
+docs/RESEARCH_PAPER*.md
+docs/RESEARCH_PAPER*.docx
+docs/~$*.docx
+scripts/md_to_docx.py
+
+# Microsoft Office temp/lock files
+~$*.docx
+~$*.xlsx
+~$*.pptx
