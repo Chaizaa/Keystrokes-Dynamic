@@ -87,32 +87,24 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         """
-        Verify password against hash
-        
-        Supports multiple hash formats:
-        - Scrypt (new): "scrypt:32768:8:1$..."
-        - SHA-256 (legacy from CSV): "5e884898da28047151d0e56f8dc629..." (64 hex chars)
+        Verify password against hash.
 
-        Args:
-            password: Plain text password to verify
+        Supports all modern werkzeug-generated hashes (scrypt, pbkdf2, argon2).
 
-        Returns:
-            bool: True if password matches
+        Legacy unsalted SHA-256 hashes (64 hex chars, no salt) are intentionally
+        no longer accepted — they are vulnerable to rainbow-table attacks.
+        Any account in that format must go through the password-reset flow to
+        obtain a properly hashed password before logging in again.
         """
         if not self.password_hash:
             return False
-        
-        # Detect hash format
-        if self.password_hash.startswith('scrypt:'):
-            # Modern scrypt format - use werkzeug
-            return check_password_hash(self.password_hash, password)
-        elif len(self.password_hash) == 64 and all(c in '0123456789abcdef' for c in self.password_hash):
-            # Legacy SHA-256 format (from CSV)
-            sha256_hash = hashlib.sha256(password.encode()).hexdigest()
-            return sha256_hash == self.password_hash
-        else:
-            # Unknown format - return False
+
+        # Reject unsalted SHA-256 — do not allow these to authenticate.
+        if len(self.password_hash) == 64 and all(c in "0123456789abcdef" for c in self.password_hash):
             return False
+
+        # All modern werkzeug-generated hashes (scrypt, pbkdf2, argon2, etc.)
+        return check_password_hash(self.password_hash, password)
 
     def get_enrollment_count(self) -> int:
         """

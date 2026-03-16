@@ -198,8 +198,9 @@ def create_app(config_name="development"):
     # Health endpoints for admins/ops
     app.register_blueprint(health_bp, url_prefix="/health")
 
-    # Exempt admin API from CSRF (for AJAX requests)
-    csrf.exempt(admin_bp)
+    # Admin blueprint: CSRF is NOT exempted. base.html's global fetch() override
+    # automatically injects X-CSRFToken on every non-GET request, so all admin
+    # AJAX calls (delete user, send reset) are protected without any extra work.
 
     # Create database tables (guarded so migrations/stamping can run cleanly).
     # When running `flask db ...`, pre-creating tables can break migrations.
