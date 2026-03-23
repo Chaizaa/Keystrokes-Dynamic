@@ -141,10 +141,50 @@ class MLModelService:
         return buf.getvalue()
 
     def _deserialize_model(self, blob: bytes):
+        """Deserialize and validate the RandomForest model from BLOB.
+
+        Validates that:
+        1. The deserialized object is a RandomForestClassifier
+        2. The model has the required interface (predict_proba)
+        3. Feature count matches expected (50 columns)
+
+        Raises ValueError if validation fails.
+        """
+        from sklearn.ensemble import RandomForestClassifier
         import joblib
 
-        buf = io.BytesIO(blob)
-        return joblib.load(buf)
+        if not isinstance(blob, bytes) or len(blob) == 0:
+            raise ValueError("Model blob is empty or invalid")
+
+        try:
+            buf = io.BytesIO(blob)
+            model = joblib.load(buf)
+        except Exception as e:
+            raise ValueError(f"Failed to deserialize model: {e}")
+
+        # Validate model type
+        if not isinstance(model, RandomForestClassifier):
+            raise ValueError(
+                f"Model must be RandomForestClassifier, got {type(model).__name__}"
+            )
+
+        # Validate model has required methods
+        if not hasattr(model, "predict_proba"):
+            raise ValueError("Model must have predict_proba method")
+
+        # Validate feature count
+        expected_features = len(FEATURE_COLUMNS)
+        if not hasattr(model, "n_features_in_"):
+            raise ValueError("Model missing n_features_in_ attribute")
+
+        if model.n_features_in_ != expected_features:
+            raise ValueError(
+                f"Feature count mismatch: expected {expected_features}, "
+                f"got {model.n_features_in_}"
+            )
+
+        # Model passed all validations
+        return model
 
     def _load_training_rows(self) -> List[UsersVector]:
         """Load all enrollment rows used as training pool."""
