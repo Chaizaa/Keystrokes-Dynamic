@@ -1,5 +1,9 @@
 # 🚀 Unified Login System Implementation
 
+> [!WARNING]
+> Dokumen ini adalah catatan implementasi historis dan tidak selalu mencerminkan struktur project saat ini.
+> Untuk referensi aktif, gunakan `README.md`, `docs/API.md`, dan `docs/README_BLUEPRINT.md`.
+
 ## 📋 Overview
 
 Sistem login telah diubah dari **dual-mode** (Collection Mode + Verification Mode) menjadi **unified smart login** yang:

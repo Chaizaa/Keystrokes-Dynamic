@@ -4,10 +4,12 @@ Quick test to verify that keystroke processor rounding works correctly
 """
 
 import sys
-import os
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(__file__))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.utils.keystroke_processor import (
     round_to_decimals,

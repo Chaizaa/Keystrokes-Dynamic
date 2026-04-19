@@ -313,10 +313,10 @@ Verify typing pattern hasn't changed → Maintain session
    - Creates user account
    │
    ▼
-5. Enrollment Phase (10-20 samples):
+5. Enrollment Phase (target 100 samples, resumable):
    - User types password multiple times
    - Each sample stored in database
-   - Statistical model built from samples
+   - Backend schedules ML training when enrollment target is reached
    │
    ▼
 6. Registration complete
@@ -429,11 +429,11 @@ similarity = average(1 - |feature1 - feature2| / |feature2|)
 │   Browser    │  Keystroke events captured
 │  (JavaScript)│
 └──────┬───────┘
-       │ JSON: {key, timestamp, event_type}
+      │ JSON events: {t, evt, code, key}
        ▼
 ┌──────────────┐
 │  Flask API   │  POST /api/register_sample
-│  (api.py)    │  POST /api/verify
+   │  (api_bp)    │  POST /api/login
 └──────┬───────┘
        │ Process & validate
        ▼
@@ -469,7 +469,7 @@ similarity = average(1 - |feature1 - feature2| / |feature2|)
 
 ### 🎯 Biometric Features
 
-- ✅ **Multi-Sample Enrollment** (10-20 samples recommended)
+- ✅ **Multi-Sample Enrollment** (100 samples target, resumable)
 - ✅ **Three Verification Algorithms** (Euclidean, Cosine, Statistical)
 - ✅ **Confidence Scoring** (Very High, High, Medium, Low, Very Low)
 - ✅ **Adaptive Thresholds** (Configurable per-user or system-wide)
@@ -488,7 +488,7 @@ similarity = average(1 - |feature1 - feature2| / |feature2|)
 
 ### 🔌 API Features
 
-- ✅ **RESTful Endpoints** (7 documented endpoints)
+- ✅ **RESTful Endpoints** (enrollment, login, 2FA, dataset, user APIs)
 - ✅ **JSON Responses** (Consistent error/success formats)
 - ✅ **Rate Limiting** (Per-endpoint limits)
 - ✅ **CORS Support** (Configurable cross-origin requests)
@@ -551,24 +551,23 @@ Keystrokes-Dynamic/
 │   │   ├── auth_service.py     # Authentication service
 │   │   └── biometric_service.py # Biometric verification
 │   │
-│   ├── blueprints/              # Route handlers (MVC Controllers)
+│   ├── blueprints/              # Route handlers
 │   │   ├── __init__.py
-│   │   ├── main.py             # Landing page routes
-│   │   └── api.py              # REST API endpoints
-│   │
-│   ├── static/                  # Static assets
-│   │   ├── css/
-│   │   │   ├── base.css
-│   │   │   └── login.css
-│   │   └── js/
-│   │       └── keystroke.js    # Keystroke capture
-│   │
-│   └── templates/               # Jinja2 templates
-│       ├── base.html
-│       ├── home.html
-│       ├── login.html
-│       ├── register.html
-│       └── login_unified.html
+│   │   ├── main.py              # Landing/home routes
+│   │   ├── auth.py              # Auth pages
+│   │   ├── dataset.py           # Public dataset page
+│   │   └── api/                 # API modules (enrollment/login/2FA/user/...)
+│   └── utils/                   # Feature extraction/utilities
+│
+├── static/                      # Frontend assets
+│   ├── css/
+│   └── js/
+│
+├── templates/                   # Jinja2 templates
+│   ├── base.html
+│   ├── login_unified.html
+│   ├── register.html
+│   └── dataset_collection.html
 │
 ├── tests/                       # Test suite
 │   ├── conftest.py             # Pytest configuration
@@ -579,7 +578,7 @@ Keystrokes-Dynamic/
 │       └── test_api_endpoints.py
 │
 ├── docs/                        # Documentation
-│   ├── API_DOCUMENTATION.md    # API reference
+│   ├── API.md                  # API reference (current)
 │   ├── DEPLOYMENT_GUIDE.md     # Production deployment
 │   ├── SECURITY.md             # Security documentation
 │   ├── TEST_RESULTS.md         # Test coverage report
@@ -702,6 +701,19 @@ SECRET_KEY=your-secret-key-here-change-in-production
 DATABASE_URL=sqlite:///keystroke_auth.db
 ```
 
+**ML backend mode switch**:
+```env
+# Active biometric backend: rf | svm
+ML_BACKEND=rf
+```
+
+- `rf` is the default and safest baseline.
+- `svm` enables per-user SVM (RBF + probability output).
+- Invalid values automatically fallback to `rf`.
+- After switching backend, the first login for a user may trigger model training for the selected backend.
+
+For production rollout and rollback steps, see [docs/ML_BACKEND_SWITCH_GUIDE.md](docs/ML_BACKEND_SWITCH_GUIDE.md).
+
 **Generate secure secret key**:
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
@@ -757,15 +769,15 @@ Visit `http://localhost:5000/register`
   - At least 1 digit
   - At least 1 special character (!@#$%^&*(),.?":{}|<>)
 
-#### 3. Biometric Enrollment (10-20 samples)
+#### 3. Biometric Enrollment (target 100 samples)
 
 After account creation, you'll be prompted to type your password multiple times:
 
 ```
-Sample 1/10: Type your password naturally
+Sample 1/100: Type your password naturally
 [Progress: ██████░░░░░░░░░░░░░░░░ 30%]
 
-Sample 2/10: Type your password naturally
+Sample 2/100: Type your password naturally
 [Progress: ████████████░░░░░░░░░░ 60%]
 
 ...
@@ -819,41 +831,34 @@ response = requests.post('http://localhost:5000/api/check_username', json={
 })
 # Response: {'available': True}
 
-# 2. Register user
-response = requests.post('http://localhost:5000/api/register', json={
-    'username': 'newuser',
-    'password': 'SecurePass123!'
-})
-# Response: {'success': True, 'message': 'User created'}
-
-# 3. Enroll keystroke samples (repeat 10-20 times)
-keystroke_data = [
-    {'key': 'S', 'keyCode': 83, 'timestamp': 1000, 'eventType': 'keydown'},
-    {'key': 'S', 'keyCode': 83, 'timestamp': 1100, 'eventType': 'keyup'},
-    # ... more keystroke events
+# 2. Enroll keystroke samples (repeat until progress target reached)
+events = [
+   {'t': 1000.0, 'evt': 'd', 'code': 'KeyS', 'key': 's'},
+   {'t': 1100.0, 'evt': 'u', 'code': 'KeyS', 'key': 's'},
+   # ... more events
 ]
 
 response = requests.post('http://localhost:5000/api/register_sample', json={
     'username': 'newuser',
-    'keystrokeData': keystroke_data
+   'email': 'newuser@example.com',
+   'events': events
 })
-# Response: {'success': True, 'sample_number': 1}
+# Response: {'status': 'success', 'progress': {'current': 1, 'target': 100, ...}}
 
-# 4. Login with biometric verification
-response = requests.post('http://localhost:5000/api/verify', json={
+# 3. Login with biometric verification
+response = requests.post('http://localhost:5000/api/login', json={
     'username': 'newuser',
-    'password': 'SecurePass123!',
-    'keystrokeData': keystroke_data
+   'events': events
 })
 # Response: {
 #     'success': True,
-#     'confidence_level': 'high',
+#     'confidence_label': 'high',
 #     'score': 0.87,
 #     'message': 'Login successful'
 # }
 ```
 
-Complete API documentation: [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+Complete API documentation: [API.md](docs/API.md)
 
 ---
 
@@ -870,36 +875,34 @@ Production:  https://your-domain.com
 
 | Method | Endpoint | Description | Rate Limit |
 |--------|----------|-------------|------------|
-| POST | `/api/check_username` | Check username availability | 30/min |
-| POST | `/api/register` | Register new user | 3/hour |
+| POST | `/api/check_username` | Check username or enrollment state | 10/min |
 | POST | `/api/register_sample` | Submit enrollment sample | 30/min |
-| POST | `/api/verify` | Login with biometric | 5/min |
-| GET | `/api/user/info` | Get user information | 30/min |
-| POST | `/api/reset_password` | Change password | 10/min |
-| POST | `/api/logout` | Logout user | 30/min |
+| POST | `/api/pre_verify_password` | Pre-check password + rhythm | app default |
+| POST | `/api/login` | Login with biometric verification | 10/min |
+| GET | `/api/user/info` | Get current user information | session required |
+| POST | `/api/user/reset_password` | Reset password (logged-in user) | 3/hour |
 
 ### Example: Login with Biometric Verification
 
 **Request**:
 ```http
-POST /api/verify HTTP/1.1
+POST /api/login HTTP/1.1
 Content-Type: application/json
 
 {
   "username": "testuser",
-  "password": "SecurePass123!",
-  "keystrokeData": [
+   "events": [
     {
-      "key": "S",
-      "keyCode": 83,
-      "timestamp": 1703434812345,
-      "eventType": "keydown"
+         "t": 1703434812345,
+         "evt": "d",
+         "code": "KeyS",
+         "key": "s"
     },
     {
-      "key": "S",
-      "keyCode": 83,
-      "timestamp": 1703434812445,
-      "eventType": "keyup"
+         "t": 1703434812445,
+         "evt": "u",
+         "code": "KeyS",
+         "key": "s"
     }
     // ... more events
   ]
@@ -911,10 +914,9 @@ Content-Type: application/json
 {
   "success": true,
   "message": "Login successful",
-  "confidence_level": "high",
+   "confidence_label": "high",
   "score": 0.87,
-  "threshold": 0.70,
-  "username": "testuser"
+   "templates_used": 100
 }
 ```
 
@@ -922,14 +924,12 @@ Content-Type: application/json
 ```json
 {
   "success": false,
-  "error": "verification_failed",
-  "message": "Typing pattern does not match enrolled samples",
-  "score": 0.45,
-  "threshold": 0.70
+   "message": "Verification failed",
+   "reason": "impostor_detected"
 }
 ```
 
-**Full API documentation**: [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+**Full API documentation**: [docs/API.md](docs/API.md)
 
 ---
 
@@ -1023,7 +1023,7 @@ Module                           Coverage
 app/__init__.py                  94%
 app/services/auth_service.py     85% ✅
 app/services/biometric_service.py 50%
-app/blueprints/api.py            25%
+app/blueprints/api/*.py          25%
 app/models/user.py               81%
 ─────────────────────────────────────────
 Overall                          47%
@@ -1147,7 +1147,7 @@ SOFTWARE.
 
 ### Documentation
 
-- **API Reference**: [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+- **API Reference**: [docs/API.md](docs/API.md)
 - **Deployment Guide**: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
 - **Security Documentation**: [docs/SECURITY.md](docs/SECURITY.md)
 - **Test Reports**: [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md)

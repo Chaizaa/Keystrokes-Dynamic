@@ -1,5 +1,9 @@
 # 📋 Optimization Report - Implementation Complete
 
+> [!WARNING]
+> Dokumen ini adalah laporan optimasi historis dan berisi istilah/alur lama.
+> Untuk alur runtime aktif, gunakan `README.md`, `docs/QUICK_START.md`, dan `docs/API.md`.
+
 **Date:** December 17, 2025  
 **Status:** ✅ ALL APPROVED CHANGES IMPLEMENTED
 

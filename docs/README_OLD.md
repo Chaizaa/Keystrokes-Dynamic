@@ -1,5 +1,9 @@
 # Keystrokes-Dynamic
 
+> [!WARNING]
+> Dokumen ini bersifat historical/legacy dan tidak menjadi sumber kebenaran implementasi saat ini.
+> Untuk kontrak API dan alur terbaru, gunakan `README.md`, `docs/API.md`, `docs/QUICK_START.md`, dan `docs/README_BLUEPRINT.md`.
+
 Berdasarkan analisis kode sumber (source code) yang Anda unggah, berikut adalah draf **README.md** yang komprehensif dan profesional untuk proyek ini. Dokumen ini mencakup deskripsi proyek, cara instalasi, struktur file, dan penjelasan teknis mengenai algoritma biometrik yang digunakan.
 
 -----

@@ -1,4 +1,9 @@
 # Flask Migration Progress Report
+
+> [!WARNING]
+> Dokumen ini merupakan progress report historis dan dapat berisi status yang sudah tidak berlaku.
+> Untuk dokumentasi operasional aktif, rujuk `README.md` dan `docs/API.md`.
+
 **Date:** December 24, 2025  
 **Project:** Keystrokes-Dynamic Biometric Authentication  
 **Branch:** apis  
