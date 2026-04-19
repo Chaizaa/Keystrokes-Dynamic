@@ -1,12 +1,8 @@
-"""ML model training + persistence service.
+"""SVM model training + persistence service.
 
-Implements the per-user RandomForest approach from `ml/ml_pta.py`:
-- one-vs-rest classification: genuine=user, impostor=other users
-- train/val/test split: 60/20/20 stratified
-- model selection: minimize EER on validation set
-- threshold: the EER threshold on validation set
-
-Models and thresholds are stored in the DB table `user_ml_models`.
+Implements per-user one-vs-rest SVM verification with probability output
+(`SVC(probability=True)`) so scores remain compatible with existing response
+shape and thresholding logic.
 """
 
 from __future__ import annotations
@@ -14,45 +10,15 @@ from __future__ import annotations
 import io
 import json
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
-from sqlalchemy import or_
 
 from app.models import User, UserMLModel, UsersVector, db
-
-
-FEATURE_COLUMNS: List[str] = [
-    "H_mean",
-    "H_std",
-    "H_min",
-    "H_max",
-    "H_cv",
-    "DD_mean",
-    "DD_std",
-    "DD_min",
-    "DD_max",
-    "DD_cv",
-    "UD_mean",
-    "UD_std",
-    "UD_min",
-    "UD_max",
-    "UD_cv",
-    "UU_mean",
-    "UU_std",
-    "UU_min",
-    "UU_max",
-    "UU_cv",
-    "DU_mean",
-    "DU_std",
-    "DU_min",
-    "DU_max",
-    "DU_cv",
-    "total_duration",
-    "typing_speed",
-]
+from app.services.ml_model_service import FEATURE_COLUMNS
 
 
 def _now_utc() -> datetime:
@@ -60,7 +26,6 @@ def _now_utc() -> datetime:
 
 
 def _compute_metrics(y_true: np.ndarray, probs: np.ndarray, threshold: float) -> Dict[str, float]:
-    """Match `compute_metrics` in ml_pta.py."""
     from sklearn.metrics import confusion_matrix
 
     y_pred = (probs >= threshold).astype(int)
@@ -81,7 +46,6 @@ def _compute_metrics(y_true: np.ndarray, probs: np.ndarray, threshold: float) ->
 
 
 def _compute_eer_threshold(y_true: np.ndarray, probs: np.ndarray) -> Tuple[float, float]:
-    """Return (eer, threshold) same as `compute_eer_threshold` in ml_pta.py."""
     from sklearn.metrics import roc_curve
 
     fpr, tpr, thresholds = roc_curve(y_true, probs)
@@ -104,20 +68,77 @@ class TrainResult:
     message: Optional[str] = None
 
 
-class MLModelService:
-    """Train, store, and use per-user RandomForest models."""
+class SVMModelService:
+    """Train, store, and use per-user SVM models."""
 
-    MODEL_TYPE = "RandomForestClassifier"
+    MODEL_TYPE = "SVC_RBF_probability"
 
-    # Mirrors `param_grid` values in ml_pta.py
+    # Conservative grid for phase-2 rollout.
     PARAM_GRID: Dict[str, List[Any]] = {
-        "n_estimators": [200, 400, 600],
-        "max_depth": [None, 10, 20, 30],
-        # NOTE: ml_pta.py defines min_samples_split but does not loop over it.
-        # We keep the same behaviour for reproducibility.
-        "min_samples_leaf": [1, 2, 4],
-        "max_features": ["sqrt", "log2"],
+        "C": [1.0, 10.0, 50.0],
+        "gamma": ["scale", "auto"],
     }
+
+    # Keep impostor pool quality conservative (complete users only).
+    MIN_REQUIRED_ENROLLMENT_ROWS = 100
+
+    # In-process runtime cache to avoid repeated BLOB deserialization
+    # on frequent login attempts for the same user/model revision.
+    MODEL_CACHE_MAX_SIZE = 128
+
+    def __init__(self):
+        self._runtime_cache: "OrderedDict[Tuple[str, int, str], Tuple[Any, List[str]]]" = OrderedDict()
+        self._runtime_cache_lock = threading.Lock()
+
+    @staticmethod
+    def _updated_marker(updated_at: Any) -> str:
+        if updated_at is None:
+            return "none"
+        try:
+            return updated_at.isoformat()
+        except Exception:
+            return str(updated_at)
+
+    def _cache_key_from_row(self, row: UserMLModel) -> Tuple[str, int, str]:
+        return (
+            str(getattr(row, "username", "") or ""),
+            int(getattr(row, "id", 0) or 0),
+            self._updated_marker(getattr(row, "updated_at", None)),
+        )
+
+    def _invalidate_user_runtime_cache(self, username: str) -> None:
+        username = (username or "").strip()
+        if not username:
+            return
+        with self._runtime_cache_lock:
+            stale_keys = [key for key in self._runtime_cache.keys() if key[0] == username]
+            for key in stale_keys:
+                self._runtime_cache.pop(key, None)
+
+    def _get_cached_runtime(self, row: UserMLModel) -> Tuple[Any, List[str]]:
+        key = self._cache_key_from_row(row)
+        with self._runtime_cache_lock:
+            cached = self._runtime_cache.get(key)
+            if cached is not None:
+                self._runtime_cache.move_to_end(key)
+                return cached
+
+        model = self._deserialize_model(row.model_blob)
+        try:
+            feature_names = json.loads(row.feature_names_json)
+        except Exception:
+            feature_names = FEATURE_COLUMNS
+
+        if not isinstance(feature_names, list) or not feature_names:
+            feature_names = FEATURE_COLUMNS
+
+        payload = (model, feature_names)
+        with self._runtime_cache_lock:
+            self._runtime_cache[key] = payload
+            self._runtime_cache.move_to_end(key)
+            while len(self._runtime_cache) > self.MODEL_CACHE_MAX_SIZE:
+                self._runtime_cache.popitem(last=False)
+        return payload
 
     def get_model_row(self, username: str) -> Optional[UserMLModel]:
         if not username:
@@ -125,12 +146,7 @@ class MLModelService:
         return (
             db.session.query(UserMLModel)
             .filter(UserMLModel.username == username)
-            .filter(
-                or_(
-                    UserMLModel.model_type == self.MODEL_TYPE,
-                    UserMLModel.model_type.is_(None),
-                )
-            )
+            .filter(UserMLModel.model_type == self.MODEL_TYPE)
             .one_or_none()
         )
 
@@ -147,8 +163,10 @@ class MLModelService:
         row = self.get_model_row(username)
         if not row:
             return False
+        cached_username = (row.username or username or "").strip()
         db.session.delete(row)
         db.session.commit()
+        self._invalidate_user_runtime_cache(cached_username)
         return True
 
     def _serialize_model(self, model) -> bytes:
@@ -159,16 +177,8 @@ class MLModelService:
         return buf.getvalue()
 
     def _deserialize_model(self, blob: bytes):
-        """Deserialize and validate the RandomForest model from BLOB.
-
-        Validates that:
-        1. The deserialized object is a RandomForestClassifier
-        2. The model has the required interface (predict_proba)
-        3. Feature count matches expected (50 columns)
-
-        Raises ValueError if validation fails.
-        """
-        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.pipeline import Pipeline
+        from sklearn.svm import SVC
         import joblib
 
         if not isinstance(blob, bytes) or len(blob) == 0:
@@ -180,32 +190,36 @@ class MLModelService:
         except Exception as e:
             raise ValueError(f"Failed to deserialize model: {e}")
 
-        # Validate model type
-        if not isinstance(model, RandomForestClassifier):
-            raise ValueError(
-                f"Model must be RandomForestClassifier, got {type(model).__name__}"
-            )
+        if isinstance(model, Pipeline):
+            svc = model.named_steps.get("svc")
+            if not isinstance(svc, SVC):
+                raise ValueError("Pipeline must contain an SVC step named 'svc'")
+            if not getattr(svc, "probability", False):
+                raise ValueError("SVC model must be trained with probability=True")
+        elif isinstance(model, SVC):
+            if not getattr(model, "probability", False):
+                raise ValueError("SVC model must be trained with probability=True")
+        else:
+            raise ValueError(f"Model must be Pipeline/SVC, got {type(model).__name__}")
 
-        # Validate model has required methods
         if not hasattr(model, "predict_proba"):
             raise ValueError("Model must have predict_proba method")
 
-        # Validate feature count
         expected_features = len(FEATURE_COLUMNS)
-        if not hasattr(model, "n_features_in_"):
+        n_features = getattr(model, "n_features_in_", None)
+        if n_features is None and isinstance(model, Pipeline):
+            svc = model.named_steps.get("svc")
+            n_features = getattr(svc, "n_features_in_", None)
+        if n_features is None:
             raise ValueError("Model missing n_features_in_ attribute")
-
-        if model.n_features_in_ != expected_features:
+        if int(n_features) != expected_features:
             raise ValueError(
-                f"Feature count mismatch: expected {expected_features}, "
-                f"got {model.n_features_in_}"
+                f"Feature count mismatch: expected {expected_features}, got {int(n_features)}"
             )
 
-        # Model passed all validations
         return model
 
     def _load_training_rows(self) -> List[UsersVector]:
-        """Load all enrollment rows used as training pool."""
         return (
             db.session.query(UsersVector)
             .filter(
@@ -215,12 +229,27 @@ class MLModelService:
             .all()
         )
 
+    def _filter_complete_user_rows(self, rows: Iterable[UsersVector], target_username: str) -> List[UsersVector]:
+        counts: Dict[str, int] = {}
+        for r in rows:
+            uname = getattr(r, "username", None)
+            if not uname:
+                continue
+            counts[uname] = counts.get(uname, 0) + 1
+
+        allowed = {
+            uname for uname, cnt in counts.items()
+            if cnt >= self.MIN_REQUIRED_ENROLLMENT_ROWS
+        }
+        allowed.add(target_username)
+
+        return [r for r in rows if getattr(r, "username", None) in allowed]
+
     def _rows_to_xy(self, rows: Iterable[UsersVector], target_username: str) -> Tuple[np.ndarray, np.ndarray]:
         X_list: List[List[float]] = []
         y_list: List[int] = []
 
         for r in rows:
-            # Must have username to label
             uname = getattr(r, "username", None)
             if not uname:
                 continue
@@ -251,7 +280,6 @@ class MLModelService:
         return X, y
 
     def train_user_model(self, username: str, *, force: bool = False) -> TrainResult:
-        """Train (or retrain) a user model using the ml_pta procedure."""
         username = (username or "").strip()
         if not username:
             return TrainResult(success=False, username="", reason="missing_username")
@@ -265,18 +293,19 @@ class MLModelService:
                 message="User not found",
             )
 
-        if (not force) and self.get_model_row(username):
-            row = self.get_model_row(username)
+        existing_same_backend = self.get_model_row(username)
+        if (not force) and existing_same_backend:
             return TrainResult(
                 success=True,
                 username=username,
-                threshold=float(row.threshold),
-                model_id=int(row.id),
+                threshold=float(existing_same_backend.threshold),
+                model_id=int(existing_same_backend.id),
                 reason="already_trained",
-                message="Model already exists",
+                message="SVM model already exists",
             )
 
         rows = self._load_training_rows()
+        rows = self._filter_complete_user_rows(rows, username)
         X_all, y_all = self._rows_to_xy(rows, username)
 
         if X_all.shape[0] == 0:
@@ -287,7 +316,6 @@ class MLModelService:
                 message="No enrollment rows found for training",
             )
 
-        # Need both classes for one-vs-rest
         n_genuine = int(np.sum(y_all == 1))
         n_impostor = int(np.sum(y_all == 0))
         if n_genuine < 2 or n_impostor < 2:
@@ -301,8 +329,10 @@ class MLModelService:
                 ),
             )
 
-        from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.svm import SVC
 
         try:
             X_train, X_temp, y_train, y_temp = train_test_split(
@@ -332,45 +362,48 @@ class MLModelService:
         best_threshold = None
         best_params: Dict[str, Any] = {}
 
-        # Grid search (manual loop), mirrors ml_pta.py
-        for n in self.PARAM_GRID["n_estimators"]:
-            for depth in self.PARAM_GRID["max_depth"]:
-                for leaf in self.PARAM_GRID["min_samples_leaf"]:
-                    for feat in self.PARAM_GRID["max_features"]:
-                        model = RandomForestClassifier(
-                            n_estimators=n,
-                            max_depth=depth,
-                            min_samples_leaf=leaf,
-                            max_features=feat,
-                            class_weight="balanced",
-                            random_state=42,
-                            n_jobs=-1,
-                        )
-                        model.fit(X_train, y_train)
-                        val_probs = model.predict_proba(X_val)[:, 1]
-                        eer, thr = _compute_eer_threshold(y_val, val_probs)
-                        if eer < best_eer:
-                            best_eer = float(eer)
-                            best_threshold = float(thr)
-                            best_model = model
-                            best_params = {
-                                "n_estimators": n,
-                                "max_depth": depth,
-                                "min_samples_leaf": leaf,
-                                "max_features": feat,
-                                "random_state": 42,
-                                "class_weight": "balanced",
-                            }
+        for c_val in self.PARAM_GRID["C"]:
+            for gamma in self.PARAM_GRID["gamma"]:
+                model = Pipeline(
+                    [
+                        ("scaler", StandardScaler()),
+                        (
+                            "svc",
+                            SVC(
+                                kernel="rbf",
+                                C=c_val,
+                                gamma=gamma,
+                                class_weight="balanced",
+                                probability=True,
+                                random_state=42,
+                            ),
+                        ),
+                    ]
+                )
+                model.fit(X_train, y_train)
+                val_probs = model.predict_proba(X_val)[:, 1]
+                eer, thr = _compute_eer_threshold(y_val, val_probs)
+                if eer < best_eer:
+                    best_eer = float(eer)
+                    best_threshold = float(thr)
+                    best_model = model
+                    best_params = {
+                        "kernel": "rbf",
+                        "C": c_val,
+                        "gamma": gamma,
+                        "class_weight": "balanced",
+                        "probability": True,
+                        "random_state": 42,
+                    }
 
         if best_model is None or best_threshold is None:
             return TrainResult(
                 success=False,
                 username=username,
                 reason="training_failed",
-                message="Unable to select a best model",
+                message="Unable to select a best SVM model",
             )
 
-        # Evaluate on test (ml_pta logs both train and test; we store test summary)
         test_probs = best_model.predict_proba(X_test)[:, 1]
         test_metrics = _compute_metrics(y_test, test_probs, best_threshold)
         test_eer, _ = _compute_eer_threshold(y_test, test_probs)
@@ -379,13 +412,12 @@ class MLModelService:
             "best_eer_val": best_eer,
             "threshold": best_threshold,
             "test": {**test_metrics, "EER": float(test_eer)},
+            "impostor_filter_min_enrollment_rows": self.MIN_REQUIRED_ENROLLMENT_ROWS,
         }
 
-        # Serialize model to bytes
         blob = self._serialize_model(best_model)
 
-        # Persist row (upsert by username). In mode-switch rollout, this may
-        # overwrite a row previously trained by another backend.
+        # Upsert by username, replacing model regardless of previous backend type.
         row = self.get_model_row_any(username)
         if row is None:
             row = UserMLModel(
@@ -394,7 +426,7 @@ class MLModelService:
                 model_blob=blob,
                 threshold=float(best_threshold),
                 feature_names_json=json.dumps(FEATURE_COLUMNS),
-            model_type=self.MODEL_TYPE,
+                model_type=self.MODEL_TYPE,
                 sklearn_version=None,
                 metrics_json=json.dumps(metrics),
                 train_params_json=json.dumps(best_params),
@@ -419,6 +451,7 @@ class MLModelService:
             row.updated_at = _now_utc()
 
         db.session.commit()
+        self._invalidate_user_runtime_cache(username)
 
         return TrainResult(
             success=True,
@@ -428,12 +461,10 @@ class MLModelService:
             metrics=metrics,
             model_id=int(row.id),
             reason="trained",
-            message="Model trained successfully",
+            message="SVM model trained successfully",
         )
 
     def verify(self, username: str, features: Dict[str, Any]) -> Dict[str, Any]:
-        """Predict proba and apply per-user threshold."""
-
         username = (username or "").strip()
         if not username:
             return {
@@ -451,13 +482,8 @@ class MLModelService:
             }
 
         try:
-            model = self._deserialize_model(row.model_blob)
-            try:
-                feature_names = json.loads(row.feature_names_json)
-            except Exception:
-                feature_names = FEATURE_COLUMNS
+            model, feature_names = self._get_cached_runtime(row)
 
-            # Align input
             x: List[float] = []
             for name in feature_names:
                 val = features.get(name, 0.0)
@@ -489,7 +515,7 @@ class MLModelService:
                 "threshold": round(threshold, 4),
                 "confidence": conf,
                 "model_id": int(row.id),
-                "method": "random_forest",
+                "method": "svm_rbf_probability",
             }
         except Exception as exc:
             return {
@@ -500,50 +526,37 @@ class MLModelService:
             }
 
 
-ml_model_service = MLModelService()
+svm_model_service = SVMModelService()
 
-# --- Background training helpers -----------------------------------------
-# Tracks usernames whose model is currently being trained in a daemon thread.
-# Prevents duplicate concurrent grid-search runs for the same user.
 _training_in_progress: set = set()
 _training_lock = threading.Lock()
 
 
 def schedule_background_training(app, username: str, *, force: bool = False) -> bool:
-    """Kick off model training for *username* in a background daemon thread.
-
-    Returns True if a new training thread was started, False if one was already
-    running for that user (or if the model already exists and force=False).
-
-    The caller must pass the current Flask ``app`` instance (obtained with
-    ``current_app._get_current_object()``) so the thread can push an app
-    context around the SQLAlchemy calls.
-    """
     username = (username or "").strip()
     if not username:
         return False
 
     with _training_lock:
         if username in _training_in_progress:
-            return False  # already training
+            return False
         _training_in_progress.add(username)
 
     def _run():
         try:
             with app.app_context():
-                ml_model_service.train_user_model(username, force=force)
+                svm_model_service.train_user_model(username, force=force)
         except Exception as exc:
-            print(f"[BG-TRAIN] Error training model for {username}: {exc}")
+            print(f"[SVM-BG-TRAIN] Error training model for {username}: {exc}")
         finally:
             with _training_lock:
                 _training_in_progress.discard(username)
 
-    t = threading.Thread(target=_run, daemon=True, name=f"ml-train-{username}")
+    t = threading.Thread(target=_run, daemon=True, name=f"svm-train-{username}")
     t.start()
     return True
 
 
 def is_training_in_progress(username: str) -> bool:
-    """Return True if a background training thread is active for *username*."""
     with _training_lock:
         return username in _training_in_progress
