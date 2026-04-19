@@ -1,78 +1,262 @@
 {% extends "base.html" %}
 
-{% block title %}SecureAuth | Enterprise Biometric Authentication{% endblock %}
+{% block title %}OBSIDIAN // Advanced Security Systems{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
 {% endblock %}
 
 {% block body %}
-    <div class="hero">
-        <nav>
-            <div class="logo">SecureAuth</div>
+<div class="landing-shell">
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <nav class="command-nav tactical-panel" aria-label="Primary">
+        <div class="nav-left">
+            <a href="/" class="brand-link" aria-label="OBSIDIAN home">
+                <svg class="brand-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
+                <span class="brand-text">OBSIDIAN</span>
+            </a>
             <div class="nav-links">
-                <a href="#features">FEATURES</a>
-                <a href="#security">SECURITY</a>
-                <a href="#about">ABOUT</a>
-            </div>
-        </nav>
-        
-        <div class="content">
-            <div class="container">
-                <div class="text-content">
-                    <h1>Enterprise-Grade Biometric Authentication</h1>
-                    <p class="subtitle">Leverage behavioral biometrics through keystroke dynamics analysis. Advanced machine learning algorithms provide seamless, passwordless authentication.</p>
-                    
-                    <div class="cta-buttons">
-                        <a href="/login" class="btn btn-primary">Access Platform</a>
-                        <a href="/register" class="btn btn-secondary">Create Account</a>
-                    </div>
-                    
-                    <div class="features">
-                        <div class="feature">
-                            <div class="feature-icon">SECURITY</div>
-                            <h3>Military-Grade Security</h3>
-                            <p>99.7% accuracy with multi-method verification</p>
-                        </div>
-                        <div class="feature">
-                            <div class="feature-icon">PERFORMANCE</div>
-                            <h3>Real-Time Analysis</h3>
-                            <p>Sub-second authentication processing</p>
-                        </div>
-                        <div class="feature">
-                            <div class="feature-icon">ADAPTIVE</div>
-                            <h3>Adaptive Learning</h3>
-                            <p>Continuous improvement with usage</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="visual-side">
-                    <div class="auth-card">
-                        <h3>System Metrics</h3>
-                        <div class="metric">
-                            <span class="metric-label">Authentication Rate</span>
-                            <span class="metric-value">99.7%</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">False Positive</span>
-                            <span class="metric-value">0.1%</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Processing Time</span>
-                            <span class="metric-value">< 100ms</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Active Users</span>
-                            <span class="metric-value">10K+</span>
-                        </div>
-                    </div>
-                </div>
+                <a href="#capabilities">[ CAPABILITIES ]</a>
+                <a href="#infrastructure">[ LATTICE OS ]</a>
+                <a href="#telemetry">[ TELEMETRY ]</a>
             </div>
         </div>
-        
-        <div class="footer">
-            © 2025 SecureAuth Enterprise. All rights reserved. | Advanced Biometric Authentication Platform
+
+        <div class="nav-right">
+            <div class="system-clock">
+                SYS.VER_9.4 // <span id="live-time">--</span><br>
+                ENCRYPTION: <span class="clock-value">QUANTUM-RESISTANT</span>
+            </div>
+            <div class="network-pill">
+                <span class="network-dot" aria-hidden="true"></span>
+                <span>NETWORK SECURE</span>
+            </div>
+        </div>
+    </nav>
+
+    <header class="landing-hero bg-grid" aria-label="Hero">
+        <canvas id="data-mesh" aria-hidden="true"></canvas>
+
+        <div class="hero-word" aria-hidden="true">SHIELD</div>
+
+        <div class="hero-inner">
+            <section class="hero-copy-wrap reveal">
+                <div class="hero-tag">
+                    <span class="hero-tag-line" aria-hidden="true"></span>
+                    <span>FOR EVERY SECOND // NEXT-GEN PERIMETER DEFENSE</span>
+                </div>
+
+                <h1>Absolute <span>Dominance.</span></h1>
+
+                <p>
+                    OBSIDIAN transforms disjointed sensors into a singular, intelligent neural network.
+                    Autonomous threat detection, multi-spectrum analysis, and kinetic response mechanisms
+                    operating in sub-millisecond latency.
+                </p>
+
+                <div class="hero-actions">
+                    <a href="/register" class="btn-primary">
+                        Initiate Protocol
+                        <svg class="btn-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="#infrastructure" class="btn-outline">View Architecture</a>
+                </div>
+            </section>
+
+            <aside class="hero-diagnostics reveal" aria-label="System diagnostics">
+                <div class="tactical-panel diagnostics-panel">
+                    <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-tr"></div>
+                    <div class="crosshair-corner cc-bl"></div><div class="crosshair-corner cc-br"></div>
+
+                    <div class="diag-head">
+                        <h2>SYSTEM DIAGNOSTICS</h2>
+                        <span>LIVE FEED</span>
+                    </div>
+
+                    <div class="diag-block">
+                        <div class="diag-row"><span>SPATIAL AWARENESS MESH</span><span>99.8%</span></div>
+                        <div class="diag-track"><div class="diag-fill" style="width:99.8%"></div></div>
+                    </div>
+
+                    <div class="diag-metrics">
+                        <div>
+                            <p>THREAT ASSESS</p>
+                            <strong>0.012<span>ms</span></strong>
+                        </div>
+                        <div>
+                            <p>ACTIVE NODES</p>
+                            <strong>24,198</strong>
+                        </div>
+                    </div>
+
+                    <div class="diag-radar" aria-hidden="true">
+                        <div class="radar-line-h"></div>
+                        <div class="radar-line-v"></div>
+                        <div class="radar-ring outer"></div>
+                        <div class="radar-ring inner"></div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </header>
+
+    <div class="marquee-bar" aria-label="Global system feed">
+        <div class="marquee-track">
+            <span>// GLOBAL THREAT LEVEL: NOMINAL</span>
+            <span>// LATTICE OS V9 ONLINE</span>
+            <span>// ALL SENSOR ARRAYS CALIBRATED</span>
+            <span>// EDGE PROCESSING: OPTIMAL</span>
+            <span>// GLOBAL THREAT LEVEL: NOMINAL</span>
+            <span>// LATTICE OS V9 ONLINE</span>
+            <span>// ALL SENSOR ARRAYS CALIBRATED</span>
+            <span>// EDGE PROCESSING: OPTIMAL</span>
         </div>
     </div>
+
+    <main class="capabilities-main" id="capabilities">
+        <section class="section-intro reveal">
+            <div class="intro-kicker">
+                <span class="kicker-dot"></span>
+                <span>Tactical Capabilities</span>
+            </div>
+            <h2>Multi-Domain <br>Integration</h2>
+        </section>
+
+        <section class="feature-grid reveal" aria-label="Capabilities">
+            <article class="feature-card tactical-panel">
+                <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-br"></div>
+                <div class="feature-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                </div>
+                <h3>Sensor Fusion</h3>
+                <p>Aggregates telemetry from distributed radar, EO/IR cameras, and acoustic sensors into a singular operational picture.</p>
+                <div class="feature-track"><div class="feature-fill"></div></div>
+            </article>
+
+            <article class="feature-card tactical-panel">
+                <div class="crosshair-corner cc-tr"></div><div class="crosshair-corner cc-bl"></div>
+                <div class="feature-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <h3>Computer Vision</h3>
+                <p>Proprietary neural networks classify targets instantly, eliminating false positives and dynamically prioritizing verified threats.</p>
+                <div class="feature-track"><div class="feature-fill"></div></div>
+            </article>
+
+            <article class="feature-card tactical-panel">
+                <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-br"></div>
+                <div class="feature-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <h3>Kinetic Response</h3>
+                <p>Autonomous or human-in-the-loop engagement via deployed drone interceptors, electronic warfare modules, and sonic deterrents.</p>
+                <div class="feature-track"><div class="feature-fill"></div></div>
+            </article>
+        </section>
+
+        <section class="lattice-wrapper tactical-panel reveal" id="infrastructure">
+            <div class="lattice-grid">
+                <div class="lattice-left">
+                    <p class="architecture-badge">SOFTWARE ARCHITECTURE</p>
+                    <h2>Lattice Core</h2>
+                    <p>
+                        Hardware is only as capable as the software commanding it. Lattice OS processes millions of data points
+                        at the edge, abstracting complexity to provide operators with decisive, actionable intelligence.
+                    </p>
+                    <ul>
+                        <li><span>+</span><span>Hardware Agnostic Integration</span></li>
+                        <li><span>+</span><span>Distributed Edge Compute Network</span></li>
+                        <li><span>+</span><span>Automated Sensor-to-Shooter Loop</span></li>
+                    </ul>
+                </div>
+
+                <div class="lattice-right" aria-hidden="true">
+                    <div class="node-visual">
+                        <div class="ring ring-a"></div>
+                        <div class="ring ring-b"></div>
+                        <div class="ring ring-c"></div>
+                        <div class="core-node">OS</div>
+
+                        <div class="sat sat-top">RAD</div>
+                        <div class="sat sat-bottom">EO/IR</div>
+                        <div class="sat sat-left">C2</div>
+                        <div class="sat sat-right">UAV</div>
+                    </div>
+                    <p class="lattice-note note-top">COMPILING TOPOGRAPHY...</p>
+                    <p class="lattice-note note-bottom">STATUS: SECURE</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats-banner reveal" id="telemetry">
+            <h2>Operational Supremacy</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <strong class="counter" data-target="360">0</strong>
+                    <p>Degree Vision</p>
+                </div>
+                <div class="stat-item">
+                    <strong><span class="counter" data-target="15">0</span><small>ms</small></strong>
+                    <p>Latency Loop</p>
+                </div>
+                <div class="stat-item">
+                    <strong class="counter" data-target="24">0</strong>
+                    <p>Hour Autonomy</p>
+                </div>
+                <div class="stat-item">
+                    <strong><span class="counter" data-target="99">0</span><small>%</small></strong>
+                    <p>Target ID Accuracy</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="landing-footer">
+        <div class="footer-grid">
+            <section>
+                <h2>
+                    <svg class="brand-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
+                    OBSIDIAN
+                </h2>
+                <p>
+                    Engineering asymmetric advantage. We build software-defined hardware to secure the most critical perimeters on Earth.
+                </p>
+                <a href="/register" class="btn-outline footer-cta">Contact Defense Systems</a>
+            </section>
+
+            <section>
+                <h3>Platform</h3>
+                <ul>
+                    <li><a href="#capabilities">Sensor Arrays</a></li>
+                    <li><a href="#capabilities">Autonomous Interceptors</a></li>
+                    <li><a href="#infrastructure">Lattice Software</a></li>
+                    <li><a href="#telemetry">Deployment Logistics</a></li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Clearance & Compliance</h3>
+                <p>
+                    Certain systems and capabilities are highly classified and subject to export restrictions.
+                    Authorized government personnel only.
+                </p>
+                <a href="/login" class="portal-login">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    <span>SECURE PORTAL LOGIN</span>
+                </a>
+            </section>
+        </div>
+
+        <div class="footer-bottom">
+            <span>&copy; <span id="current-year"></span> OBSIDIAN DEFENSE SYSTEMS.</span>
+            <span>RESTRICTED ARCHITECTURE // GLOBAL NODE ACTIVE</span>
+        </div>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/landing.js') }}"></script>
 {% endblock %}
