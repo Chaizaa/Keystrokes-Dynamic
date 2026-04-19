@@ -14,9 +14,8 @@ from flask import jsonify, request
 from sqlalchemy import select
 
 from app.models import User, db
-from app.services import AuthService
 
-from ._shared import api_bp
+from ._shared import api_bp, get_auth_service
 
 
 def _fetch_user(username: str):
@@ -59,8 +58,7 @@ def confirm_2fa():
         if not username or not token:
             return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
 
-        auth = AuthService()
-        if not auth.verify_two_factor_token(username, token):
+        if not get_auth_service().verify_two_factor_token(username, token):
             return jsonify({"success": False, "message": "Token tidak valid"}), 400
 
         user = _fetch_user(username)
@@ -84,8 +82,7 @@ def verify_2fa():
         if not username or not token:
             return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
 
-        auth = AuthService()
-        ok = auth.verify_two_factor_token(username, token)
+        ok = get_auth_service().verify_two_factor_token(username, token)
         return jsonify({"success": ok}), (200 if ok else 400)
 
     except Exception as e:

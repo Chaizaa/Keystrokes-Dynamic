@@ -14,11 +14,16 @@ Usage (in app/__init__.py)::
 # Re-export shared instances for app wiring and for tests that import them.
 from app.utils.keystroke_processor import process_web_events  # noqa: F401
 from app.utils.keystroke_processor import assess_sample_quality  # noqa: F401
+from app.utils.password_strength import calculate_password_strength  # noqa: F401
 
 from ._shared import (  # noqa: F401
     api_bp,
     auth_service,
     biometric_service,
+    get_auth_service,
+    get_biometric_service,
+    get_service,
+    service_registry,
 )
 
 # Import order is irrelevant; all modules decorate the same api_bp object.

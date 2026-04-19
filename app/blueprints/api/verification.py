@@ -25,7 +25,7 @@ from app.models import db as sqlalchemy_db
 from app.services.email_service import email_service
 from app.utils.password_strength import calculate_password_strength
 
-from ._shared import api_bp, auth_service, biometric_service
+from ._shared import api_bp, get_biometric_service
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +49,168 @@ def _fetch_user(username: str):
     return db.session.execute(select(User).where(User.username == username)).scalars().first()
 
 
+def _verify_token_with_fallback(token, email, sent_at, *, code_hash=None, salt=None):
+    """Call email_service.verify_token with backward-compatible fallback."""
+    kwargs = {}
+    if code_hash is not None:
+        kwargs["code_hash"] = code_hash
+    if salt is not None:
+        kwargs["salt"] = salt
+
+    try:
+        return email_service.verify_token(token, email, sent_at, **kwargs)
+    except TypeError:
+        return email_service.verify_token(token, email, sent_at)
+
+
+def _is_email_verification_expired(user) -> bool:
+    """Return True when email verification token has exceeded configured expiry."""
+    try:
+        from flask import current_app
+
+        expiry_hours = current_app.config.get("EMAIL_VERIFICATION_EXPIRY_HOURS", 1)
+        sent_at = user.email_verification_sent_at
+        if sent_at:
+            if sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) > (sent_at + timedelta(hours=int(expiry_hours)))
+    except Exception as exc:
+        print("[DEBUG] verify_email expiry check failed:", exc)
+
+    return False
+
+
+def _generate_6_digit_code() -> str:
+    """Generate a zero-padded six-digit one-time code."""
+    return str(secrets.randbelow(10**6)).zfill(6)
+
+
+def _issue_email_verification_code(user):
+    """Set verification code fields on user and return generated code."""
+    sent_at = datetime.now(timezone.utc)
+    code = _generate_6_digit_code()
+    user.email_verification_sent_at = sent_at
+    user.email_verification_code_hash = generate_password_hash(code)
+    return code
+
+
+def _send_email_verification_code(user):
+    """Persist and send a new email verification code."""
+    code = _issue_email_verification_code(user)
+    db.session.commit()
+    return email_service.send_verification_email(user, code)
+
+
+def _send_password_reset_code(user):
+    """Persist and send a password-reset verification code."""
+    sent_at = datetime.now(timezone.utc)
+    code = _generate_6_digit_code()
+    user.password_reset_code_hash = generate_password_hash(code)
+    user.password_reset_sent_at = sent_at
+    db.session.commit()
+    email_service.send_verification_email(user, code, purpose="user_reset")
+
+
+def _process_reset_events(username, events):
+    """Process reset keystroke events and return extracted data."""
+    import app.blueprints.api as api_mod
+
+    result = api_mod.process_web_events(events, username)
+    if result["status"] != "success":
+        return None, None, None, (
+            jsonify({"status": "error", "message": "Failed to process keystroke data"}),
+            400,
+        )
+
+    features = result["features"]
+    real_pass = result.get("real_password_string")
+    password_hash = result.get("password_hash")
+
+    if not real_pass:
+        return None, None, None, (
+            jsonify({"status": "error", "message": "Master password not provided in sample"}),
+            400,
+        )
+
+    return features, real_pass, password_hash, None
+
+
+def _clear_enrollment_if_needed(username):
+    """Clear old enrollment vectors only on first reset sample."""
+    enrollment_status = get_biometric_service().get_enrollment_status(username)
+    enrollment_count = enrollment_status["count"]
+    if enrollment_count == 0:
+        try:
+            from sqlalchemy import delete as sa_delete
+
+            db.session.execute(sa_delete(EnrollmentVector).where(EnrollmentVector.username == username))
+            db.session.commit()
+        except Exception:
+            pass
+
+
+def _set_user_password_for_reset(user, real_pass, username):
+    """Set and persist the new user password for reset flow."""
+    try:
+        user.set_password(real_pass)
+        db.session.commit()
+        return None
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to set password during reset for {username}: {e}")
+        return jsonify({"status": "error", "message": "Unable to set password"}), 500
+
+
+def _save_reset_enrollment_sample(username, user, features, password_hash):
+    """Persist one enrollment sample generated during password reset."""
+    try:
+        from app.models import AdminAudit
+
+        uid = getattr(user, "id", None)
+        if uid is not None:
+            features["user_id"] = int(uid)
+
+        ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
+        ev.timestamp = datetime.now(timezone.utc).isoformat()
+        ev.total_duration = features.get("total_duration")
+        ev.typing_speed = features.get("typing_speed")
+
+        # Raw timing vectors
+        for vec_name in ("H", "DD", "UD", "UU", "DU"):
+            setattr(ev, f"{vec_name}_vector", json.dumps(features.get(f"{vec_name}_vector", [])))
+
+        # Flat per-vector statistics (mean, std, min, max, cv)
+        for prefix in ("H", "DD", "UD", "UU", "DU"):
+            for stat in ("mean", "std", "min", "max", "cv"):
+                col = f"{prefix}_{stat}"
+                val = features.get(col)
+                if val is not None:
+                    setattr(ev, col, val)
+
+        if password_hash:
+            ev.password_hash = password_hash
+
+        sqlalchemy_db.session.add(ev)
+        sqlalchemy_db.session.commit()
+
+        AdminAudit.log(
+            action=AdminAudit.ACTION_ENROLLED,
+            user_id=uid,
+            username=username,
+            details={
+                "quality_label": features.get("quality_label"),
+                "password_strength": features.get("password_strength"),
+            },
+        )
+        db.session.commit()
+        return None
+
+    except Exception as e:
+        print(f"[ERROR] reset_password save sample: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "Database error saving sample"}), 500
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -70,28 +232,16 @@ def verify_email():
             return jsonify({"success": False, "message": "User not found",
                             "error_code": "user_not_found"}), 404
 
-        # Check expiry
-        try:
-            from flask import current_app
-            expiry_hours = current_app.config.get("EMAIL_VERIFICATION_EXPIRY_HOURS", 1)
-            sent_at = user.email_verification_sent_at
-            if sent_at:
-                if sent_at.tzinfo is None:
-                    sent_at = sent_at.replace(tzinfo=timezone.utc)
-                if datetime.now(timezone.utc) > (sent_at + timedelta(hours=int(expiry_hours))):
-                    return jsonify({"success": False, "message": "Token expired",
-                                    "error_code": "expired_token"}), 400
-        except Exception as _e:
-            print("[DEBUG] verify_email expiry check failed:", _e)
+        if _is_email_verification_expired(user):
+            return jsonify({"success": False, "message": "Token expired",
+                            "error_code": "expired_token"}), 400
 
-        try:
-            ok, reason = email_service.verify_token(
-                token, user.email, user.email_verification_sent_at,
-                code_hash=user.email_verification_code_hash,
-            )
-        except TypeError:
-            ok, reason = email_service.verify_token(token, user.email,
-                                                     user.email_verification_sent_at)
+        ok, reason = _verify_token_with_fallback(
+            token,
+            user.email,
+            user.email_verification_sent_at,
+            code_hash=user.email_verification_code_hash,
+        )
 
         if not ok:
             if reason == "expired":
@@ -147,12 +297,7 @@ def send_verification():
             user.email = email
 
         try:
-            sent_at = datetime.now(timezone.utc)
-            user.email_verification_sent_at = sent_at
-            code = str(secrets.randbelow(10**6)).zfill(6)
-            user.email_verification_code_hash = generate_password_hash(code)
-            db.session.commit()
-            email_service.send_verification_email(user, code)
+            _send_email_verification_code(user)
             print(f"[INFO] Verification email sent to {user.email}")
             return jsonify({"success": True, "message": "Verification email sent",
                             "created": created_new}), 200
@@ -183,12 +328,7 @@ def send_reset_verification():
             return jsonify({"success": False, "message": "No email set on account"}), 400
 
         try:
-            sent_at = datetime.now(timezone.utc)
-            code = str(secrets.randbelow(10**6)).zfill(6)
-            user.password_reset_code_hash = generate_password_hash(code)
-            user.password_reset_sent_at = sent_at
-            db.session.commit()
-            email_service.send_verification_email(user, code, purpose="user_reset")
+            _send_password_reset_code(user)
             return jsonify({"success": True, "message": "Verification email sent"}), 200
         except Exception as e:
             db.session.rollback()
@@ -216,14 +356,12 @@ def verify_reset():
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
 
-        try:
-            ok, reason = email_service.verify_token(
-                token, user.email, user.password_reset_sent_at,
-                code_hash=user.password_reset_code_hash,
-            )
-        except TypeError:
-            ok, reason = email_service.verify_token(token, user.email,
-                                                     user.password_reset_sent_at)
+        ok, reason = _verify_token_with_fallback(
+            token,
+            user.email,
+            user.password_reset_sent_at,
+            code_hash=user.password_reset_code_hash,
+        )
 
         if not ok:
             if reason == "expired":
@@ -269,14 +407,12 @@ def reset_password_public():
             return jsonify({"status": "error", "message": "User tidak ditemukan"}), 404
 
         # Validate the signed reset token
-        try:
-            ok, reason = email_service.verify_token(
-                reset_token, user.email, user.password_reset_sent_at,
-                salt="password-reset",
-            )
-        except TypeError:
-            ok, reason = email_service.verify_token(
-                reset_token, user.email, user.password_reset_sent_at)
+        ok, reason = _verify_token_with_fallback(
+            reset_token,
+            user.email,
+            user.password_reset_sent_at,
+            salt="password-reset",
+        )
 
         if not ok:
             if reason == "expired":
@@ -286,20 +422,9 @@ def reset_password_public():
                             "error_code": "invalid_token"}), 400
 
         # Process keystroke events FIRST — before any DB mutation
-        import app.blueprints.api as api_mod
-
-        result = api_mod.process_web_events(events, username)
-        if result["status"] != "success":
-            return jsonify({"status": "error",
-                            "message": "Failed to process keystroke data"}), 400
-
-        features = result["features"]
-        real_pass = result.get("real_password_string")
-        password_hash = result.get("password_hash")
-
-        if not real_pass:
-            return jsonify({"status": "error",
-                            "message": "Master password not provided in sample"}), 400
+        features, real_pass, password_hash, process_error = _process_reset_events(username, events)
+        if process_error:
+            return process_error
 
         # Weak password: log advisory only — do NOT block reset (UI already warns)
         strength_result = calculate_password_strength(real_pass)
@@ -309,72 +434,19 @@ def reset_password_public():
                   f"score={strength_result['score']:.2f})")
 
         # Only on the FIRST sample: clear old enrollment so this is a fresh re-enrollment
-        enrollment_status = biometric_service.get_enrollment_status(username)
-        enrollment_count = enrollment_status["count"]
-        if enrollment_count == 0:
-            try:
-                from sqlalchemy import delete as sa_delete
-                db.session.execute(sa_delete(EnrollmentVector).where(
-                    EnrollmentVector.username == username))
-                db.session.commit()
-            except Exception:
-                pass
+        _clear_enrollment_if_needed(username)
 
         # Persist the new password
-        try:
-            user.set_password(real_pass)
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f"[ERROR] Failed to set password during reset for {username}: {e}")
-            return jsonify({"status": "error", "message": "Unable to set password"}), 500
+        set_password_error = _set_user_password_for_reset(user, real_pass, username)
+        if set_password_error:
+            return set_password_error
 
         # Save enrollment sample with full feature data (matches enrollment.py)
-        try:
-            from app.models import AdminAudit
-            uid = getattr(user, "id", None)
-            if uid is not None:
-                features["user_id"] = int(uid)
+        save_error = _save_reset_enrollment_sample(username, user, features, password_hash)
+        if save_error:
+            return save_error
 
-            ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
-            ev.timestamp = datetime.now(timezone.utc).isoformat()
-            ev.total_duration = features.get("total_duration")
-            ev.typing_speed = features.get("typing_speed")
-
-            # Raw timing vectors
-            for vec_name in ("H", "DD", "UD", "UU", "DU"):
-                setattr(ev, f"{vec_name}_vector",
-                        json.dumps(features.get(f"{vec_name}_vector", [])))
-
-            # Flat per-vector statistics (mean, std, min, max, cv)
-            for prefix in ("H", "DD", "UD", "UU", "DU"):
-                for stat in ("mean", "std", "min", "max", "cv"):
-                    col = f"{prefix}_{stat}"
-                    val = features.get(col)
-                    if val is not None:
-                        setattr(ev, col, val)
-
-            if password_hash:
-                ev.password_hash = password_hash
-
-            sqlalchemy_db.session.add(ev)
-            sqlalchemy_db.session.commit()
-
-            AdminAudit.log(
-                action=AdminAudit.ACTION_ENROLLED,
-                user_id=uid,
-                username=username,
-                details={"quality_label": features.get("quality_label"),
-                         "password_strength": features.get("password_strength")},
-            )
-            db.session.commit()
-        except Exception as e:
-            print(f"[ERROR] reset_password save sample: {e}")
-            traceback.print_exc()
-            return jsonify({"status": "error",
-                            "message": "Database error saving sample"}), 500
-
-        new_status = biometric_service.get_enrollment_status(username)
+        new_status = get_biometric_service().get_enrollment_status(username)
         return jsonify({
             "status": "success",
             "message": "Sample saved",
@@ -411,12 +483,7 @@ def resend_verification():
                             "error_code": "no_email"}), 400
 
         try:
-            sent_at = datetime.now(timezone.utc)
-            user.email_verification_sent_at = sent_at
-            code = str(secrets.randbelow(10**6)).zfill(6)
-            user.email_verification_code_hash = generate_password_hash(code)
-            db.session.commit()
-            sent = email_service.send_verification_email(user, code)
+            sent = _send_email_verification_code(user)
             if not sent:
                 return jsonify({"success": False, "message": "Failed to send email"}), 500
             return jsonify({"success": True, "message": "Verification email resent"}), 200
