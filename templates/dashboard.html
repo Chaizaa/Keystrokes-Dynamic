@@ -8,68 +8,107 @@
 
 {% block body %}
 
-<div class="container">
-    <div class="header">
-        <h1>Dashboard</h1>
-        <div class="user-badge">
-            <span id="headerUsername">Loading...</span>
-        </div>
-    </div>
-    
-    <div id="loadingSection" class="card loading">
-        <div class="spinner"></div>
-        <p>Loading your profile...</p>
-    </div>
-    
-    <div id="mainContent" style="display: none;">
-        <!-- Profile Card -->
-        <div class="card">
-            <h2>Profile Information</h2>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="label">Username</div>
-                    <div class="value" id="username">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Email</div>
-                    <div class="value" id="email">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Account Created</div>
-                    <div class="value" id="createdAt">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Email Verified</div>
-                    <div class="value" id="emailVerified">-</div>
-                </div>
+<div class="dashboard-shell">
+    <div class="dash-orb dash-orb-one" aria-hidden="true"></div>
+    <div class="dash-orb dash-orb-two" aria-hidden="true"></div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-main">
+                <p class="header-kicker">SecureAuth Control Layer</p>
+                <h1>Security Dashboard</h1>
+                <p class="header-subtitle">Track verification posture, user readiness, and account controls in one operational view.</p>
+            </div>
+            <div class="user-badge">
+                <span class="badge-label">Active User</span>
+                <span id="headerUsername">Loading...</span>
             </div>
         </div>
-        
-        <!-- Statistics Card -->
-        <div class="card">
-            <h2>Biometric Statistics</h2>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="number" id="enrollmentCount">0</div>
-                    <div class="label">Enrollment Samples</div>
-                </div>
-                <div class="stat-box">
-                    <div class="number" id="hasPassword">-</div>
-                    <div class="label">Has Password</div>
-                </div>
-            </div>
+
+        <div class="value-pills" aria-label="Platform values">
+            <span>Transparency</span>
+            <span>Reliability</span>
+            <span>Privacy</span>
+            <span>Governance</span>
         </div>
-        
-        <!-- Actions Card -->
-        <div class="card">
-            <h2>Account Actions</h2>
-            <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">
-                Reset Password
-            </button>
-            <!-- Legacy login removed from UI -->
-            <button class="btn btn-danger" onclick="logout()">
-                Logout
-            </button>
+
+        <div id="loadingSection" class="card loading">
+            <div class="spinner"></div>
+            <p>Loading your profile...</p>
+        </div>
+
+        <div id="mainContent" class="main-layout" style="display: none;">
+            <section class="card card-profile">
+                <h2>Profile Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="label">Username</div>
+                        <div class="value" id="username">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">Email</div>
+                        <div class="value" id="email">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">Account Created</div>
+                        <div class="value" id="createdAt">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">Email Verified</div>
+                        <div class="value" id="emailVerified">-</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card card-stats">
+                <h2>Biometric Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="number" id="enrollmentCount">0</div>
+                        <div class="label">Enrollment Samples</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="hasPassword">-</div>
+                        <div class="label">Has Password</div>
+                    </div>
+                </div>
+                <p class="stats-note">Live readiness signals are refreshed whenever the profile endpoint is queried.</p>
+            </section>
+
+            <section class="card card-workflow">
+                <h2>How Verification Stays Reliable</h2>
+                <ol class="workflow-list">
+                    <li>
+                        <span>01</span>
+                        <p>Behavioral features are captured from natural typing patterns.</p>
+                    </li>
+                    <li>
+                        <span>02</span>
+                        <p>Models score each interaction and generate confidence context.</p>
+                    </li>
+                    <li>
+                        <span>03</span>
+                        <p>Policy thresholds evaluate trust and trigger the right action path.</p>
+                    </li>
+                    <li>
+                        <span>04</span>
+                        <p>Audit-ready logs support reviews, reporting, and governance checks.</p>
+                    </li>
+                </ol>
+            </section>
+
+            <section class="card card-actions">
+                <h2>Account Actions</h2>
+                <p class="actions-copy">Use secure recovery for credential reset or end the current session.</p>
+                <div class="actions-row">
+                    <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">
+                        Reset Password
+                    </button>
+                    <button class="btn btn-danger" onclick="logout()">
+                        Logout
+                    </button>
+                </div>
+            </section>
         </div>
     </div>
 </div>
