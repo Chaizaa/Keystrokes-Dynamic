@@ -19,7 +19,10 @@ depends_on = None
 
 def _column_exists(table, column):
     bind = op.get_bind()
-    cols = [c['name'] for c in sa_inspect(bind).get_columns(table)]
+    try:
+        cols = [c['name'] for c in sa_inspect(bind).get_columns(table)]
+    except Exception:
+        return False
     return column in cols
 
 

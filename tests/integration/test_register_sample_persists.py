@@ -1,7 +1,7 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.models import User, db
+from app.models import EnrollmentVector, User, db
 
 
 def test_register_sample_persists_for_existing_user(client, db_session, monkeypatch):
@@ -12,22 +12,15 @@ def test_register_sample_persists_for_existing_user(client, db_session, monkeypa
     db.session.add(user)
     db.session.commit()
 
-    # Ensure legacy biometric DB has no pre-existing samples for this username
-    import sqlite3
-
-    from app.blueprints.api import db_manager
-
-    conn = sqlite3.connect(db_manager.db_path)
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM user_vectors WHERE username = ?", ("persistuser",))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    assert db_manager.get_enrollment_count("persistuser") == 0
+    initial_count = db.session.execute(
+        select(func.count())
+        .select_from(EnrollmentVector)
+        .where(
+            EnrollmentVector.username == "persistuser",
+            EnrollmentVector.event_type == "enrollment",
+        )
+    ).scalar_one()
+    assert int(initial_count) == 0
 
     # Mock processing to return a valid features object and password string
     def fake_process(events, username):
@@ -51,5 +44,12 @@ def test_register_sample_persists_for_existing_user(client, db_session, monkeypa
     j = resp.get_json()
     assert j.get("status") == "success"
 
-    # Now the legacy DB should report 1 sample for this user
-    assert db_manager.get_enrollment_count("persistuser") == 1
+    enrollment_count = db.session.execute(
+        select(func.count())
+        .select_from(EnrollmentVector)
+        .where(
+            EnrollmentVector.username == "persistuser",
+            EnrollmentVector.event_type == "enrollment",
+        )
+    ).scalar_one()
+    assert int(enrollment_count) == 1

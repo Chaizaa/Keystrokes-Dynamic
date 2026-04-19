@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import json
 
 from sqlalchemy import Index, event, select
+from sqlalchemy.orm.attributes import set_committed_value
 
 from . import db
 from .user import User
@@ -309,6 +310,29 @@ def _autofill_username_from_user_id(mapper, connection, target: UsersVector):
     except Exception:
         # Best-effort only
         return
+
+
+def _coerce_loaded_timestamp_to_datetime(target: UsersVector) -> None:
+    ts = getattr(target, "timestamp", None)
+    if not isinstance(ts, str):
+        return
+    try:
+        parsed = datetime.fromisoformat(ts)
+    except Exception:
+        return
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    set_committed_value(target, "timestamp", parsed)
+
+
+@event.listens_for(UsersVector, "load")
+def _coerce_timestamp_on_load(target, context):
+    _coerce_loaded_timestamp_to_datetime(target)
+
+
+@event.listens_for(UsersVector, "refresh")
+def _coerce_timestamp_on_refresh(target, context, attrs):
+    _coerce_loaded_timestamp_to_datetime(target)
 
 
 # Backward-compatibility alias

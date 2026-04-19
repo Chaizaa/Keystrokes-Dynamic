@@ -1,8 +1,21 @@
-import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.blueprints.api import biometric_service, db_manager
-from app.models import User, db
+from app.models import User, UsersVector, db
+
+
+def _get_enrollment_count(username: str) -> int:
+    return int(
+        db.session.execute(
+            select(func.count())
+            .select_from(UsersVector)
+            .where(
+                UsersVector.username == username,
+                (UsersVector.event_type == "enrollment")
+                | (UsersVector.data_type == "enrollment"),
+            )
+        ).scalar()
+        or 0
+    )
 
 
 def test_enrollment_and_login_verification(client, db_session, monkeypatch):
@@ -12,29 +25,15 @@ def test_enrollment_and_login_verification(client, db_session, monkeypatch):
     username = "test_integration_user"
     test_password = "TestPass123!"
 
-    # Clean up any existing user rows and legacy DB samples for a clean start
+    # Clean up any existing user rows and enrollment vectors for a clean start.
     try:
-        db.session.execute(select(User).where(User.username == username)).scalars().all()
+        db.session.query(UsersVector).filter(UsersVector.username == username).delete()
         db.session.query(User).filter(User.username == username).delete()
         db.session.commit()
     except Exception:
         db.session.rollback()
 
-    # Ensure legacy DB has no pre-existing samples for this username
-    import sqlite3
-
-    conn = sqlite3.connect(db_manager.db_path)
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM user_vectors WHERE username = ?", (username,))
-        cur.execute("DELETE FROM feature_vectors WHERE username = ?", (username,))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    assert db_manager.get_enrollment_count(username) == 0
+    assert _get_enrollment_count(username) == 0
 
     # Mock processing to always return a valid features object and the same password
     def fake_process(events, username_arg):
@@ -65,7 +64,7 @@ def test_enrollment_and_login_verification(client, db_session, monkeypatch):
         assert j.get("status") == "success"
 
     # Now the DB should report >=20 samples for this user
-    count = db_manager.get_enrollment_count(username)
+    count = _get_enrollment_count(username)
     assert count >= 20
 
     # Mark the user's email as verified (not under test here; ensure login isn't blocked by unverified email)
@@ -93,7 +92,7 @@ def test_enrollment_and_login_verification(client, db_session, monkeypatch):
             resolved_username = username
 
         # Ensure DB reports the expected count
-        current = db_manager.get_enrollment_count(resolved_username)
+        current = _get_enrollment_count(resolved_username)
         assert current >= 20, f"Expected >=20 samples before verification but got {current}"
         return {"success": True, "verified": True, "score": 0.95, "confidence": "high"}
 

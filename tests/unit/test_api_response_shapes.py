@@ -32,8 +32,6 @@ def test_register_sample_returns_expected_shape(client, monkeypatch, db_session)
         }
 
     monkeypatch.setattr("app.blueprints.api.process_web_events", fake_process)
-    # Avoid legacy DB writes
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: True, raising=False)
 
     payload = {
         "username": "testshapeuser",
