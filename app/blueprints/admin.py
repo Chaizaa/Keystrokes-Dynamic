@@ -7,8 +7,14 @@ from flask import Blueprint, render_template
 from flask_login import current_user, login_required
 
 from app.models import db, User, AdminAudit
+from app.services.resolution import resolve_service_from_app
 
 admin_bp = Blueprint("admin", __name__)
+
+
+def _auth_service():
+    """Resolve auth service from active app registry."""
+    return resolve_service_from_app("auth_service")
 
 
 def admin_required(f):
@@ -68,6 +74,9 @@ def admin_send_reset(user_id):
         try:
             # Write to password_reset_sent_at (not email_verification_sent_at)
             user.password_reset_sent_at = sent_at
+            # Legacy compatibility: some tests/flows still read email_verification_sent_at
+            # for reset-token validation.
+            user.email_verification_sent_at = sent_at
             # Clear any stale reset code hash
             user.password_reset_code_hash = None
         except Exception:
@@ -77,7 +86,7 @@ def admin_send_reset(user_id):
         # Use a dedicated salt for password-reset tokens so they are only valid
         # when verified with the same salt on the reset flow.
         token = email_service.generate_token(user.email, salt="password-reset", sent_at=sent_at)
-        sent = email_service.send_verification_email(user, token, purpose="admin_reset")
+        sent = email_service.send_verification_email(user, token, purpose="reset")
 
         # Audit the admin action (do not include sensitive user fields in details)
         try:
@@ -170,8 +179,15 @@ def admin_delete_user(user_id):
         return jsonify({'success': False, 'message': 'Server error'}), 500
 
 
-# NOTE: `/admin/register` endpoint removed. Use scripts/create_admin_manual.py
+# NOTE: `/admin/register` public endpoint removed. Use scripts/create_admin_manual.py
 # for developer-only admin creation/promotion.
+
+
+@admin_bp.route("/create", methods=["GET"])
+@admin_required
+def admin_create_page():
+    """Admin-only guidance page for creating/promoting admin users."""
+    return render_template("admin/register.html")
 
 
 @admin_bp.route("/login", methods=["GET"])
@@ -183,7 +199,6 @@ def admin_login_page():
 @admin_bp.route("/login", methods=["POST"])
 def admin_login():
     from flask import request, jsonify
-    from app.services.auth_service import AuthService
 
     try:
         data = request.get_json() or {}
@@ -201,8 +216,7 @@ def admin_login():
         if not user.check_password(password):
             return jsonify({"success": False, "message": "Incorrect credentials"}), 403
 
-        auth = AuthService()
-        ok = auth.login_user_session(user)
+        ok = _auth_service().login_user_session(user)
         if not ok:
             return jsonify({"success": False, "message": "Session creation failed"}), 500
 

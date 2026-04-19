@@ -12,44 +12,53 @@
     align-items: flex-start;
     justify-content: center;
     padding: 40px 16px 60px;
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    background:
+        radial-gradient(circle at 10% 12%, rgba(255, 122, 42, 0.18), transparent 34%),
+        radial-gradient(circle at 86% 8%, rgba(255, 122, 42, 0.08), transparent 35%),
+        linear-gradient(160deg, #06080d 0%, #090c12 52%, #050608 100%);
 }
 
 .ds-card {
-    background: #1a2235;
-    border: 1px solid #2d3748;
-    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(18, 22, 30, 0.98), rgba(10, 13, 18, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     padding: 36px 40px;
     width: 100%;
     max-width: 560px;
-    color: #e2e8f0;
+    color: #e5e7eb;
+    box-shadow: 0 24px 46px rgba(0, 0, 0, 0.48), inset 0 0 0 1px rgba(255, 122, 42, 0.07);
 }
 
 .ds-brand {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #6b9fff;
+    color: #ffb066;
     margin-bottom: 8px;
 }
 
 .ds-title {
-    font-size: 22px;
+    font-size: 30px;
     font-weight: 700;
-    color: #f0f4ff;
-    margin: 0 0 6px;
+    color: #f8fafc;
+    margin: 0 0 8px;
+    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
 }
 
 .ds-subtitle {
-    font-size: 14px;
-    color: #94a3b8;
-    margin: 0 0 28px;
+    font-size: 12px;
+    color: #aab2bf;
+    margin: 0 0 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
 .ds-divider {
     border: none;
-    border-top: 1px solid #2d3748;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
     margin: 24px 0;
 }
 
@@ -58,28 +67,38 @@
 
 .ds-label {
     display: block;
-    font-size: 13px;
-    font-weight: 600;
-    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    color: #b7bfcd;
     margin-bottom: 6px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
+}
+
+.ds-label-note {
+    color:#7c8596;
+    font-weight:400;
 }
 
 .ds-input {
     width: 100%;
     padding: 12px 14px;
-    background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    color: #e2e8f0;
+    background: linear-gradient(160deg, rgba(10, 13, 18, 0.95), rgba(7, 9, 13, 0.95));
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 2px;
+    color: #f8fafc;
     font-size: 15px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
     box-sizing: border-box;
 }
-.ds-input:focus { border-color: #6b9fff; }
-.ds-input::placeholder { color: #475569; }
+
+.ds-input:focus {
+    border-color: rgba(255, 122, 42, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 122, 42, 0.35);
+}
+
+.ds-input::placeholder { color: #6b7280; }
 
 /* ── Buttons ── */
 .ds-btn {
@@ -88,53 +107,87 @@
     justify-content: center;
     gap: 8px;
     padding: 13px 24px;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
+    border-radius: 2px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     cursor: pointer;
-    border: none;
-    transition: background 0.15s, opacity 0.15s;
+    border: 1px solid transparent;
+    transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease, opacity 0.15s;
     width: 100%;
 }
+
 .ds-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.ds-btn--primary { background: #3b82f6; color: #fff; }
-.ds-btn--primary:hover:not(:disabled) { background: #2563eb; }
-.ds-btn--success { background: #059669; color: #fff; }
-.ds-btn--success:hover:not(:disabled) { background: #047857; }
+
+.ds-btn--primary {
+    background: linear-gradient(135deg, #ff7a2a 0%, #e6671d 100%);
+    color: #fff;
+    border-color: rgba(255, 122, 42, 0.85);
+}
+
+.ds-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.ds-btn--success {
+    background: linear-gradient(135deg, #f08a3f 0%, #dd6a1f 100%);
+    color: #fff;
+    border-color: rgba(255, 122, 42, 0.8);
+}
+
+.ds-btn--success:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
 .ds-btn--outline {
     background: transparent;
-    border: 1px solid #334155;
-    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #b7bfcd;
     font-size: 13px;
     padding: 10px 18px;
 }
-.ds-btn--outline:hover:not(:disabled) { border-color: #6b9fff; color: #6b9fff; }
+
+.ds-btn--outline:hover:not(:disabled) {
+    border-color: rgba(255, 122, 42, 0.65);
+    color: #ffcf9f;
+    background: rgba(255, 122, 42, 0.08);
+}
 
 /* ── Status message ── */
 .ds-status {
     font-size: 13px;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 14px;
     display: block;
+    border: 1px solid transparent;
 }
+
 .ds-status.hidden { display: none; }
-.ds-status--info    { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
-.ds-status--success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
-.ds-status--warning { background: rgba(234,179,8,0.07);  color: #9a8040; border: 1px solid rgba(234,179,8,0.18); }
-.ds-status--error   { background: rgba(239,68,68,0.07);  color: #9b7070; border: 1px solid rgba(239,68,68,0.18); }
+
+.ds-status--info    { background: rgba(255, 122, 42, 0.12); color: #ffd7bf; border: 1px solid rgba(255, 122, 42, 0.42); }
+.ds-status--success { background: rgba(255, 122, 42, 0.14); color: #ffe7d3; border: 1px solid rgba(255, 122, 42, 0.5); }
+.ds-status--warning { background: rgba(234,179,8,0.08); color: #f2d7a0; border: 1px solid rgba(234,179,8,0.26); }
+.ds-status--error   { background: rgba(239,68,68,0.1); color: #f2b8b8; border: 1px solid rgba(239,68,68,0.28); }
+
+.ds-status-flat { margin-top: 0; }
 
 /* ── Password strength bar ── */
 .ds-pw-strength {
     margin-top: 8px;
 }
+
 .ds-pw-strength-track {
     height: 6px;
-    background: #1e293b;
+    background: rgba(255, 255, 255, 0.09);
     border-radius: 6px;
     overflow: hidden;
     margin-bottom: 5px;
 }
+
 .ds-pw-strength-fill {
     height: 100%;
     width: 0%;
@@ -144,7 +197,11 @@
 }
 .ds-pw-strength-label {
     font-size: 12px;
-    color: #64748b;
+    color: #8e96a4;
+}
+
+.ds-pw-strength--capture {
+    margin-top: 8px;
 }
 
 /* ── Input wrapper for toggle ── */
@@ -163,33 +220,43 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #64748b;
+    color: #8e96a4;
     padding: 4px;
     display: flex;
     align-items: center;
 }
 
+.ds-pw-toggle:hover { color: #ffb066; }
+
+.ds-help-text {
+    font-size: 12px;
+    color: #8e96a4;
+    margin: 6px 0 4px;
+}
+
 /* ── Target phrase display ── */
 .ds-phrase-box {
     text-align: center;
-    background: #0f172a;
-    border: 2px dashed #334155;
-    border-radius: 12px;
+    background: rgba(8, 11, 16, 0.9);
+    border: 1px dashed rgba(255, 122, 42, 0.42);
+    border-radius: 2px;
     padding: 20px;
     margin: 20px 0;
 }
+
 .ds-phrase-label {
     font-size: 11px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #64748b;
+    color: #8e96a4;
     margin-bottom: 8px;
 }
+
 .ds-phrase-text {
     font-family: 'Courier New', monospace;
     font-size: 28px;
     font-weight: 700;
-    color: #6b9fff;
+    color: #ffb066;
     letter-spacing: 4px;
     word-break: break-all;
     user-select: none;
@@ -199,38 +266,43 @@
 .ds-progress-wrap {
     margin: 20px 0;
 }
+
 .ds-progress-track {
     height: 8px;
-    background: #1e293b;
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 99px;
     overflow: hidden;
     margin: 8px 0;
 }
+
 .ds-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    background: linear-gradient(90deg, #ff7a2a, #ffb066);
     border-radius: 99px;
     transition: width 0.3s ease;
     width: 0%;
 }
+
 .ds-progress-meta {
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: #64748b;
+    color: #8e96a4;
 }
+
+.ds-progress-tip { color: #ffb066; }
 
 /* ── Subject code badge ── */
 .ds-code-badge {
     display: inline-block;
-    background: #1e3a5f;
-    border: 1px solid #1d4ed8;
-    border-radius: 6px;
+    background: rgba(28, 20, 14, 0.86);
+    border: 1px solid rgba(255, 122, 42, 0.5);
+    border-radius: 2px;
     padding: 4px 12px;
     font-family: monospace;
     font-size: 15px;
     font-weight: 700;
-    color: #93c5fd;
+    color: #ffcf9f;
     letter-spacing: 2px;
 }
 
@@ -246,11 +318,18 @@
     align-items: flex-start;
     padding: 7px 0;
     font-size: 14px;
-    color: #94a3b8;
-    border-bottom: 1px solid #1e293b;
+    color: #b7bfcd;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
+
 .ds-info-list li:last-child { border-bottom: none; }
-.ds-info-list .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.ds-info-list .icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #ffb066;
+}
 
 /* ── Highlight stat boxes ── */
 .ds-stat-row {
@@ -259,25 +338,41 @@
     gap: 12px;
     margin: 20px 0;
 }
+
+.ds-stat-row--intro {
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 20px;
+}
+
 .ds-stat {
-    background: #0f172a;
-    border: 1px solid #2d3748;
-    border-radius: 10px;
+    background: rgba(8, 11, 16, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     padding: 14px 12px;
     text-align: center;
+    box-shadow: inset 0 0 0 1px rgba(255, 122, 42, 0.04);
 }
+
 .ds-stat-num {
     font-size: 26px;
     font-weight: 800;
-    color: #6b9fff;
+    color: #ffb066;
     line-height: 1;
     margin-bottom: 4px;
+    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
 }
+
+.ds-time-min {
+    font-size: 14px;
+    font-weight: 500;
+    color: #b7bfcd;
+}
+
 .ds-stat-label {
     font-size: 11px;
-    color: #64748b;
+    color: #8e96a4;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
 }
 
 /* ── Utility ── */
@@ -290,20 +385,107 @@
 /* ── Resume section ── */
 .ds-resume-section {
     padding: 16px;
-    background: #0f172a;
-    border: 1px solid #2d3748;
-    border-radius: 10px;
+    background: rgba(8, 11, 16, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     margin-top: 12px;
 }
+
 .ds-resume-toggle {
     background: none;
     border: none;
-    color: #6b9fff;
+    color: #ffb066;
     cursor: pointer;
     font-size: 13px;
     padding: 0;
     text-decoration: underline;
     text-underline-offset: 3px;
+}
+
+.ds-resume-toggle:hover { color: #ffcf9f; }
+
+.ds-resume-input { margin-bottom: 10px; }
+
+.ds-capture-top {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+}
+
+.ds-capture-code-label {
+    font-size:12px;
+    color:#8e96a4;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+}
+
+.ds-capture-right { text-align:right; }
+
+#ds-rep-label {
+    font-size:13px;
+    color:#ffb066;
+    font-weight:700;
+}
+
+.ds-capture-note {
+    font-size:12px;
+    color:#7c8596;
+    text-align:center;
+    margin-top:16px;
+}
+
+.ds-done-title {
+    color:#ffd7bf;
+    margin:0 0 8px;
+    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.ds-done-text {
+    color:#b7bfcd;
+    margin:0 0 20px;
+    font-size:15px;
+}
+
+.ds-done-code-wrap {
+    margin:16px 0 28px;
+}
+
+.ds-done-code-label {
+    font-size:12px;
+    color:#8e96a4;
+    display:block;
+    margin-bottom:6px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.ds-done-code {
+    font-size:22px;
+    padding:8px 20px;
+}
+
+.ds-done-help {
+    font-size:14px;
+    color:#b7bfcd;
+}
+
+@media (max-width: 640px) {
+    .ds-container {
+        padding: 12px 10px 22px;
+    }
+    .ds-card {
+        padding: 20px 16px;
+    }
+    .ds-title {
+        font-size: 24px;
+    }
+    .ds-stat-row,
+    .ds-stat-row--intro {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 {% endblock %}
@@ -320,13 +502,13 @@
     <div id="stage-intro" class="ds-stage">
 
         <!-- Info stats -->
-        <div class="ds-stat-row" style="grid-template-columns: 1fr 1fr; margin-bottom:20px;">
+        <div class="ds-stat-row ds-stat-row--intro">
             <div class="ds-stat">
                 <div class="ds-stat-num">{{ total_samples }}</div>
                 <div class="ds-stat-label">Total Sampel</div>
             </div>
             <div class="ds-stat">
-                <div class="ds-stat-num">&asymp;{{ (total_samples // 60) + 1 }}&ndash;{{ (total_samples // 30) + 1 }}<span style="font-size:14px;font-weight:500"> menit</span></div>
+                <div class="ds-stat-num">&asymp;{{ (total_samples // 60) + 1 }}&ndash;{{ (total_samples // 30) + 1 }}<span class="ds-time-min"> menit</span></div>
                 <div class="ds-stat-label">Estimasi Waktu</div>
             </div>
         </div>
@@ -357,7 +539,7 @@
 
         <!-- Registration form -->
         <div class="ds-field">
-            <label class="ds-label" for="ds-name">Nama / Inisial <span style="color:#475569;font-weight:400">(opsional)</span></label>
+            <label class="ds-label" for="ds-name">Nama / Inisial <span class="ds-label-note">(opsional)</span></label>
             <input
                 class="ds-input"
                 type="text"
@@ -385,7 +567,7 @@
                     </svg>
                 </button>
             </div>
-            <p style="font-size:12px; color:#64748b; margin:6px 0 4px;">
+            <p class="ds-help-text">
                 Campur huruf besar, kecil, angka, dan simbol biar makin kuat ya!
             </p>
             <div class="ds-pw-strength" id="ds-pw-strength-intro">
@@ -408,13 +590,12 @@
             <div id="ds-resume-section" class="ds-resume-section hidden mt-4">
                 <label class="ds-label" for="ds-resume-code">Kode Subjek</label>
                 <input
-                    class="ds-input mb-4"
+                    class="ds-input mb-4 ds-resume-input"
                     type="text"
                     id="ds-resume-code"
                     placeholder="Contoh: s001"
                     maxlength="10"
-                    autocomplete="off"
-                    style="margin-bottom:10px">
+                    autocomplete="off">
                 <button id="ds-resume-btn" class="ds-btn ds-btn--outline">
                     Lanjutkan
                 </button>
@@ -427,13 +608,13 @@
     <div id="stage-capture" class="ds-stage hidden">
 
         <!-- Subject code (left) + sample counter (right) -->
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div class="ds-capture-top">
             <div>
-                <span style="font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.05em;">Kode Subjek</span><br>
+                <span class="ds-capture-code-label">Kode Subjek</span><br>
                 <span id="ds-subject-code-display" class="ds-code-badge ds-subject-code"></span>
             </div>
-            <div style="text-align:right;">
-                <div id="ds-rep-label" style="font-size:13px; color:#6b9fff; font-weight:600;"></div>
+            <div class="ds-capture-right">
+                <div id="ds-rep-label"></div>
             </div>
         </div>
 
@@ -450,7 +631,7 @@
             </div>
             <div class="ds-progress-meta">
                 <span id="ds-progress-label">0 / {{ total_samples }} sampel</span>
-                <span style="color:#6b9fff;">Catat kode subjekmu!</span>
+                <span class="ds-progress-tip">Catat kode subjekmu!</span>
             </div>
         </div>
 
@@ -476,7 +657,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="ds-pw-strength" id="ds-pw-strength-capture" style="margin-top:8px;">
+            <div class="ds-pw-strength ds-pw-strength--capture" id="ds-pw-strength-capture">
                 <div class="ds-pw-strength-track">
                     <div class="ds-pw-strength-fill" id="ds-pw-fill-capture"></div>
                 </div>
@@ -488,29 +669,29 @@
             Kirim (Enter)
         </button>
 
-        <p style="font-size:12px; color:#475569; text-align:center; margin-top:16px;">
+        <p class="ds-capture-note">
             Jangan ditutup dulu ya, belum selesai!
         </p>
     </div>
 
     <!-- ─────────────────────────────── STAGE: DONE ──────────────────────── -->
     <div id="stage-done" class="ds-stage hidden text-center">
-        <h2 style="color:#6ee7b7; margin:0 0 8px;">Semua Sampel Selesai!</h2>
-        <p style="color:#94a3b8; margin:0 0 20px; font-size:15px;">
+        <h2 class="ds-done-title">Semua Sampel Selesai!</h2>
+        <p class="ds-done-text">
             Makasih banyak udah mau bantu kami!<br>
             Data ketikanmu udah kami simpan dan bakal jadi bagian dari penelitian ini.
         </p>
-        <div style="margin: 16px 0 28px;">
-            <span style="font-size:13px; color:#64748b; display:block; margin-bottom:6px;">Kode Subjek Kamu</span>
-            <span id="ds-done-code" class="ds-code-badge" style="font-size:22px; padding: 8px 20px;"></span>
+        <div class="ds-done-code-wrap">
+            <span class="ds-done-code-label">Kode Subjek Kamu</span>
+            <span id="ds-done-code" class="ds-code-badge ds-done-code"></span>
         </div>
-        <p style="font-size:14px; color:#94a3b8;">
+        <p class="ds-done-help">
             Ada yang mau ditanyain? Kontak peneliti aja dan kasih tau kode subjekmu.
         </p>
     </div>
 
     <!-- Single shared status bar, shown by JS across all stages -->
-    <span id="ds-status" class="ds-status hidden" style="margin-top:0;"></span>
+    <span id="ds-status" class="ds-status ds-status-flat hidden"></span>
 
 </div><!-- .ds-card -->
 </div><!-- .ds-container -->

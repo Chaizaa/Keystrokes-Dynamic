@@ -114,6 +114,8 @@
     let isFirstKeystroke = true;
     let usernameCheckTimeout = null;
     let isSubmitting = false;
+    const SUCCESS_REDIRECT_DELAY_MS = 250;
+    const FORM_RESET_DELAY_MS = 600;
     
     const usernameField = document.getElementById('username');
     const passwordField = document.getElementById('passwordField');
@@ -290,9 +292,11 @@
             return false;
         }
         
-        // Debug: Log captured events
-        console.log(`[DEBUG] Captured ${rawEvents.length} keystroke events`);
-        console.log('[DEBUG] Events:', rawEvents);
+        // Debug logging only in dev mode to avoid unnecessary UI jank.
+        if (LOGIN_DEV_LENIENT) {
+            console.log(`[DEBUG] Captured ${rawEvents.length} keystroke events`);
+            console.log('[DEBUG] Events:', rawEvents);
+        }
         
         // Minimum 4 events = 2 characters (each char has keydown + keyup)
         if (rawEvents.length < 4) {
@@ -322,10 +326,10 @@
             if (status === 200 && body.success) {
                 // SUCCESS
                 showResult(body.message, 'success');
-                // Redirect to home after 2 seconds
+                // Redirect quickly for snappier UX once verification succeeds.
                 setTimeout(() => {
                     window.location.href = '/home';
-                }, 2000);
+                }, SUCCESS_REDIRECT_DELAY_MS);
                 
             } else {
                 // FAILED
@@ -336,7 +340,7 @@
                 } else if (body.reason === 'impostor_detected') {
                     message += '<br><small>Type with the same rhythm as during enrollment</small>';
                 } else if (body.reason === 'no_enrollment') {
-                    message += '<br><small><a href="/register" style="color: #6b9fff;">Register first</a></small>';
+                    message += '<br><small><a href="/register" style="color: #ffb066;">Register first</a></small>';
                 } else if (body.reason === 'PASSWORD_MISMATCH' || body.reason === 'hash_mismatch') {
                     message = 'Incorrect password. Make sure you type the same password used during registration.';
                 }
@@ -355,7 +359,7 @@
                 // Re-enable form
                 setTimeout(() => {
                     resetForm();
-                }, 2000);
+                }, FORM_RESET_DELAY_MS);
             }
         })
         .catch(err => {
@@ -364,7 +368,7 @@
             showResult('Server error. Please try again.', 'error');
             setTimeout(() => {
                 resetForm();
-            }, 2000);
+            }, FORM_RESET_DELAY_MS);
         });
         
         return false;

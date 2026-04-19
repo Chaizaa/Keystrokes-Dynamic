@@ -77,7 +77,7 @@ function calcPasswordStrength(pw) {
     if (/[^A-Za-z0-9]/.test(pw)) score += 0.20;
     score = Math.min(1.0, score);
     let label, color;
-    if      (score >= 0.67) { label = "Kuat";        color = "#10b981"; }
+    if      (score >= 0.67) { label = "Kuat";        color = "#ff8a44"; }
     else if (score >= 0.51) { label = "Sedang";      color = "#f59e0b"; }
     else if (score >= 0.34) { label = "Lemah";       color = "#f97316"; }
     else                    { label = "Sangat lemah"; color = "#ef4444"; }
