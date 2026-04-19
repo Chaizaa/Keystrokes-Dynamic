@@ -4,6 +4,7 @@ Flask Application Factory with SQLAlchemy, Flask-Login, and Security Extensions
 
 import os
 import secrets
+import sys
 
 from flask import Flask
 from flask_caching import Cache
@@ -32,6 +33,117 @@ cache = Cache()
 socketio = SocketIO(cors_allowed_origins=os.environ.get("ALLOWED_ORIGIN", "*"))
 
 
+def _load_app_config(app, config_name):
+    """Load app config from dict or named config class."""
+    # Add parent directory to path so we can import config
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from config import get_config, validate_config
+
+    # Handle both string config name and dict config
+    if isinstance(config_name, dict):
+        app.config.update(config_name)
+        return
+
+    config_class = get_config(config_name)
+    validate_config(config_class)
+    app.config.from_object(config_class)
+
+
+def _configure_rate_limiter(app):
+    """Configure and initialize Flask-Limiter based on app config toggles."""
+    # Respect application config to enable/disable rate limiting during tests
+    if not app.config.get("RATELIMIT_ENABLED", True):
+        limiter.enabled = False
+        # Clear default limits so they don't apply
+        try:
+            limiter.default_limits = []
+        except Exception:
+            pass
+    limiter.init_app(app)
+    limiter.enabled = app.config.get("RATELIMIT_ENABLED", True)
+
+    # Developer convenience: if DEV_LENIENT_RATELIMIT is enabled, turn off server-side rate limiting
+    if app.config.get("DEV_LENIENT_RATELIMIT", False):
+        print("[INFO] DEV_LENIENT_RATELIMIT is enabled — disabling server-side rate limiter")
+        limiter.enabled = False
+        try:
+            limiter.default_limits = []
+        except Exception:
+            pass
+
+
+def _register_blueprints(app):
+    """Register all application blueprints in the established order."""
+    from app.blueprints.admin import admin_bp
+    from app.blueprints.api import api_bp
+    from app.blueprints.auth import auth_bp
+    from app.blueprints.dataset import dataset_bp
+    from app.blueprints.health import health_bp
+    from app.blueprints.main import main_bp
+
+    app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(dataset_bp)
+    # Health endpoints for admins/ops
+    app.register_blueprint(health_bp, url_prefix="/health")
+
+
+def _attach_service_registry(app):
+    """Attach the shared API service registry to app.extensions."""
+    from app.blueprints.api._shared import service_registry as api_service_registry
+
+    app.extensions["service_registry"] = api_service_registry
+
+
+def _is_running_db_cli():
+    """Detect whether current process is running flask db CLI commands."""
+    argv_text = " ".join(sys.argv).lower()
+    return (" db " in f" {argv_text} ") and any(
+        cmd in argv_text
+        for cmd in (
+            "upgrade",
+            "downgrade",
+            "revision",
+            "migrate",
+            "merge",
+            "stamp",
+            "heads",
+            "history",
+            "current",
+            "show",
+        )
+    )
+
+
+def _should_run_create_all(app):
+    """Return True if create_all should run for this process context."""
+    return not (
+        app.config.get("SKIP_CREATE_ALL", False)
+        or app.config.get("TESTING", False)
+        or _is_running_db_cli()
+    )
+
+
+def _configure_dataset_only_guard(app):
+    """Optionally expose only dataset-related routes for public collection mode."""
+    if os.environ.get("DATASET_ONLY") != "1":
+        return
+
+    _ALLOWED_PREFIXES = ("/dataset", "/api/dataset/", "/static/", "/health/")
+
+    @app.before_request
+    def _dataset_only_guard():
+        from flask import abort, request as _req
+
+        p = _req.path
+        if not any(p == prefix.rstrip("/") or p.startswith(prefix) for prefix in _ALLOWED_PREFIXES):
+            abort(404)
+
+
 def create_app(config_name="development"):
     """
     Application factory pattern for Flask
@@ -51,22 +163,11 @@ def create_app(config_name="development"):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     # Load configuration
-    import os
-    import sys
+    _load_app_config(app, config_name)
 
-    # Add parent directory to path so we can import config
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from config import get_config
-
-    # Handle both string config name and dict config
-    if isinstance(config_name, dict):
-        app.config.update(config_name)
-    else:
-        config_class = get_config(config_name)
-        # Validate production config before applying (avoids import-time crash)
-        if hasattr(config_class, "validate"):
-            config_class.validate()
-        app.config.from_object(config_class)
+    # Normalize ML backend mode switch so app runtime always sees a valid value.
+    _ml_backend_raw = str(app.config.get("ML_BACKEND", os.environ.get("ML_BACKEND", "rf")) or "rf").strip().lower()
+    app.config["ML_BACKEND"] = _ml_backend_raw if _ml_backend_raw in {"rf", "svm"} else "rf"
 
     # Set secret key for session management
     if not app.config.get("SECRET_KEY"):
@@ -105,8 +206,7 @@ def create_app(config_name="development"):
     # Restrict CORS origins via ALLOWED_ORIGIN env var (Railway: set to your domain).
     # Default is "*" (open) for local dev. In production set e.g.:
     #   ALLOWED_ORIGIN=https://web-production-77b15.up.railway.app
-    import os as _cors_os
-    _cors_origins = _cors_os.environ.get("ALLOWED_ORIGIN", "*")
+    _cors_origins = os.environ.get("ALLOWED_ORIGIN", "*")
     CORS(app, resources={r"/api/*": {"origins": _cors_origins}})
 
     # Flask-Login configuration
@@ -130,25 +230,7 @@ def create_app(config_name="development"):
     csrf.exempt(api_blueprint)
 
     # Rate Limiting
-    # Respect application config to enable/disable rate limiting during tests
-    if not app.config.get("RATELIMIT_ENABLED", True):
-        limiter.enabled = False
-        # Clear default limits so they don't apply
-        try:
-            limiter.default_limits = []
-        except Exception:
-            pass
-    limiter.init_app(app)
-    limiter.enabled = app.config.get("RATELIMIT_ENABLED", True)
-
-    # Developer convenience: if DEV_LENIENT_RATELIMIT is enabled, turn off server-side rate limiting
-    if app.config.get("DEV_LENIENT_RATELIMIT", False):
-        print("[INFO] DEV_LENIENT_RATELIMIT is enabled — disabling server-side rate limiter")
-        limiter.enabled = False
-        try:
-            limiter.default_limits = []
-        except Exception:
-            pass
+    _configure_rate_limiter(app)
 
     # Inject development toggles into templates
     @app.context_processor
@@ -183,20 +265,10 @@ def create_app(config_name="development"):
         )
 
     # Register blueprints
-    from app.blueprints.admin import admin_bp
-    from app.blueprints.api import api_bp
-    from app.blueprints.auth import auth_bp
-    from app.blueprints.dataset import dataset_bp
-    from app.blueprints.health import health_bp
-    from app.blueprints.main import main_bp
+    _register_blueprints(app)
 
-    app.register_blueprint(main_bp)
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(api_bp, url_prefix="/api")
-    app.register_blueprint(admin_bp, url_prefix="/admin")
-    app.register_blueprint(dataset_bp)
-    # Health endpoints for admins/ops
-    app.register_blueprint(health_bp, url_prefix="/health")
+    # Expose shared service registry through app extensions.
+    _attach_service_registry(app)
 
     # Admin blueprint: CSRF is NOT exempted. base.html's global fetch() override
     # automatically injects X-CSRFToken on every non-GET request, so all admin
@@ -204,25 +276,7 @@ def create_app(config_name="development"):
 
     # Create database tables (guarded so migrations/stamping can run cleanly).
     # When running `flask db ...`, pre-creating tables can break migrations.
-    import sys as _sys
-    _argv = " ".join(_sys.argv).lower()
-    _running_db_cli = (" db " in f" {_argv} ") and any(
-        cmd in _argv
-        for cmd in (
-            "upgrade",
-            "downgrade",
-            "revision",
-            "migrate",
-            "merge",
-            "stamp",
-            "heads",
-            "history",
-            "current",
-            "show",
-        )
-    )
-
-    if not (app.config.get("SKIP_CREATE_ALL", False) or _running_db_cli):
+    if _should_run_create_all(app):
         with app.app_context():
             db.create_all()
 
@@ -236,16 +290,6 @@ def create_app(config_name="development"):
     #   /static/        — CSS / JS / image assets
     #   /health/        — Railway health-check pings
     # -------------------------------------------------------------------------
-    import os as _os
-    if _os.environ.get("DATASET_ONLY") == "1":
-        _ALLOWED_PREFIXES = ("/dataset", "/api/dataset/", "/static/", "/health/")
-
-        @app.before_request
-        def _dataset_only_guard():
-            from flask import abort, request as _req
-            p = _req.path
-            if not any(p == prefix.rstrip("/") or p.startswith(prefix)
-                       for prefix in _ALLOWED_PREFIXES):
-                abort(404)
+    _configure_dataset_only_guard(app)
 
     return app

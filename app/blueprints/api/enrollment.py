@@ -18,7 +18,14 @@ from app.models import AdminAudit, EnrollmentVector, User, db
 from app.services.email_service import email_service
 from app.utils.password_strength import calculate_password_strength, get_strength_label
 
-from ._shared import api_bp, auth_service, biometric_service
+# Keep legacy module-level symbols for compatibility with existing imports/tests.
+from ._shared import (
+    api_bp,
+    auth_service,
+    biometric_service,
+    get_auth_service,
+    get_biometric_service,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +46,382 @@ def _apply_vector_stats(ev, features: dict) -> None:
                 setattr(ev, col, val)
 
 
+def _process_web_events(username, events):
+    """Call shared keystroke processor via api package export (test-friendly)."""
+    import app.blueprints.api as api_mod
+
+    return api_mod.process_web_events(events, username)
+
+
+def _assess_sample_quality(features):
+    """Call shared quality assessor via api package export (test-friendly)."""
+    import app.blueprints.api as api_mod
+
+    return api_mod.assess_sample_quality(features)
+
+
+def _recommended_samples():
+    """Return the enrollment target from the biometric service or its legacy fallback."""
+    getter = getattr(get_biometric_service(), "get_recommended_samples", None)
+    if callable(getter):
+        try:
+            return int(getter())
+        except Exception:
+            pass
+    return int(getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 100))
+
+
+def _resolve_username_for_check(username):
+    """Resolve email identifier to username for check_username endpoint."""
+    try:
+        if "@" in username:
+            user_obj = get_auth_service().get_user_by_email(username)
+            if user_obj:
+                return user_obj.username, None
+            return username, (
+                jsonify({
+                    "exists": False,
+                    "can_login": False,
+                    "enrollment_complete": False,
+                    "enrollment_count": 0,
+                    "message": f"User {username} tidak ditemukan",
+                }),
+                200,
+            )
+    except Exception:
+        pass
+
+    return username, None
+
+
+def _build_check_username_login_response(username, availability, enrollment_count, login_ready):
+    """Build check_username response payload for login mode."""
+    recommended = _recommended_samples()
+    if not availability["exists"]:
+        return jsonify({
+            "exists": False,
+            "can_login": False,
+            "enrollment_complete": False,
+            "enrollment_count": 0,
+            "message": f"User {username} tidak ditemukan",
+        }), 200
+
+    return jsonify({
+        "exists": True,
+        "can_login": login_ready,
+        "enrollment_complete": login_ready,
+        "enrollment_count": enrollment_count,
+        "message": (
+            f"User {username} ditemukan"
+            if login_ready
+            else (
+                f"Enrollment belum lengkap "
+                f"({enrollment_count}/{recommended})"
+            )
+        ),
+    }), 200
+
+
+def _build_check_username_register_response(availability, enrollment_count):
+    """Build check_username response payload for register mode."""
+    recommended = _recommended_samples()
+    if availability.get("exists"):
+        status_str = "resumable"
+    elif not availability["available"] and availability.get("reason") == "resumable":
+        status_str = "resumable"
+    elif not availability["available"]:
+        status_str = "taken"
+    else:
+        status_str = "available"
+
+    response_data = {
+        "status": status_str,
+        "available": availability["available"],
+        "exists": availability["exists"],
+        "message": availability["message"],
+        "enrollment_count": enrollment_count,
+        "is_retry": enrollment_count > 0,
+        "detail": "",
+    }
+
+    if status_str == "resumable" and availability.get("exists"):
+        response_data["message"] = (
+            f"Resume registration: {enrollment_count}/{recommended} samples collected"
+        )
+
+    return jsonify(response_data)
+
+
+def _extract_register_payload(data):
+    """Extract username/events/email payload from register_sample request JSON."""
+    username = (data.get("username") or "").strip()
+    events = data.get("events")
+    raw_email = data.get("email", None)
+    email = raw_email.strip() or None if isinstance(raw_email, str) else None
+    return username, events, email
+
+
+def _validate_register_payload(username, events):
+    """Validate required fields and username format for register_sample."""
+    if not events or not username:
+        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+
+    validation = get_auth_service().validate_username(username)
+    if not validation["valid"]:
+        return jsonify({"status": "error", "message": validation["message"]}), 400
+
+    return None
+
+
+def _prepare_enrollment_features(username, events):
+    """Process raw events and enrich features with quality metadata."""
+    result = _process_web_events(username, events)
+    if result["status"] != "success":
+        return None, None, None, jsonify({"status": "error", "message": result["msg"]}), 400
+
+    features = result["features"]
+    features["username"] = username
+    features["event_type"] = "enrollment"
+
+    quality = _assess_sample_quality(features)
+    features["quality_label"] = quality["quality_label"]
+    features["quality_score"] = quality["quality_score"]
+
+    return result, features, quality, None, None
+
+
+def _set_password_on_existing_user(existing_user, real_pass, username):
+    """Set password for existing user that previously had no password."""
+    try:
+        existing_user.set_password(real_pass)
+        db.session.commit()
+        return existing_user, "PASSWORD_SET_ON_EXISTING", None
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to set password for {username}: {e}")
+        return None, None, (jsonify({"status": "error", "message": "Unable to set password"}), 500)
+
+
+def _log_registration_audit(user):
+    """Write registration audit row; non-blocking on failures."""
+    try:
+        if user:
+            AdminAudit.log(
+                action=AdminAudit.ACTION_REGISTERED,
+                user_id=user.id,
+                username=user.username,
+                details={"email": user.email},
+            )
+            db.session.commit()
+    except Exception:
+        pass
+
+
+def _send_registration_verification_email(user, email):
+    """Send registration verification email when email is provided."""
+    if not (user and user.email and email and "@" in email):
+        return
+
+    user = db.session.get(User, user.id)
+    try:
+        sent_at = datetime.now(timezone.utc)
+        user.email_verification_sent_at = sent_at
+        db.session.commit()
+        try:
+            token = email_service.generate_token(user.email, salt="email-verify", sent_at=sent_at)
+        except TypeError:
+            token = email_service.generate_token(user.email, salt="email-verify")
+        email_service.send_verification_email(user, token)
+        print(f"[INFO] Verification email sent to {user.email}")
+    except Exception as e:
+        print(f"[WARNING] Failed to send verification email: {e}")
+
+
+def _create_user_for_first_sample(username, real_pass, email, features):
+    """Create account on first sample and apply side-effects (audit/email)."""
+    user_result = get_auth_service().create_user(username, real_pass, email=email)
+    if not user_result["success"]:
+        err_payload = {
+            "status": "error",
+            "message": user_result.get("message", "Unable to create account"),
+        }
+        if user_result.get("error_code"):
+            err_payload["error_code"] = user_result["error_code"]
+        return None, None, (jsonify(err_payload), 400)
+
+    user = user_result.get("user")
+    _log_registration_audit(user)
+
+    if user:
+        try:
+            features["user_id"] = int(user.id)
+        except Exception:
+            pass
+
+    _send_registration_verification_email(user, email)
+    return user, None, None
+
+
+def _handle_password_and_user_flow(username, enrollment_count, real_pass, email, features):
+    """Handle password validation/user creation logic across first and subsequent samples."""
+    strength_result = calculate_password_strength(real_pass)
+    features["password_strength"] = strength_result["strength"]
+    features["password_score"] = strength_result["score"]
+
+    # Weak password: log advisory only — do NOT block enrollment (UI already warns).
+    if enrollment_count == 0 and strength_result["score"] < 0.5:
+        print(
+            f"[WARN] register_sample: weak password for '{username}' "
+            f"(strength={strength_result['strength']}, score={strength_result['score']:.2f})"
+        )
+
+    user = None
+    password_event = None
+
+    # Subsequent samples: password must match existing
+    if enrollment_count > 0:
+        user = get_auth_service().get_user_by_username(username)
+        if not user:
+            return None, None, strength_result, (
+                jsonify({"status": "error", "message": "User tidak ditemukan"}),
+                404,
+            )
+        if not user.check_password(real_pass):
+            return None, None, strength_result, (
+                jsonify({
+                    "status": "error",
+                    "message": "Incorrect password",
+                    "error_code": "PASSWORD_MISMATCH",
+                }),
+                400,
+            )
+
+    # First sample: create/validate user account
+    if enrollment_count == 0:
+        existing_user = get_auth_service().get_user_by_username(username)
+        if existing_user:
+            has_password = bool(getattr(existing_user, "password_hash", None))
+            if has_password:
+                if not existing_user.check_password(real_pass):
+                    return None, None, strength_result, (
+                        jsonify({
+                            "status": "error",
+                            "message": "Incorrect password",
+                            "error_code": "PASSWORD_MISMATCH",
+                        }),
+                        400,
+                    )
+                user = existing_user
+            else:
+                user, password_event, set_pwd_error = _set_password_on_existing_user(
+                    existing_user,
+                    real_pass,
+                    username,
+                )
+                if set_pwd_error:
+                    return None, None, strength_result, set_pwd_error
+        else:
+            user, password_event, create_error = _create_user_for_first_sample(
+                username,
+                real_pass,
+                email,
+                features,
+            )
+            if create_error:
+                return None, None, strength_result, create_error
+
+    return user, password_event, strength_result, None
+
+
+def _resolve_enrollment_user_id(user, username):
+    """Resolve user id for enrollment row, with fallback lookup by username."""
+    if user:
+        return getattr(user, "id", None)
+    existing = get_auth_service().get_user_by_username(username)
+    if existing:
+        return getattr(existing, "id", None)
+    return None
+
+
+def _save_enrollment_vector(username, features, password_hash, user):
+    """Persist one enrollment sample to EnrollmentVector table."""
+    try:
+        uid = _resolve_enrollment_user_id(user, username)
+        if uid is not None:
+            features["user_id"] = int(uid)
+
+        ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
+        ev.timestamp = datetime.now(timezone.utc).isoformat()
+        ev.total_duration = features.get("total_duration")
+        ev.typing_speed = features.get("typing_speed")
+
+        # Raw vectors
+        for vec_name in ("H", "DD", "UD", "UU", "DU"):
+            setattr(ev, f"{vec_name}_vector", json.dumps(features.get(f"{vec_name}_vector", [])))
+
+        # Flat stats (mean, std, min, max, cv)
+        _apply_vector_stats(ev, features)
+
+        if password_hash:
+            ev.password_hash = password_hash
+
+        db.session.add(ev)
+        db.session.commit()
+        return None
+
+    except Exception as e:
+        print(f"[ERROR] register_sample save_data: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "Database error saving sample"}), 500
+
+
+def _schedule_auto_training_if_ready(username, new_count):
+    """Schedule background training when enrollment target is reached."""
+    ml_training = None
+    try:
+        if new_count >= _recommended_samples():
+            from flask import current_app
+
+            app = current_app._get_current_object()
+
+            backend_name = str(current_app.config.get("ML_BACKEND", "rf") or "rf").strip().lower()
+            backend_name = "svm" if backend_name == "svm" else "rf"
+
+            if backend_name == "svm":
+                from app.services.svm_model_service import (
+                    schedule_background_training as schedule_background_training_backend,
+                )
+            else:
+                from app.services.ml_model_service import (
+                    schedule_background_training as schedule_background_training_backend,
+                )
+
+            started = schedule_background_training_backend(app, username, force=False)
+            print(
+                f"[AUTO-TRAIN] username={username} backend={backend_name} "
+                f"status={'started' if started else 'already_running'}"
+            )
+
+            ml_training = {
+                "success": True,
+                "backend": backend_name,
+                "reason": "training_started" if started else "training_in_progress",
+                "message": (
+                    f"{backend_name.upper()} model training started in background."
+                    if started
+                    else f"{backend_name.upper()} model training already in progress."
+                ),
+            }
+    except Exception as _exc:
+        ml_training = {
+            "success": False,
+            "reason": "auto_train_exception",
+            "message": str(_exc),
+        }
+
+    return ml_training
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -51,20 +434,9 @@ def check_username():
         data = request.json
         username = (data.get("username", "") or "").strip()
 
-        # Support email lookup
-        try:
-            if "@" in username:
-                user_obj = auth_service.get_user_by_email(username)
-                if user_obj:
-                    username = user_obj.username
-                else:
-                    return jsonify({
-                        "exists": False, "can_login": False,
-                        "enrollment_complete": False, "enrollment_count": 0,
-                        "message": f"User {username} tidak ditemukan",
-                    }), 200
-        except Exception:
-            pass
+        username, resolved_error = _resolve_username_for_check(username)
+        if resolved_error:
+            return resolved_error
 
         check_mode = data.get("mode", "register")
 
@@ -74,8 +446,8 @@ def check_username():
                 "exists": False, "enrollment_complete": False, "enrollment_count": 0,
             }), 400
 
-        availability = auth_service.check_username_availability(username)
-        enrollment_status = biometric_service.get_enrollment_status(username)
+        availability = get_auth_service().check_username_availability(username)
+        enrollment_status = get_biometric_service().get_enrollment_status(username)
         enrollment_count = enrollment_status["count"]
         login_ready = enrollment_status["ready_for_login"]
 
@@ -84,47 +456,15 @@ def check_username():
 
         # LOGIN MODE
         if check_mode == "login":
-            if not availability["exists"]:
-                return jsonify({
-                    "exists": False, "can_login": False,
-                    "enrollment_complete": False, "enrollment_count": 0,
-                    "message": f"User {username} tidak ditemukan",
-                }), 200
-            return jsonify({
-                "exists": True, "can_login": login_ready,
-                "enrollment_complete": login_ready, "enrollment_count": enrollment_count,
-                "message": (f"User {username} ditemukan" if login_ready
-                            else f"Enrollment belum lengkap ({enrollment_count}/{getattr(biometric_service, 'RECOMMENDED_SAMPLES', 100)})"),
-            }), 200
-
-        # REGISTER MODE
-        _recommended = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
-        if availability.get("exists") and 0 < enrollment_count < _recommended:
-            status_str = "resumable"
-        elif not availability["available"] and availability.get("reason") == "resumable":
-            status_str = "resumable"
-        elif not availability["available"]:
-            status_str = "taken"
-        else:
-            status_str = "available"
-
-        response_data = {
-            "status": status_str,
-            "available": availability["available"],
-            "exists": availability["exists"],
-            "message": availability["message"],
-            "enrollment_count": enrollment_count,
-            "is_retry": enrollment_count > 0,
-            "detail": "",
-        }
-
-        if status_str == "resumable" and availability.get("exists"):
-            _target = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
-            response_data["message"] = (
-                f"Resume registration: {enrollment_count}/{_target} samples collected"
+            return _build_check_username_login_response(
+                username,
+                availability,
+                enrollment_count,
+                login_ready,
             )
 
-        return jsonify(response_data)
+        # REGISTER MODE
+        return _build_check_username_register_response(availability, enrollment_count)
 
     except Exception as e:
         print(f"[ERROR] check_username: {e}")
@@ -138,207 +478,62 @@ def register_sample():
     """Register a single keystroke sample during enrollment."""
     try:
         data = request.json
-        username = (data.get("username") or "").strip()
-        events = data.get("events")
-        raw_email = data.get("email", None)
-        email = raw_email.strip() or None if isinstance(raw_email, str) else None
+        username, events, email = _extract_register_payload(data)
 
-        if not events or not username:
-            return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+        payload_error = _validate_register_payload(username, events)
+        if payload_error:
+            return payload_error
 
-        validation = auth_service.validate_username(username)
-        if not validation["valid"]:
-            return jsonify({"status": "error", "message": validation["message"]}), 400
-
-        enrollment_status = biometric_service.get_enrollment_status(username)
+        enrollment_status = get_biometric_service().get_enrollment_status(username)
         enrollment_count = enrollment_status["count"]
 
-        _recommended_reg = getattr(biometric_service, "RECOMMENDED_SAMPLES", 100)
+        _recommended_reg = _recommended_samples()
         if enrollment_count > 0:
             print(f"[INFO] User '{username}' continuing registration ({enrollment_count}/{_recommended_reg})")
 
-        import app.blueprints.api as api_mod
-
-        result = api_mod.process_web_events(events, username)
-        if result["status"] != "success":
-            return jsonify({"status": "error", "message": result["msg"]}), 400
-
-        features = result["features"]
-        features["username"] = username
-        features["event_type"] = "enrollment"
-
-        quality = api_mod.assess_sample_quality(features)
-        features["quality_label"] = quality["quality_label"]
-        features["quality_score"] = quality["quality_score"]
+        result, features, quality, prep_error_response, prep_error_code = _prepare_enrollment_features(
+            username,
+            events,
+        )
+        if prep_error_response:
+            return prep_error_response, prep_error_code
 
         real_pass = result.get("real_password_string")
         password_hash = result.get("password_hash")
         strength_result = None
         password_event = None
+        user = None
 
         if real_pass:
-            strength_result = calculate_password_strength(real_pass)
-            features["password_strength"] = strength_result["strength"]
-            features["password_score"] = strength_result["score"]
-
-            # Weak password: log advisory only — do NOT block enrollment (UI already warns).
-            if enrollment_count == 0 and strength_result["score"] < 0.5:
-                print(f"[WARN] register_sample: weak password for '{username}' "
-                      f"(strength={strength_result['strength']}, score={strength_result['score']:.2f})")
-
-            # Subsequent samples: password must match existing
-            if enrollment_count > 0:
-                user = auth_service.get_user_by_username(username)
-                if not user:
-                    return jsonify({"status": "error",
-                                    "message": "User tidak ditemukan"}), 404
-                if not user.check_password(real_pass):
-                    return jsonify({"status": "error", "message": "Incorrect password",
-                                    "error_code": "PASSWORD_MISMATCH"}), 400
-
-            # First sample: create/validate user account
-            if enrollment_count == 0:
-                existing_user = auth_service.get_user_by_username(username)
-                if existing_user:
-                    has_password = bool(getattr(existing_user, "password_hash", None))
-                    if has_password:
-                        if not existing_user.check_password(real_pass):
-                            return jsonify({"status": "error", "message": "Incorrect password",
-                                            "error_code": "PASSWORD_MISMATCH"}), 400
-                        user = existing_user
-                    else:
-                        try:
-                            existing_user.set_password(real_pass)
-                            db.session.commit()
-                            user = existing_user
-                            password_event = "PASSWORD_SET_ON_EXISTING"
-                        except Exception as e:
-                            db.session.rollback()
-                            print(f"[ERROR] Failed to set password for {username}: {e}")
-                            return jsonify({"status": "error",
-                                            "message": "Unable to set password"}), 500
-                else:
-                    user_result = auth_service.create_user(username, real_pass, email=email)
-                    if not user_result["success"]:
-                        err_payload = {"status": "error",
-                                       "message": user_result.get("message",
-                                                                   "Unable to create account")}
-                        if user_result.get("error_code"):
-                            err_payload["error_code"] = user_result["error_code"]
-                        return jsonify(err_payload), 400
-
-                    user = user_result.get("user")
-
-                    # Audit: registration
-                    try:
-                        if user:
-                            AdminAudit.log(
-                                action=AdminAudit.ACTION_REGISTERED,
-                                user_id=user.id, username=user.username,
-                                details={"email": user.email},
-                            )
-                            db.session.commit()
-                    except Exception:
-                        pass
-
-                    if user:
-                        try:
-                            features["user_id"] = int(user.id)
-                        except Exception:
-                            pass
-
-                    # Send verification email if email provided
-                    if user and user.email and email and "@" in email:
-                        user = db.session.get(User, user.id)
-                        try:
-                            sent_at = datetime.now(timezone.utc)
-                            user.email_verification_sent_at = sent_at
-                            db.session.commit()
-                            try:
-                                token = email_service.generate_token(
-                                    user.email, salt="email-verify", sent_at=sent_at)
-                            except TypeError:
-                                token = email_service.generate_token(
-                                    user.email, salt="email-verify")
-                            email_service.send_verification_email(user, token)
-                            print(f"[INFO] Verification email sent to {user.email}")
-                        except Exception as e:
-                            print(f"[WARNING] Failed to send verification email: {e}")
+            user, password_event, strength_result, password_flow_error = _handle_password_and_user_flow(
+                username,
+                enrollment_count,
+                real_pass,
+                email,
+                features,
+            )
+            if password_flow_error:
+                return password_flow_error
         else:
             features["password_strength"] = "unknown"
             features["password_score"] = 0
+            strength_result = {"strength": "unknown", "score": 0}
 
         # Save enrollment vector via SQLAlchemy
-        try:
-            uid = None
-            if "user" in locals() and locals().get("user"):
-                uid = getattr(locals()["user"], "id", None)
-            else:
-                existing = auth_service.get_user_by_username(username)
-                if existing:
-                    uid = getattr(existing, "id", None)
+        save_error = _save_enrollment_vector(username, features, password_hash, user)
+        if save_error:
+            return save_error
 
-            if uid is not None:
-                features["user_id"] = int(uid)
-            ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
-            ev.timestamp = datetime.now(timezone.utc).isoformat()
-            ev.total_duration = features.get("total_duration")
-            ev.typing_speed = features.get("typing_speed")
-
-            # Raw vectors
-            for vec_name in ("H", "DD", "UD", "UU", "DU"):
-                setattr(ev, f"{vec_name}_vector",
-                        json.dumps(features.get(f"{vec_name}_vector", [])))
-
-            # Flat stats (mean, std, min, max, cv) – filled by _apply_vector_stats
-            _apply_vector_stats(ev, features)
-
-            if password_hash:
-                ev.password_hash = password_hash
-
-            db.session.add(ev)
-            db.session.commit()
-
-        except Exception as e:
-            print(f"[ERROR] register_sample save_data: {e}")
-            traceback.print_exc()
-            return jsonify({"status": "error",
-                            "message": "Database error saving sample"}), 500
-
-        new_status = biometric_service.get_enrollment_status(username)
+        new_status = get_biometric_service().get_enrollment_status(username)
         new_count = new_status["count"]
 
-        ml_training = None
-        # Auto-train per-user model when enrollment completes (ML-only flow).
-        # Training runs in a background thread — the grid search over 72 RF
-        # configurations takes 10-60 s and must not block the HTTP response.
-        try:
-            if new_count == getattr(biometric_service, "RECOMMENDED_SAMPLES", 100):
-                from flask import current_app
-                from app.services.ml_model_service import schedule_background_training
-                app = current_app._get_current_object()
-                started = schedule_background_training(app, username, force=False)
-                ml_training = {
-                    "success": True,
-                    "reason": "training_started" if started else "training_in_progress",
-                    "message": (
-                        "Model training started in background."
-                        if started
-                        else "Model training already in progress."
-                    ),
-                }
-        except Exception as _exc:
-            ml_training = {
-                "success": False,
-                "reason": "auto_train_exception",
-                "message": str(_exc),
-            }
+        ml_training = _schedule_auto_training_if_ready(username, new_count)
 
         resp_payload = {
             "status": "success",
-            "message": f"Sample {new_count}/{getattr(biometric_service, 'RECOMMENDED_SAMPLES', 100)} saved successfully",
+            "message": f"Sample {new_count}/{_recommended_reg} saved successfully",
             "progress": {
-                "current": new_count, "target": getattr(biometric_service, "RECOMMENDED_SAMPLES", 100),
+                "current": new_count, "target": _recommended_reg,
                 "complete": new_status["ready_for_login"],
             },
             "quality": quality,

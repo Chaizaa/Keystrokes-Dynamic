@@ -16,7 +16,72 @@ from sqlalchemy import delete, func, select
 from app import limiter as _limiter
 from app.models import LoginAttempt, UsersVector, db
 
-from ._shared import api_bp, auth_service, biometric_service
+# Keep legacy module-level symbols for compatibility with existing imports/tests.
+from ._shared import (
+    api_bp,
+    auth_service,
+    biometric_service,
+    get_auth_service,
+    get_biometric_service,
+)
+
+
+def _get_current_username() -> str:
+    """Return authenticated username from current session context."""
+    return current_user.username
+
+
+def _count_verified_logins(username: str) -> int:
+    """Count successful login attempts for user from ORM log table."""
+    return int(
+        db.session.execute(
+            select(func.count())
+            .select_from(LoginAttempt)
+            .where(LoginAttempt.username == username, LoginAttempt.success == True)  # noqa: E712
+        ).scalar()
+        or 0
+    )
+
+
+def _build_user_info_payload(username: str) -> dict:
+    """Build stable response payload for /api/user/info endpoint."""
+    email = getattr(current_user, "email", None) or "N/A"
+    last_login = getattr(current_user, "last_login", None)
+    enrollment_status = get_biometric_service().get_enrollment_status(username)
+
+    return {
+        "username": username,
+        "email": email,
+        "last_login": last_login,
+        "session_start": session.get("login_time"),
+        "enrollment_count": enrollment_status["count"],
+        "enrollment_ready": enrollment_status["ready_for_login"],
+        "verified_logins": _count_verified_logins(username),
+    }
+
+
+def _validate_reset_password_payload(data: dict):
+    """Validate reset password payload and return normalized credentials."""
+    new_password = data.get("new_password")
+    if not new_password:
+        return None, None, (jsonify({"error": "New password required"}), 400)
+
+    current_password = data.get("current_password")
+    if not current_password:
+        return None, None, (jsonify({"error": "Current password required to reset"}), 400)
+
+    return new_password, current_password, None
+
+
+def _clear_enrollment_vectors(username: str) -> None:
+    """Delete enrollment vectors after successful password reset."""
+    db.session.execute(
+        delete(UsersVector).where(
+            UsersVector.username == username,
+            (UsersVector.event_type == "enrollment")
+            | (UsersVector.data_type == "enrollment"),
+        )
+    )
 
 
 @api_bp.route("/user/info", methods=["GET"])
@@ -28,32 +93,8 @@ def get_user_info():
         f"{current_user.username if current_user.is_authenticated else 'Anonymous'}"
     )
     try:
-        username = current_user.username
-
-        # current_user IS the SQLAlchemy User model object; use it directly.
-        # Fall back to db_manager only for legacy-only deployments where ORM
-        # columns may be absent.
-        email = getattr(current_user, "email", None) or "N/A"
-        last_login = getattr(current_user, "last_login", None)
-
-        enrollment_status = biometric_service.get_enrollment_status(username)
-        verified_logins = int(
-            db.session.execute(
-                select(func.count())
-                .select_from(LoginAttempt)
-                .where(LoginAttempt.username == username, LoginAttempt.success == True)  # noqa: E712
-            ).scalar() or 0
-        )
-
-        return jsonify({
-            "username": username,
-            "email": email,
-            "last_login": last_login,
-            "session_start": session.get("login_time"),
-            "enrollment_count": enrollment_status["count"],
-            "enrollment_ready": enrollment_status["ready_for_login"],
-            "verified_logins": verified_logins,
-        }), 200
+        username = _get_current_username()
+        return jsonify(_build_user_info_payload(username)), 200
 
     except Exception as e:
         print(f"[ERROR] get_user_info: {e}")
@@ -67,30 +108,20 @@ def get_user_info():
 def reset_password():
     """Reset the current user's password. Clears enrollment data and logs out."""
     try:
-        data = request.json
-        new_password = data.get("new_password")
-        username = current_user.username
+        data = request.json or {}
+        username = _get_current_username()
 
-        if not new_password:
-            return jsonify({"error": "New password required"}), 400
+        new_password, current_password, validation_error = _validate_reset_password_payload(data)
+        if validation_error:
+            return validation_error
 
-        current_password = data.get("current_password")
-        if not current_password:
-            return jsonify({"error": "Current password required to reset"}), 400
-
-        success, message = auth_service.change_password(
+        success, message = get_auth_service().change_password(
             username, current_password, new_password
         )
         if not success:
             return jsonify({"error": message}), 400
 
-        db.session.execute(
-            delete(UsersVector).where(
-                UsersVector.username == username,
-                (UsersVector.event_type == "enrollment")
-                | (UsersVector.data_type == "enrollment"),
-            )
-        )
+        _clear_enrollment_vectors(username)
         db.session.commit()
 
         logout_user()
