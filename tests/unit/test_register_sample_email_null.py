@@ -6,7 +6,7 @@ import pytest
 
 
 def test_register_with_null_email(client, monkeypatch, db_session):
-    # Mock processing success and avoid legacy db writes
+    # Mock processing success
     def fake_process(events, username):
         return {
             "status": "success",
@@ -16,7 +16,6 @@ def test_register_with_null_email(client, monkeypatch, db_session):
         }
 
     monkeypatch.setattr("app.blueprints.api.process_web_events", fake_process)
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: None, raising=False)
 
     payload = {
         "username": "nulltest",

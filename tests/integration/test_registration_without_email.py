@@ -1,8 +1,21 @@
-import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.blueprints.api import db_manager
-from app.models import User, db
+from app.models import User, UsersVector, db
+
+
+def _get_enrollment_count(username: str) -> int:
+    return int(
+        db.session.execute(
+            select(func.count())
+            .select_from(UsersVector)
+            .where(
+                UsersVector.username == username,
+                (UsersVector.event_type == "enrollment")
+                | (UsersVector.data_type == "enrollment"),
+            )
+        ).scalar()
+        or 0
+    )
 
 
 def test_enroll_without_email_allows_creation_and_login(client, db_session, monkeypatch):
@@ -11,26 +24,13 @@ def test_enroll_without_email_allows_creation_and_login(client, db_session, monk
 
     # Cleanup any existing records
     try:
+        db.session.query(UsersVector).filter(UsersVector.username == username).delete()
         db.session.query(User).filter(User.username == username).delete()
         db.session.commit()
     except Exception:
         db.session.rollback()
 
-    # Ensure legacy DB has no pre-existing samples for this username
-    import sqlite3
-
-    conn = sqlite3.connect(db_manager.db_path)
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM user_vectors WHERE username = ?", (username,))
-        cur.execute("DELETE FROM feature_vectors WHERE username = ?", (username,))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    assert db_manager.get_enrollment_count(username) == 0
+    assert _get_enrollment_count(username) == 0
 
     # Mock processing and quality
     def fake_process(events, username_arg):
@@ -61,7 +61,7 @@ def test_enroll_without_email_allows_creation_and_login(client, db_session, monk
         assert j.get("status") == "success"
 
     # Now the DB should report >=20 samples for this user
-    count = db_manager.get_enrollment_count(username)
+    count = _get_enrollment_count(username)
     assert count >= 20
 
     # Confirm user exists and has no email
@@ -71,7 +71,7 @@ def test_enroll_without_email_allows_creation_and_login(client, db_session, monk
 
     # Spy on biometric verify to assert >=20 samples before login
     def spy_verify(username_arg, features_arg, *args, **kwargs):
-        current = db_manager.get_enrollment_count(username)
+        current = _get_enrollment_count(username)
         assert current >= 20
         return {"success": True, "verified": True, "score": 0.95, "confidence": "high"}
 

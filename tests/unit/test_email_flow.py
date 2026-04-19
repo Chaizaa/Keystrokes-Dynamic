@@ -37,9 +37,6 @@ def test_register_sample_email_send_failure_does_not_fail(client, monkeypatch, d
 
     monkeypatch.setattr(es.email_service, "send_verification_email", raise_send, raising=False)
 
-    # Avoid writing to legacy SQLite during unit tests (legacy db_manager.save_data)
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: True, raising=False)
-
     payload = {
         "username": "newuser",
         "events": [{"type": "keydown", "key": "a"}],
@@ -90,9 +87,6 @@ def test_register_sample_email_send_success_records_timestamp_and_token(
         lambda user, token: True,
         raising=False,
     )
-
-    # Avoid writing to legacy SQLite during unit tests (legacy db_manager.save_data)
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: True, raising=False)
 
     payload = {
         "username": "anothernew",

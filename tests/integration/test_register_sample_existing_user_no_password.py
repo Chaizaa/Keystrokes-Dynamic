@@ -1,7 +1,7 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.models import User, db
+from app.models import EnrollmentVector, User, db
 
 
 def test_register_sample_existing_user_can_set_password_on_first_sample(
@@ -13,22 +13,15 @@ def test_register_sample_existing_user_can_set_password_on_first_sample(
     db.session.add(user)
     db.session.commit()
 
-    # Ensure legacy biometric DB has no pre-existing samples for this username
-    import sqlite3
-
-    from app.blueprints.api import db_manager
-
-    conn = sqlite3.connect(db_manager.db_path)
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM user_vectors WHERE username = ?", ("nopassworduser",))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    assert db_manager.get_enrollment_count("nopassworduser") == 0
+    initial_count = db.session.execute(
+        select(func.count())
+        .select_from(EnrollmentVector)
+        .where(
+            EnrollmentVector.username == "nopassworduser",
+            EnrollmentVector.event_type == "enrollment",
+        )
+    ).scalar_one()
+    assert int(initial_count) == 0
 
     # Mock processing to return a valid features object and password string
     def fake_process(events, username):
@@ -58,8 +51,15 @@ def test_register_sample_existing_user_can_set_password_on_first_sample(
     # Server should indicate we set the password on an existing account
     assert j.get("password_event") == "PASSWORD_SET_ON_EXISTING"
 
-    # Now the legacy DB should report 1 sample for this user
-    assert db_manager.get_enrollment_count("nopassworduser") == 1
+    enrollment_count = db.session.execute(
+        select(func.count())
+        .select_from(EnrollmentVector)
+        .where(
+            EnrollmentVector.username == "nopassworduser",
+            EnrollmentVector.event_type == "enrollment",
+        )
+    ).scalar_one()
+    assert int(enrollment_count) == 1
 
     # And the user record should now have a password hash
     from app.services.auth_service import AuthService

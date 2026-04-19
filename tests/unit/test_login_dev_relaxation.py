@@ -19,7 +19,8 @@ def test_login_skips_rate_limit_in_dev_and_allows_relaxed_score(
     import app.blueprints.api as api_mod
 
     monkeypatch.setattr(
-        api_mod.db_manager, "get_failed_login_count_recent", lambda u, minutes=15: 6
+        "app.models.LoginAttempt.get_recent_failed_attempts",
+        lambda u, minutes=15: 6,
     )
 
     # Ensure enrollment present

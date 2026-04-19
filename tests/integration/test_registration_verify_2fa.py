@@ -20,7 +20,6 @@ def test_registration_verify_email_and_enable_2fa(client, monkeypatch, db_sessio
         }
 
     monkeypatch.setattr("app.blueprints.api.process_web_events", fake_process_web_events)
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: True, raising=False)
 
     import app.services.email_service as es
 

@@ -18,7 +18,6 @@ def test_registration_to_login_with_2fa_required(client, monkeypatch, db_session
         }
 
     monkeypatch.setattr("app.blueprints.api.process_web_events", fake_process_web_events_reg)
-    monkeypatch.setattr("app.blueprints.api.db_manager.save_data", lambda data: True, raising=False)
     import app.services.email_service as es
 
     monkeypatch.setattr(

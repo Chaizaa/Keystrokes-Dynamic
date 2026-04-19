@@ -19,11 +19,25 @@ depends_on = None
 
 def _column_exists(table, column):
     bind = op.get_bind()
-    cols = [c['name'] for c in sa_inspect(bind).get_columns(table)]
+    try:
+        cols = [c['name'] for c in sa_inspect(bind).get_columns(table)]
+    except Exception:
+        return False
     return column in cols
 
 
+def _table_exists(table):
+    bind = op.get_bind()
+    try:
+        return table in sa_inspect(bind).get_table_names()
+    except Exception:
+        return False
+
+
 def upgrade():
+    if not _table_exists('dataset_entries'):
+        return
+
     with op.batch_alter_table('dataset_entries', schema=None) as batch_op:
         # Drop old index/constraint only if the columns still exist (old local DB).
         # On a fresh DB (Railway) these were never created.
@@ -42,6 +56,9 @@ def upgrade():
 
 
 def downgrade():
+    if not _table_exists('dataset_entries'):
+        return
+
     with op.batch_alter_table('dataset_entries', schema=None) as batch_op:
         batch_op.add_column(sa.Column('target_phrase', sa.VARCHAR(length=50), nullable=True))
         batch_op.add_column(sa.Column('session_no', sa.INTEGER(), nullable=False))
