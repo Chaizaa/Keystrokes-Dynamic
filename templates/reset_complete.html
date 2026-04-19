@@ -123,8 +123,8 @@ function updatePasswordStrengthUI() {
         bar.style.width = pct + '%';
         if (result.score < 0.5) bar.style.background = '#f59e0b';
         else if (result.score < 0.8) bar.style.background = '#f59e0b';
-        else bar.style.background = '#10b981';
-        label.style.color = result.score < 0.5 ? '#d97706' : (result.score < 0.8 ? '#d97706' : '#059669');
+        else bar.style.background = '#ff8a44';
+        label.style.color = result.score < 0.5 ? '#d97706' : (result.score < 0.8 ? '#d97706' : '#ffb066');
         label.textContent = `Strength: ${result.strength} (${pct}%)`;
         // Advisory hint — warning only, not a blocker
         const weakHintId = 'rcPwWeakHint';
@@ -347,7 +347,7 @@ async function handleEnterPress() {
             rawEvents = [];
             resetTimer();
             statusEl.textContent = 'Sample saved';
-            statusEl.style.color = '#10b981'; // green (mirrors register.html success color)
+            statusEl.style.color = '#ffb066';
             statusEl.classList.add('success');
             passwordMismatchCount = 0;
             backspaceCount = 0; // reset for next sample

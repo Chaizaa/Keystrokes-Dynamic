@@ -5,70 +5,97 @@
 {% block extra_css %}
 <style>
   .ak-container {
-    max-width: 640px;
-    margin: 48px auto;
-    padding: 0 16px;
+    max-width: 720px;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 28px 16px;
+    display: flex;
+    align-items: center;
+    background:
+      radial-gradient(circle at 10% 12%, rgba(255, 122, 42, 0.18), transparent 34%),
+      radial-gradient(circle at 86% 10%, rgba(255, 122, 42, 0.08), transparent 35%),
+      linear-gradient(160deg, #06080d 0%, #090c12 52%, #050608 100%);
     font-family: inherit;
   }
+
   .ak-card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 32px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    width: 100%;
+    background: linear-gradient(160deg, rgba(18, 22, 30, 0.98), rgba(10, 13, 18, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+    padding: 28px;
+    box-shadow: 0 20px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255, 122, 42, 0.08);
   }
+
   .ak-card h1 {
-    font-size: 1.4rem;
-    margin: 0 0 4px;
-    color: #1a202c;
+    font-size: 2rem;
+    margin: 0 0 8px;
+    color: #f8fafc;
+    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
+
   .ak-card .subtitle {
-    font-size: .9rem;
-    color: #718096;
-    margin: 0 0 28px;
+    font-size: .84rem;
+    color: #aab2bf;
+    margin: 0 0 22px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
+
   .ak-status {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: .95rem;
-    margin-bottom: 24px;
+    font-size: .9rem;
+    margin-bottom: 20px;
     padding: 10px 14px;
-    border-radius: 6px;
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
+    border-radius: 2px;
+    background: linear-gradient(160deg, rgba(12, 16, 22, 0.94), rgba(8, 10, 14, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #d1d5db;
   }
+
   .ak-status .dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
+    width: 9px;
+    height: 9px;
+    border-radius: 1px;
     flex-shrink: 0;
   }
-  .dot-active   { background: #48bb78; }
-  .dot-inactive { background: #cbd5e0; }
+
+  .dot-active   {
+    background: #ff8a44;
+    box-shadow: 0 0 0 3px rgba(255, 122, 42, 0.22);
+  }
+
+  .dot-inactive { background: #6b7280; }
 
   /* Raw key display — one-time reveal */
   .ak-reveal {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     padding: 16px;
-    background: #fffbeb;
-    border: 1px solid #f6e05e;
-    border-radius: 8px;
+    background: linear-gradient(160deg, rgba(30, 20, 12, 0.86), rgba(20, 13, 8, 0.86));
+    border: 1px solid rgba(255, 122, 42, 0.45);
+    border-radius: 2px;
   }
+
   .ak-reveal p {
     margin: 0 0 8px;
     font-size: .85rem;
-    color: #744210;
+    color: #ffd7bf;
     font-weight: 600;
   }
+
   .ak-reveal .key-value {
     font-family: monospace;
     font-size: .9rem;
     word-break: break-all;
-    background: #fff;
-    border: 1px solid #f6e05e;
-    border-radius: 4px;
+    background: rgba(8, 11, 16, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 2px;
     padding: 8px 10px;
-    color: #1a202c;
+    color: #f8fafc;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -78,18 +105,27 @@
   .ak-reveal .copy-btn {
     font-size: .8rem;
     padding: 4px 10px;
-    border: 1px solid #d69e2e;
-    border-radius: 4px;
-    background: #fefcbf;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    background: linear-gradient(135deg, #ff7a2a 0%, #e6671d 100%);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     cursor: pointer;
     white-space: nowrap;
-    transition: background .15s;
+    transition: transform .15s ease, filter .15s ease;
   }
-  .ak-reveal .copy-btn:hover { background: #faf089; }
+
+  .ak-reveal .copy-btn:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
   .ak-reveal .warning {
     margin: 8px 0 0;
     font-size: .8rem;
-    color: #c05621;
+    color: #ffc8a6;
   }
 
   /* Generate / Regenerate button */
@@ -97,42 +133,79 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 20px;
+    padding: 10px 18px;
     font-size: .95rem;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    border-radius: 2px;
     cursor: pointer;
-    transition: background .15s, transform .1s;
+    transition: transform .15s ease, filter .15s ease;
   }
+
   .btn-generate-primary {
-    background: #4299e1;
+    background: linear-gradient(135deg, #ff7a2a 0%, #e6671d 100%);
     color: #fff;
+    border: 1px solid rgba(255, 122, 42, 0.8);
   }
-  .btn-generate-primary:hover  { background: #3182ce; }
-  .btn-generate-primary:active { transform: scale(.98); }
+
+  .btn-generate-primary:hover  {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .btn-generate-primary:active { transform: translateY(0); }
+
   .btn-generate-danger {
-    background: #fc8181;
-    color: #fff;
+    background: transparent;
+    color: #ffc8a6;
+    border: 1px solid rgba(255, 122, 42, 0.55);
   }
-  .btn-generate-danger:hover   { background: #f56565; }
-  .btn-generate-danger:active  { transform: scale(.98); }
+
+  .btn-generate-danger:hover   {
+    background: rgba(255, 122, 42, 0.16);
+    transform: translateY(-1px);
+  }
+
+  .btn-generate-danger:active  { transform: translateY(0); }
 
   .ak-back {
     display: inline-block;
     margin-top: 20px;
     font-size: .875rem;
-    color: #4299e1;
+    color: #ffb066;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 700;
+  }
+
+  .ak-back:hover {
+    color: #ffcf9f;
     text-decoration: none;
   }
-  .ak-back:hover { text-decoration: underline; }
 
   .ak-note {
     margin-top: 20px;
     font-size: .8rem;
-    color: #a0aec0;
-    border-top: 1px solid #e2e8f0;
+    color: #aab2bf;
+    border-top: 1px solid rgba(255,255,255,0.12);
     padding-top: 16px;
+    line-height: 1.55;
+  }
+
+  .ak-note code {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 2px;
+    padding: 2px 6px;
+    color: #f8fafc;
+  }
+
+  @media (max-width: 640px) {
+    .ak-container { padding: 10px; }
+    .ak-card { padding: 18px; }
+    .ak-card h1 { font-size: 1.55rem; }
   }
 </style>
 {% endblock %}
@@ -167,8 +240,7 @@
     {% endif %}
 
     <!-- ── Generate / Regenerate form ── -->
-    <form method="POST" action="{{ url_for('main.api_key_dashboard') }}"
-          onsubmit="return confirmGenerate()">
+    <form id="apiKeyForm" method="POST" action="{{ url_for('main.api_key_dashboard') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% if has_key %}
         <button type="submit" class="btn-generate btn-generate-danger">
@@ -200,16 +272,30 @@
     });
   }
 
-  function confirmGenerate() {
+  async function confirmGenerate() {
     {% if has_key %}
-    return confirm(
+    const message =
       'Regenerating will invalidate your current API key immediately.\n' +
       'Any integrations using it will stop working until updated.\n\n' +
-      'Continue?'
-    );
+      'Continue?';
+    if (typeof window.showConfirmModal === 'function') {
+      return await window.showConfirmModal('Regenerate API Key?', message, {
+        confirmText: 'Regenerate',
+        cancelText: 'Cancel',
+        destructive: true,
+      });
+    }
+    return confirm(message);
     {% else %}
     return true;
     {% endif %}
   }
+
+  document.getElementById('apiKeyForm')?.addEventListener('submit', async function(event) {
+    const proceed = await confirmGenerate();
+    if (!proceed) {
+      event.preventDefault();
+    }
+  });
 </script>
 {% endblock %}

@@ -5,8 +5,40 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 <style>
-  .admin-login-wrap { min-height:80vh; display:flex; align-items:center; justify-content:center; padding:28px }
-  .admin-login-card { max-width:420px; width:100%; padding:34px; border-radius:14px; }
+  .admin-login-wrap {
+    min-height: 100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 16px;
+    background:
+      radial-gradient(circle at 10% 12%, rgba(255, 122, 42, 0.18), transparent 34%),
+      radial-gradient(circle at 86% 10%, rgba(255, 122, 42, 0.08), transparent 35%),
+      linear-gradient(160deg, #06080d 0%, #090c12 52%, #050608 100%);
+  }
+
+  .admin-login-card {
+    max-width:440px;
+    width:100%;
+    padding:28px;
+    border-radius:2px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: linear-gradient(160deg, rgba(18,22,30,0.98), rgba(10,13,18,0.98));
+    box-shadow: 0 22px 42px rgba(0,0,0,0.46), inset 0 0 0 1px rgba(255,122,42,0.08);
+  }
+
+  .admin-login-title {
+    text-align:center;
+    margin-bottom:8px;
+    color:#f8fafc;
+    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 29px;
+  }
+
+  .admin-login-form { margin-top:18px; }
+
   #adminResult { margin-top:14px; display:none; }
   #adminResult.success { display:block; }
   #adminResult.error { display:block; }
@@ -14,11 +46,11 @@
 {% endblock %}
 
 {% block body %}
-<div class="bg-gradient admin-login-wrap">
-  <div class="card admin-login-card">
-    <h2 style="text-align:center;margin-bottom:6px;color:#fff">Admin Sign In</h2>
+<div class="admin-login-wrap">
+  <div class="admin-login-card">
+    <h2 class="admin-login-title">Admin Sign In</h2>
     <p class="subtitle text-center">Restricted access — administrators only</p>
-    <form id="adminLoginForm" onsubmit="return handleAdminLogin(event)" style="margin-top:18px">
+    <form id="adminLoginForm" class="admin-login-form" onsubmit="return handleAdminLogin(event)">
       <div class="form-group">
         <label for="a_username">Username</label>
         <input id="a_username" type="text" required autocomplete="off">
@@ -30,7 +62,7 @@
       <button type="submit" class="btn btn-primary">Sign In as Admin</button>
     </form>
 
-    <div id="adminResult" class="status" style="display:none"></div>
+    <div id="adminResult" class="status"></div>
   </div>
 </div>
 

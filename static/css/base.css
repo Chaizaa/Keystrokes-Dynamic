@@ -1,4 +1,4 @@
-/* Base Reset & Typography */
+﻿/* Base Reset & Typography */
 * {
     margin: 0;
     padding: 0;
@@ -138,9 +138,9 @@ label {
 }
 
 .status-success {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: rgba(255, 122, 42, 0.14);
+    color: #ffd1a8;
+    border: 1px solid rgba(255, 122, 42, 0.36);
 }
 
 .status-error {
@@ -150,9 +150,9 @@ label {
 }
 
 .status-info {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(255, 122, 42, 0.1);
+    color: #ffcf9f;
+    border: 1px solid rgba(255, 122, 42, 0.28);
 }
 
 .status-checking {
@@ -200,7 +200,7 @@ label {
 
 .spinner {
     border: 3px solid rgba(255, 255, 255, 0.1);
-    border-top: 3px solid #6b9fff;
+    border-top: 3px solid #ff7a2a;
     border-radius: 50%;
     width: 24px;
     height: 24px;
@@ -227,10 +227,35 @@ label {
     --bg-3: #24243e;
     --glass-bg: rgba(255,255,255,0.035);
     --card-border: rgba(255,255,255,0.12);
-    --accent: #6b9fff;
-    --accent-weak: rgba(107,159,255,0.15);
+    --accent: #ff7a2a;
+    --accent-weak: rgba(255,122,42,0.18);
     --danger: #ef4444;
     --glass-blur: 20px;
+
+    /* Web3 expansion tokens (additive, safe for gradual rollout) */
+    --font-display: "Sora", "Trebuchet MS", "Segoe UI", sans-serif;
+    --font-body: "Space Grotesk", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+    --w3-cyan: #ffb066;
+    --w3-electric: #ff7a2a;
+    --w3-aqua: #ff9f4a;
+    --w3-text-high: #eef6ff;
+    --w3-text-med: #bfd0e8;
+    --w3-text-low: #92a7c6;
+
+    --w3-surface-1: rgba(20, 36, 64, 0.78);
+    --w3-surface-2: rgba(16, 29, 52, 0.62);
+    --w3-border-soft: rgba(156, 183, 232, 0.25);
+    --w3-border-strong: rgba(188, 212, 255, 0.45);
+
+    --w3-shadow-soft: 0 16px 32px rgba(8, 18, 41, 0.34);
+    --w3-shadow-strong: 0 24px 54px rgba(5, 14, 31, 0.55);
+    --w3-glow-soft: 0 0 14px rgba(95, 142, 255, 0.5);
+
+    --motion-fast: 160ms;
+    --motion-base: 260ms;
+    --motion-slow: 420ms;
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Confirm modal default styles (moved from base.html)
@@ -279,5 +304,6 @@ label {
 .modal.reset-modal .modal-content { background: linear-gradient(180deg, rgba(25,28,33,0.98), rgba(18,20,23,0.98)); color: #fff; border: 1px solid rgba(255,255,255,0.04); box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
 .modal.reset-modal { background: rgba(0,0,0,0.75); }
 .modal.reset-modal .form-group input { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #fff; }
+
 
 

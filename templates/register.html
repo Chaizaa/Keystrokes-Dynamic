@@ -37,7 +37,7 @@
         </div>
         
         <div class="form-group">
-            <label for="regEmail">Email Address <span style="color: #6b9fff; font-size: 12px;">(Optional)</span></label>
+            <label for="regEmail">Email Address <span style="color: #ffb066; font-size: 12px;">(Optional)</span></label>
             <div style="display:flex; gap:8px; align-items:center;">
                 <input 
                     type="email" 
@@ -251,10 +251,10 @@
             container.classList.remove('hidden');
             const pct = Math.round(result.score * 100);
             bar.style.width = pct + '%';
-            // Color mapping: red <50, amber 50-80, green >80
+            // Color mapping: red <50, amber 50-80, orange >80
             if (result.score < 0.5) bar.style.background = '#ef4444';
             else if (result.score < 0.8) bar.style.background = '#f59e0b';
-            else bar.style.background = '#10b981';
+            else bar.style.background = '#ff8a44';
             label.textContent = `Strength: ${result.strength} (${pct}%)`;
 
             // If password is too weak for initial enrollment, show hint
@@ -830,7 +830,7 @@
                 statusEl.textContent = "Sample saved";
                 statusEl.classList.remove('error');
                 statusEl.classList.add('success');
-                statusEl.style.color = '#10b981'; // Green color for success
+                statusEl.style.color = '#ffb066';
                 passwordMismatchCount = 0; // Reset mismatch counter on successful save
 
                 // If server set a password for an existing user, show a friendly toast
