@@ -1,4 +1,9 @@
 # Test Results Summary
+
+> [!WARNING]
+> Dokumen ini adalah laporan historis dan dapat memuat path/endpoint yang sudah berubah.
+> Untuk referensi implementasi aktif, gunakan `docs/API.md` dan `README.md`.
+
 **Date**: December 24, 2024  
 **Status**: ✅ Testing Phase Complete  
 **Test Coverage**: 47% overall, 85% for core services
@@ -311,10 +316,10 @@ open htmlcov/index.html   # macOS
    - Password reset flow
 
 2. **API Coverage** - Add tests for untested endpoints
-   - `/api/register` - User registration
-   - `/api/verify` - Keystroke verification
-   - `/api/samples` - Sample submission
-   - `/api/reset_password` - Password reset
+   - `/api/register_sample` - Enrollment sample submission
+   - `/api/login` - Unified biometric login
+   - `/api/verify_user` - Standalone verification path
+   - `/api/reset_password` - Public password reset
 
 3. **Performance Tests** - Validate under load
    - Concurrent login attempts

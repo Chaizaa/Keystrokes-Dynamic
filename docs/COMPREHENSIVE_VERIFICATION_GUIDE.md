@@ -1,5 +1,9 @@
 # 🔬 Comprehensive Verification System - Implementation Guide
 
+> [!WARNING]
+> Dokumen ini adalah panduan implementasi historis dan bisa menyebut mode/kontrak lama.
+> Untuk endpoint dan payload aktif, rujuk `docs/API.md`.
+
 ## 📋 Summary of Changes
 
 ### ✅ **IMPLEMENTED SUCCESSFULLY**

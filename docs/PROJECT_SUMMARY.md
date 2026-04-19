@@ -1,4 +1,9 @@
 # Project Summary
+
+> [!WARNING]
+> Dokumen ini adalah ringkasan historis dari snapshot implementasi sebelumnya.
+> Untuk status dan kontrak aktif saat ini, rujuk `README.md`, `docs/API.md`, dan `docs/QUICK_START.md`.
+
 **Keystrokes-Dynamic Biometric Authentication System**  
 **Flask Modernization - Complete**
 
@@ -108,12 +113,12 @@ Overall                                 47%
 
 **Endpoints Documented**:
 1. `POST /api/check_username` - Username availability
-2. `POST /api/register` - User registration
-3. `POST /api/register_sample` - Keystroke enrollment
-4. `POST /api/verify` - Biometric login
+2. `POST /api/register_sample` - Account bootstrap + keystroke enrollment
+3. `POST /api/login` - Unified biometric login
+4. `POST /api/verify_user` - Standalone verification flow
 5. `GET /api/user/info` - User information
-6. `POST /api/reset_password` - Password change
-7. `POST /api/logout` - Session termination
+6. `POST /api/reset_password` - Public password reset flow
+7. `POST /api/user/reset_password` - Authenticated password change
 
 ### 2. Deployment Guide (600+ lines)
 **File**: `docs/DEPLOYMENT_GUIDE.md`

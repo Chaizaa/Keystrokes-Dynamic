@@ -379,13 +379,13 @@ def validate_keystroke_data(data):
         raise BadRequest('Insufficient keystroke data')
     
     for event in data:
-        if not all(k in event for k in ['key', 'keyCode', 'timestamp', 'eventType']):
+        if not all(k in event for k in ['t', 'evt', 'code', 'key']):
             raise BadRequest('Invalid keystroke event structure')
     
     return data
 
-@api_bp.route('/api/register', methods=['POST'])
-def register():
+@api_bp.route('/api/register_sample', methods=['POST'])
+def register_sample():
     """Registration endpoint with validation"""
     data = request.get_json()
     
@@ -455,20 +455,20 @@ limiter = Limiter(
 
 # Endpoint-specific limits
 @api_bp.route('/api/check_username', methods=['POST'])
-@limiter.limit("30 per minute")
+@limiter.limit("10 per minute")
 def check_username():
     """Username availability check"""
     pass
 
-@api_bp.route('/api/verify', methods=['POST'])
-@limiter.limit("5 per minute")
-def verify():
+@api_bp.route('/api/login', methods=['POST'])
+@limiter.limit("10 per minute")
+def login():
     """Login verification (strict limit)"""
     pass
 
-@api_bp.route('/api/register', methods=['POST'])
-@limiter.limit("3 per hour")
-def register():
+@api_bp.route('/api/register_sample', methods=['POST'])
+@limiter.limit("30 per minute")
+def register_sample():
     """Registration (prevent abuse)"""
     pass
 ```
@@ -496,7 +496,7 @@ http {
     limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
     
     server {
-        location /api/verify {
+        location /api/login {
             limit_req zone=login_limit burst=2 nodelay;
             proxy_pass http://backend;
         }
@@ -568,8 +568,8 @@ class ProductionConfig(Config):
 ```python
 from flask_login import login_user, logout_user, current_user
 
-@api_bp.route('/api/verify', methods=['POST'])
-def verify():
+@api_bp.route('/api/login', methods=['POST'])
+def login():
     """Login with session creation"""
     # ... authentication logic ...
     
@@ -586,7 +586,7 @@ def verify():
         
         return jsonify({'message': 'Login successful'}), 200
 
-@api_bp.route('/api/logout', methods=['POST'])
+@auth_bp.route('/logout', methods=['GET'])
 @login_required
 def logout():
     """Logout with session destruction"""
@@ -606,8 +606,8 @@ def logout():
 ```python
 from flask import session
 
-@api_bp.route('/api/verify', methods=['POST'])
-def verify():
+@api_bp.route('/api/login', methods=['POST'])
+def login():
     """Login with session regeneration"""
     # ... authentication logic ...
     
@@ -636,8 +636,8 @@ csrf.init_app(app)
 
 # Exempt API endpoints (use custom CSRF for JSON APIs)
 @csrf.exempt
-@api_bp.route('/api/verify', methods=['POST'])
-def verify():
+@api_bp.route('/api/login', methods=['POST'])
+def login():
     pass
 ```
 
@@ -677,7 +677,7 @@ def check_csrf():
 
 <script>
 // Include CSRF token in AJAX requests
-fetch('/api/verify', {
+fetch('/api/login', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',

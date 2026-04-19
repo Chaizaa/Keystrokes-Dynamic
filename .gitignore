@@ -22,10 +22,10 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 ENV/
 env/
 *.env
-*.env.example
 
 # IDE
 .vscode/
@@ -66,6 +66,12 @@ tests/.pytest_cache/
 backups/*
 !backups/archived/
 !backups/archived/**
+# Ignore runtime/data artifacts inside archived backups
+backups/archived/*.db
+backups/archived/*.csv
+backups/archived/*.pid
+backups/archived/*.html
+backups/archived/*.bak
 
 # Scripts temp files
 scripts/__pycache__/
@@ -90,6 +96,7 @@ backup/
 # Local artifacts we want archived but not tracked in root
 tmp_register.html
 server.pid
+.tmp_*.py
 
 # Local admin scripts (contain secrets, never push)
 download_db.ps1
@@ -106,6 +113,10 @@ ml/models_v2/
 ml/result_v2/
 ml/dataset_railway_*.csv
 biometric_auth_railway_*.db
+ml/svm/models/*
+!ml/svm/models/.gitkeep
+ml/svm/result/*
+!ml/svm/result/.gitkeep
 
 # Local ad-hoc research scripts (do not track)
 scripts/_fix_paper.py
@@ -119,6 +130,11 @@ docs/RESEARCH_PAPER*.md
 docs/RESEARCH_PAPER*.docx
 docs/~$*.docx
 scripts/md_to_docx.py
+papers/outputs/
+papers/references/*.docx
+papers/references/~$*.docx
+papers/references/*.pdf
+conference_*.tex
 
 # Microsoft Office temp/lock files
 ~$*.docx

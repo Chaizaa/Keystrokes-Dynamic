@@ -122,10 +122,18 @@ MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 
 # Application Settings
-MAX_ENROLLMENT_SAMPLES=20
-MIN_ENROLLMENT_SAMPLES=10
+MIN_ENROLLMENT_SAMPLES=100
 VERIFICATION_THRESHOLD=0.7
+
+# Biometric ML backend mode switch
+# Allowed values: rf | svm
+ML_BACKEND=rf
 ```
+
+Notes:
+- Keep `ML_BACKEND=rf` as default for conservative production rollout.
+- Set `ML_BACKEND=svm` only after validating SVM behavior in staging.
+- If an invalid value is provided, the app automatically falls back to `rf`.
 
 **Generate Secret Key**:
 ```python
@@ -447,7 +455,7 @@ server {
     }
     
     # API endpoints with rate limiting
-    location /api/verify {
+    location /api/login {
         limit_req zone=login_limit burst=2 nodelay;
         
         proxy_pass http://keystroke_app;

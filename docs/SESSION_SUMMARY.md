@@ -1,4 +1,9 @@
 # Session Summary - December 24, 2024
+
+> [!WARNING]
+> Dokumen ini adalah catatan sesi historis (snapshot waktu tertentu), bukan dokumentasi kontrak aktif.
+> Untuk endpoint dan alur terbaru, rujuk `docs/API.md`.
+
 **Time**: Session completed  
 **Focus**: API Refactoring (Task 13)  
 **Status**: ✅ Complete

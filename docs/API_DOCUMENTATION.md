@@ -3,6 +3,10 @@
 **Version**: 2.0  
 **Date**: December 24, 2024
 
+> [!IMPORTANT]
+> This file is a historical deep-dive and may contain implementation-era examples.
+> For current, code-aligned endpoint contracts and payload schema, use `docs/API.md`.
+
 ---
 
 ## Overview
@@ -124,61 +128,18 @@ console.log('Available:', data.available);
 
 ---
 
-### 2. User Registration
+### 2. Account Bootstrap (Current Behavior)
 
-**Endpoint**: `POST /api/register`  
-**Description**: Create new user account with password  
-**Authentication**: None  
-**CSRF**: Exempt
+Direct `POST /api/register` is no longer part of the active API surface.
 
-#### Request Body
-```json
-{
-  "username": "string",
-  "password": "string"
-}
-```
+Account bootstrap happens inside `POST /api/register_sample` when the first
+enrollment sample is submitted.
 
-**Parameters**:
-- `username` (string, required): Unique username (3-50 chars)
-- `password` (string, required): Password (1-128 chars). Keystroke authentication supports very short passwords.
+Recommended flow:
+1. `POST /api/check_username`
+2. `POST /api/register_sample`
 
-#### Response
-
-**Success (201 Created)**:
-```json
-{
-  "success": true,
-  "message": "User registered successfully",
-  "user_id": 123,
-  "next_step": "enrollment"
-}
-```
-
-**Validation Error (400 Bad Request)**:
-```json
-{
-  "success": false,
-  "error": "Password must be at least 1 character"
-}
-```
-
-**Duplicate User (409 Conflict)**:
-```json
-{
-  "success": false,
-  "error": "Username already exists"
-}
-```
-
-#### Examples
-
-**cURL**:
-```bash
-curl -X POST http://localhost:5000/api/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "john_doe", "password": "SecurePass123!"}'
-```
+For the latest request/response contracts, refer to `docs/API.md`.
 
 ---
 
@@ -194,26 +155,24 @@ curl -X POST http://localhost:5000/api/register \
 ```json
 {
   "username": "string",
-  "password": "string",
-  "H_vector": [0.123, 0.145, 0.167, ...],
-  "DD_vector": [0.050, 0.045, 0.052, ...],
-  "UD_vector": [0.173, 0.190, 0.219, ...],
-  "attempt": 1
+  "email": "string (optional)",
+  "events": [
+    {"t": 10.0, "evt": "d", "code": "KeyA", "key": "a"},
+    {"t": 70.0, "evt": "u", "code": "KeyA", "key": "a"}
+  ]
 }
 ```
 
 **Parameters**:
 - `username` (string, required): Username for enrollment
-- `password` (string, required): User's password
-- `H_vector` (array, required): Hold time vector (milliseconds)
-- `DD_vector` (array, required): Down-Down time vector (milliseconds)
-- `UD_vector` (array, required): Up-Down time vector (milliseconds)
-- `attempt` (integer, required): Sample number (1-20)
+- `email` (string, optional): Email used for verification-enabled flow
+- `events` (array, required): Keystroke events from frontend
 
-**Vector Format**:
-- Each vector contains timing values for each keystroke
-- Values should be in seconds (float)
-- Vector lengths must match password length
+**Event Item Format**:
+- `t` (number): Client-side timestamp
+- `evt` (string): `d` (keydown) or `u` (keyup)
+- `code` (string): Physical key code (`KeyA`, `Backspace`, etc.)
+- `key` (string): Display key value
 
 #### Response
 
@@ -261,8 +220,7 @@ curl -X POST http://localhost:5000/api/register \
 ```json
 {
   "success": false,
-  "error": "Invalid vector format",
-  "details": "H_vector length mismatch"
+  "error": "Invalid event payload"
 }
 ```
 
@@ -287,19 +245,21 @@ curl -X POST http://localhost:5000/api/register \
 **JavaScript (Full Sample Submission)**:
 ```javascript
 // Capture keystroke data
-const keystrokeData = {
+const samplePayload = {
   username: 'john_doe',
-  password: 'SecurePass123!',
-  H_vector: [0.123, 0.145, 0.167, 0.134, 0.156, ...],
-  DD_vector: [0.050, 0.045, 0.052, 0.048, 0.051, ...],
-  UD_vector: [0.173, 0.190, 0.219, 0.182, 0.207, ...],
-  attempt: 1
+  email: 'john_doe@example.com',
+  events: [
+    {t: 10.0, evt: 'd', code: 'KeyS', key: 's'},
+    {t: 65.0, evt: 'u', code: 'KeyS', key: 's'},
+    {t: 80.0, evt: 'd', code: 'KeyE', key: 'e'},
+    {t: 135.0, evt: 'u', code: 'KeyE', key: 'e'}
+  ]
 };
 
 const response = await fetch('/api/register_sample', {
   method: 'POST',
   headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify(keystrokeData)
+  body: JSON.stringify(samplePayload)
 });
 
 const result = await response.json();
@@ -309,31 +269,28 @@ console.log(`Quality Score: ${result.quality_score}`);
 
 ---
 
-### 4. Keystroke Verification (Login)
+### 4. Unified Login
 
-**Endpoint**: `POST /api/verify`  
-**Description**: Verify user identity through keystroke biometric analysis  
+**Endpoint**: `POST /api/login`  
+**Description**: Authenticate user identity through keystroke biometric analysis  
 **Authentication**: None (creates session on success)  
 **CSRF**: Exempt  
-**Rate Limit**: 5 attempts per minute per IP
+**Rate Limit**: 10 attempts per minute per IP
 
 #### Request Body
 ```json
 {
   "username": "string",
-  "password": "string",
-  "H_vector": [0.123, 0.145, 0.167, ...],
-  "DD_vector": [0.050, 0.045, 0.052, ...],
-  "UD_vector": [0.173, 0.190, 0.219, ...]
+  "events": [
+    {"t": 10.0, "evt": "d", "code": "KeyA", "key": "a"},
+    {"t": 70.0, "evt": "u", "code": "KeyA", "key": "a"}
+  ]
 }
 ```
 
 **Parameters**:
 - `username` (string, required): Username to verify
-- `password` (string, required): User's password
-- `H_vector` (array, required): Hold time vector
-- `DD_vector` (array, required): Down-Down time vector
-- `UD_vector` (array, required): Up-Down time vector
+- `events` (array, required): Keystroke events in `{t, evt, code, key}` format
 
 #### Response
 
@@ -429,15 +386,15 @@ check_response = requests.post(
 )
 
 if check_response.json()['enrollment_status']['ready_for_login']:
-    # Step 2: Verify with keystroke data
+    # Step 2: Login with keystroke events
     verify_response = requests.post(
-        'http://localhost:5000/api/verify',
+        'http://localhost:5000/api/login',
         json={
             'username': 'john_doe',
-            'password': 'SecurePass123!',
-            'H_vector': [0.123, 0.145, ...],
-            'DD_vector': [0.050, 0.045, ...],
-            'UD_vector': [0.173, 0.190, ...]
+            'events': [
+                {'t': 10.0, 'evt': 'd', 'code': 'KeyS', 'key': 's'},
+                {'t': 66.0, 'evt': 'u', 'code': 'KeyS', 'key': 's'}
+            ]
         }
     )
     
@@ -497,11 +454,11 @@ curl -X GET http://localhost:5000/api/user/info \
 
 ---
 
-### 6. Password Reset
+### 6. Authenticated Password Change
 
-**Endpoint**: `POST /api/reset_password`  
-**Description**: Change user password (requires current password)  
-**Authentication**: Required  
+**Endpoint**: `POST /api/user/reset_password`  
+**Description**: Change current user's password (requires current password)  
+**Authentication**: Required (session cookie)  
 **CSRF**: Protected
 
 #### Request Body
@@ -545,12 +502,12 @@ curl -X GET http://localhost:5000/api/user/info \
 
 ---
 
-### 7. Logout
+### 7. Logout (Web Route)
 
-**Endpoint**: `POST /api/logout`  
-**Description**: End user session  
-**Authentication**: Required  
-**CSRF**: Protected
+**Endpoint**: `GET /logout`  
+**Description**: End user session and redirect to home page  
+**Authentication**: Session-aware (safe to call when logged out)  
+**CSRF**: N/A (GET route)
 
 #### Response
 
@@ -614,11 +571,11 @@ All errors follow this format:
 
 | Endpoint | Limit | Window | Scope |
 |----------|-------|--------|-------|
-| `/api/check_username` | 30 requests | 1 minute | Per IP |
-| `/api/register` | 5 requests | 1 hour | Per IP |
-| `/api/register_sample` | 10 requests | 1 minute | Per user |
-| `/api/verify` | 5 requests | 1 minute | Per IP |
-| `/api/reset_password` | 3 requests | 1 hour | Per user |
+| `/api/check_username` | 10 requests | 1 minute | Per IP |
+| `/api/register_sample` | 30 requests | 1 minute | Per IP |
+| `/api/login` | 10 requests | 1 minute | Per IP |
+| `/api/reset_password` | 10 requests | 1 hour | Per IP |
+| `/api/user/reset_password` | 3 requests | 1 hour | Authenticated |
 
 ### Rate Limit Headers
 
@@ -663,16 +620,20 @@ X-RateLimit-Reset: 1703419200
 
 ## Data Models
 
-### Keystroke Vector Format
+### Keystroke Event Format
 
 ```python
 {
-  "H_vector": [float],   # Hold times (key press duration)
-  "DD_vector": [float],  # Down-Down times (key to key)
-  "UD_vector": [float],  # Up-Down times (release to press)
-  "length": int,         # Number of keystrokes
-  "timestamp": str,      # ISO 8601 timestamp
-  "data_type": str       # "enrollment" or "verification"
+  "events": [
+    {
+      "t": float,        # Client-side timestamp
+      "evt": str,        # "d" (keydown) or "u" (keyup)
+      "code": str,       # Physical key code
+      "key": str         # Display key value
+    }
+  ],
+  "event_count": int,
+  "event_type": str      # "enrollment" or "verification"
 }
 ```
 
@@ -711,49 +672,43 @@ class KeystrokeAuthClient:
             json={'username': username, 'mode': mode}
         )
         return response.json()
-    
-    def register(self, username, password):
-        """Register new user"""
-        response = self.session.post(
-            f'{self.base_url}/api/register',
-            json={'username': username, 'password': password}
-        )
-        return response.json()
-    
-    def submit_sample(self, username, password, vectors, attempt):
-        """Submit enrollment sample"""
+
+    def submit_sample(self, username, events, email=None):
+        """Submit enrollment sample (and bootstrap account on first sample)."""
         data = {
             'username': username,
-            'password': password,
-            'H_vector': vectors['H'],
-            'DD_vector': vectors['DD'],
-            'UD_vector': vectors['UD'],
-            'attempt': attempt
+            'events': events,
         }
+        if email:
+            data['email'] = email
         response = self.session.post(
             f'{self.base_url}/api/register_sample',
             json=data
         )
         return response.json()
-    
-    def verify(self, username, password, vectors):
-        """Verify user with keystroke biometrics"""
+
+    def login(self, username, events):
+        """Login user with keystroke biometrics."""
         data = {
             'username': username,
-            'password': password,
-            'H_vector': vectors['H'],
-            'DD_vector': vectors['DD'],
-            'UD_vector': vectors['UD']
+            'events': events,
         }
         response = self.session.post(
-            f'{self.base_url}/api/verify',
+            f'{self.base_url}/api/login',
             json=data
         )
         return response.json()
 
 # Usage
 client = KeystrokeAuthClient()
-result = client.register('john_doe', 'SecurePass123!')
+result = client.submit_sample(
+    'john_doe',
+    events=[
+        {'t': 10.0, 'evt': 'd', 'code': 'KeyS', 'key': 's'},
+        {'t': 66.0, 'evt': 'u', 'code': 'KeyS', 'key': 's'},
+    ],
+    email='john_doe@example.com'
+)
 ```
 
 ---

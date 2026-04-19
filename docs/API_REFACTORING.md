@@ -1,4 +1,9 @@
 # API Refactoring Documentation
+
+> [!WARNING]
+> Dokumen ini merekam proses refactor historis dan mungkin tidak mencerminkan struktur route terbaru.
+> Sumber referensi API aktif adalah `docs/API.md`.
+
 **Date**: December 24, 2024  
 **Status**: ✅ Complete  
 **Phase**: Service Layer Integration
