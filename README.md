@@ -86,6 +86,10 @@ Stop containers:
 docker compose down
 ```
 
+Developer first-run flow:
+
+- See `DEVELOPER_FIRST_RUN_CHECKLIST.md` for step-by-step setup + validation.
+
 ## Important environment variables
 
 - `SECRET_KEY` session signing key
