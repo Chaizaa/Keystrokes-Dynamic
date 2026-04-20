@@ -17,9 +17,10 @@ def index():
 
 
 @main_bp.route("/home")
+@main_bp.route("/dashboard")
 @login_required  # Flask-Login protection
 def home():
-    """Dashboard/Home page - requires login"""
+    """Dashboard page (supports /home and /dashboard) - requires login."""
     return render_template("dashboard.html")
 
 
