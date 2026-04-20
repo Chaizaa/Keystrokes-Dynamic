@@ -68,6 +68,12 @@ http://127.0.0.1:5000
 
 ## Run with Docker (recommended for quick trial)
 
+Before first run, create local env file (recommended):
+
+```bash
+cp .env.example .env
+```
+
 Build and start:
 
 ```bash
@@ -84,6 +90,12 @@ Stop containers:
 
 ```bash
 docker compose down
+```
+
+Container status and health:
+
+```bash
+docker compose ps
 ```
 
 Developer first-run flow:
