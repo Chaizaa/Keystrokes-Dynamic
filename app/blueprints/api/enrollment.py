@@ -68,7 +68,7 @@ def _recommended_samples():
             return int(getter())
         except Exception:
             pass
-    return int(getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 100))
+    return int(getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 30))
 
 
 def _resolve_username_for_check(username):

@@ -1,0 +1,26 @@
+{
+  "run_at": "2026-04-19T12:36:45.702721+00:00",
+  "protocol": "stratified_60_20_20_one_vs_rest_eer_threshold",
+  "db_path": "data/biometric_auth_railway_20260315_174850.db",
+  "subjects": 20,
+  "rows": 2000,
+  "svm_average_test": {
+    "accuracy": 0.98125,
+    "far": 0.01710526315789474,
+    "frr": 0.05,
+    "eer": 0.02111842105263159,
+    "auc": 0.9936118421052631
+  },
+  "rf_reference_test": {
+    "accuracy": 0.97813,
+    "far": 0.02026,
+    "frr": 0.0525,
+    "eer": 0.02961
+  },
+  "delta_svm_minus_rf": {
+    "accuracy": 0.0031199999999999006,
+    "far": -0.003154736842105259,
+    "frr": -0.0024999999999999953,
+    "eer": -0.008491578947368413
+  }
+}

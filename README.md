@@ -313,7 +313,7 @@ Verify typing pattern hasn't changed → Maintain session
    - Creates user account
    │
    ▼
-5. Enrollment Phase (target 100 samples, resumable):
+5. Enrollment Phase (target 30 samples, resumable):
    - User types password multiple times
    - Each sample stored in database
    - Backend schedules ML training when enrollment target is reached
@@ -469,7 +469,7 @@ similarity = average(1 - |feature1 - feature2| / |feature2|)
 
 ### 🎯 Biometric Features
 
-- ✅ **Multi-Sample Enrollment** (100 samples target, resumable)
+- ✅ **Multi-Sample Enrollment** (30 samples target, resumable)
 - ✅ **Three Verification Algorithms** (Euclidean, Cosine, Statistical)
 - ✅ **Confidence Scoring** (Very High, High, Medium, Low, Very Low)
 - ✅ **Adaptive Thresholds** (Configurable per-user or system-wide)
@@ -769,16 +769,16 @@ Visit `http://localhost:5000/register`
   - At least 1 digit
   - At least 1 special character (!@#$%^&*(),.?":{}|<>)
 
-#### 3. Biometric Enrollment (target 100 samples)
+#### 3. Biometric Enrollment (target 30 samples)
 
 After account creation, you'll be prompted to type your password multiple times:
 
 ```
-Sample 1/100: Type your password naturally
-[Progress: ██████░░░░░░░░░░░░░░░░ 30%]
+Sample 10/30: Type your password naturally
+[Progress: ██████░░░░░░░░░░░░░░░░ 33%]
 
-Sample 2/100: Type your password naturally
-[Progress: ████████████░░░░░░░░░░ 60%]
+Sample 20/30: Type your password naturally
+[Progress: ████████████░░░░░░░░░░ 66%]
 
 ...
 

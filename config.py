@@ -39,7 +39,7 @@ class Config:
     # Biometric Settings
     # Keep the enrollment target modest so the UX does not require an
     # excessive sample count before login becomes available.
-    MIN_ENROLLMENT_SAMPLES = int(os.environ.get("MIN_ENROLLMENT_SAMPLES", "10"))
+    MIN_ENROLLMENT_SAMPLES = int(os.environ.get("MIN_ENROLLMENT_SAMPLES", "30"))
     RECOMMENDED_SAMPLES = int(os.environ.get("RECOMMENDED_SAMPLES", str(MIN_ENROLLMENT_SAMPLES)))
     VERIFICATION_THRESHOLD = float(os.environ.get("VERIFICATION_THRESHOLD", "0.7"))
     MAX_LOGIN_ATTEMPTS = int(os.environ.get("MAX_LOGIN_ATTEMPTS", "5"))
@@ -91,7 +91,7 @@ class Config:
     LOG_FILE = os.environ.get("LOG_FILE", "app.log")
 
     # Request size limit — prevents oversized payload attacks on /submit etc.
-    # 1 MB is generous for keystroke data (a full 100-rep session is ~50 KB JSON).
+    # 1 MB is generous for keystroke data (a full 30-rep session is well below this limit).
     MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1 MB
 
     # Static & Template Paths
@@ -163,7 +163,7 @@ def validate_config(config_class):
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("VERIFICATION_THRESHOLD must be within [0.0, 1.0]")
 
-    min_samples = int(getattr(config_class, "MIN_ENROLLMENT_SAMPLES", 10))
+    min_samples = int(getattr(config_class, "MIN_ENROLLMENT_SAMPLES", 30))
     recommended_samples = int(getattr(config_class, "RECOMMENDED_SAMPLES", min_samples))
     if min_samples <= 0:
         raise ValueError("MIN_ENROLLMENT_SAMPLES must be > 0")

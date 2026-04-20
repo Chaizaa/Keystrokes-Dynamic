@@ -16,10 +16,10 @@ def test_check_username_uses_app_extensions_registry(client, app, monkeypatch):
             }
 
     class _FakeBiometricService:
-        RECOMMENDED_SAMPLES = 10
+        RECOMMENDED_SAMPLES = 30
 
         def get_recommended_samples(self):
-            return 10
+            return 30
 
         def get_enrollment_status(self, _username):
             return {"count": 7, "enrolled": False, "ready_for_login": False}

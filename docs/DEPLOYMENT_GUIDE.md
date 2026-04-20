@@ -122,7 +122,8 @@ MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 
 # Application Settings
-MIN_ENROLLMENT_SAMPLES=100
+MIN_ENROLLMENT_SAMPLES=30
+RECOMMENDED_SAMPLES=30
 VERIFICATION_THRESHOLD=0.7
 
 # Biometric ML backend mode switch
