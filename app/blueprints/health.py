@@ -3,6 +3,7 @@ Health-related endpoints (migrations/health checks)
 """
 
 from flask import Blueprint, jsonify
+from sqlalchemy import text
 
 from app.models import db
 
@@ -10,6 +11,31 @@ health_bp = Blueprint("health", __name__)
 
 # Columns that must be present for registration/email/2FA features to work
 REQUIRED_USER_COLUMNS = {"email", "email_verified", "two_factor_enabled"}
+
+
+@health_bp.route("/live", methods=["GET"])
+def live_health():
+    """Simple liveness probe for container/process health."""
+    return jsonify({"status": "ok", "message": "service is alive"}), 200
+
+
+@health_bp.route("/ready", methods=["GET"])
+def ready_health():
+    """Readiness probe that verifies DB connectivity."""
+    try:
+        db.session.execute(text("SELECT 1"))
+    except Exception:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Service is running but database is not ready.",
+                }
+            ),
+            503,
+        )
+
+    return jsonify({"status": "ok", "message": "service is ready"}), 200
 
 
 @health_bp.route("/migrations", methods=["GET"])

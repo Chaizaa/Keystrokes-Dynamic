@@ -8,7 +8,6 @@
 
 {% block body %}
 
-<<<<<<< HEAD
 <div class="dashboard-shell">
     <div class="dash-orb dash-orb-one" aria-hidden="true"></div>
     <div class="dash-orb dash-orb-two" aria-hidden="true"></div>
@@ -72,6 +71,10 @@
                         <div class="number" id="hasPassword">-</div>
                         <div class="label">Has Password</div>
                     </div>
+                    <div class="stat-box">
+                        <div class="number" id="apiKeyCount">0</div>
+                        <div class="label">Active API Keys</div>
+                    </div>
                 </div>
                 <p class="stats-note">Live readiness signals are refreshed whenever the profile endpoint is queried.</p>
             </section>
@@ -98,6 +101,48 @@
                 </ol>
             </section>
 
+            <section class="card card-api">
+                <h2>API Integration Keys</h2>
+                <p class="api-note">Generate API keys for partner website integration. A new key is shown only once.</p>
+
+                <div class="api-form-grid">
+                    <div class="form-group">
+                        <label for="partnerName">Partner Name *</label>
+                        <input id="partnerName" type="text" maxlength="255" placeholder="Example: Partner A">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiRateLimit">Rate Limit / Hour</label>
+                        <input id="apiRateLimit" type="number" min="1" max="100000" value="100">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="apiDescription">Description</label>
+                        <input id="apiDescription" type="text" placeholder="Optional note for this key">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="allowedOrigins">Allowed Origins (comma separated)</label>
+                        <input id="allowedOrigins" type="text" placeholder="partner-a.com, app.partner-a.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="expiresDays">Expires In (days)</label>
+                        <input id="expiresDays" type="number" min="1" max="3650" placeholder="Optional">
+                    </div>
+                </div>
+
+                <button id="generateApiKeyBtn" class="btn btn-primary" onclick="generateApiKey()">Generate API Key</button>
+
+                <div id="apiKeyResult" class="api-key-result" style="display:none;">
+                    <label for="newApiKeyValue">New API Key (save now):</label>
+                    <div class="api-key-row">
+                        <input id="newApiKeyValue" type="text" readonly>
+                        <button class="btn btn-secondary" onclick="copyNewApiKey()">Copy</button>
+                    </div>
+                </div>
+
+                <h3 class="api-list-title">Existing Keys</h3>
+                <div id="apiKeyListLoading" class="loading-mini">Loading API keys...</div>
+                <div id="apiKeysList" class="api-key-list"></div>
+            </section>
+
             <section class="card card-actions">
                 <h2>Account Actions</h2>
                 <p class="actions-copy">Use secure recovery for credential reset or end the current session.</p>
@@ -110,108 +155,6 @@
                     </button>
                 </div>
             </section>
-=======
-<div class="container">
-    <div class="header">
-        <h1>Dashboard</h1>
-        <div class="user-badge">
-            <span id="headerUsername">Loading...</span>
-        </div>
-    </div>
-
-    <div id="loadingSection" class="card loading">
-        <div class="spinner"></div>
-        <p>Loading your profile...</p>
-    </div>
-
-    <div id="mainContent" style="display: none;">
-        <div class="card">
-            <h2>Profile Information</h2>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="label">Username</div>
-                    <div class="value" id="username">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Email</div>
-                    <div class="value" id="email">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Account Created</div>
-                    <div class="value" id="createdAt">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="label">Email Verified</div>
-                    <div class="value" id="emailVerified">-</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Biometric Statistics</h2>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="number" id="enrollmentCount">0</div>
-                    <div class="label">Enrollment Samples</div>
-                </div>
-                <div class="stat-box">
-                    <div class="number" id="hasPassword">-</div>
-                    <div class="label">Has Password</div>
-                </div>
-                <div class="stat-box">
-                    <div class="number" id="apiKeyCount">0</div>
-                    <div class="label">Active API Keys</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>API Integration Keys</h2>
-            <p class="api-note">Generate API keys for partner website integration. A new key is shown only once.</p>
-
-            <div class="api-form-grid">
-                <div class="form-group">
-                    <label for="partnerName">Partner Name *</label>
-                    <input id="partnerName" type="text" maxlength="255" placeholder="Example: Partner A">
-                </div>
-                <div class="form-group">
-                    <label for="apiRateLimit">Rate Limit / Hour</label>
-                    <input id="apiRateLimit" type="number" min="1" max="100000" value="100">
-                </div>
-                <div class="form-group full-width">
-                    <label for="apiDescription">Description</label>
-                    <input id="apiDescription" type="text" placeholder="Optional note for this key">
-                </div>
-                <div class="form-group full-width">
-                    <label for="allowedOrigins">Allowed Origins (comma separated)</label>
-                    <input id="allowedOrigins" type="text" placeholder="partner-a.com, app.partner-a.com">
-                </div>
-                <div class="form-group">
-                    <label for="expiresDays">Expires In (days)</label>
-                    <input id="expiresDays" type="number" min="1" max="3650" placeholder="Optional">
-                </div>
-            </div>
-
-            <button id="generateApiKeyBtn" class="btn btn-primary" onclick="generateApiKey()">Generate API Key</button>
-
-            <div id="apiKeyResult" class="api-key-result" style="display:none;">
-                <label for="newApiKeyValue">New API Key (save now):</label>
-                <div class="api-key-row">
-                    <input id="newApiKeyValue" type="text" readonly>
-                    <button class="btn btn-secondary" onclick="copyNewApiKey()">Copy</button>
-                </div>
-            </div>
-
-            <h3 class="api-list-title">Existing Keys</h3>
-            <div id="apiKeyListLoading" class="loading-mini">Loading API keys...</div>
-            <div id="apiKeysList" class="api-key-list"></div>
-        </div>
-
-        <div class="card">
-            <h2>Account Actions</h2>
-            <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">Reset Password</button>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
->>>>>>> chaizaa/habib_api
         </div>
     </div>
 </div>
@@ -453,12 +396,8 @@
             btn.textContent = 'Sending...';
         }
 
-<<<<<<< HEAD
         // Fallback redirect in case email sending blocks for too long
         const redirectUrl = `/reset/verify-code?username=${encodeURIComponent(username)}`;
-=======
-        const redirectUrl = `/verify?username=${encodeURIComponent(username)}&purpose=reset`;
->>>>>>> chaizaa/habib_api
         let didNavigate = false;
         const fallback = setTimeout(() => {
             if (btn) btn.textContent = originalText || 'Reset Password';

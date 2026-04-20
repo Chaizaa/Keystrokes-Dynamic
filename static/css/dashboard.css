@@ -204,6 +204,10 @@ body {
     grid-column: 2;
 }
 
+.card-api {
+    grid-column: 1 / -1;
+}
+
 .info-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -255,7 +259,6 @@ body {
     color: #d5ebff;
 }
 
-<<<<<<< HEAD
 .stat-box .label {
     margin-top: 4px;
     color: #9fbbde;
@@ -338,10 +341,11 @@ body {
     cursor: not-allowed;
     opacity: 0.72;
 }
-=======
-.btn { display:inline-block; padding:12px 22px; border-radius:8px; font-weight:700; cursor:pointer; border: none; font-size:14px; }
-.btn-sm { padding: 8px 14px; font-size: 12px; }
->>>>>>> chaizaa/habib_api
+
+.btn-sm {
+    padding: 8px 14px;
+    font-size: 12px;
+}
 
 .btn-primary {
     color: #041126;
@@ -378,8 +382,6 @@ body {
     display: flex;
 }
 
-<<<<<<< HEAD
-=======
 .api-note {
     color: #c6d5f5;
     margin: 0 0 16px;
@@ -531,11 +533,6 @@ body {
     border-color: rgba(220,53,69,0.35);
     color: #fecaca;
 }
-
-/* Reset modal to glass style to match others */
-.modal { display:none; position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center; }
-.modal.active { display:flex; }
->>>>>>> chaizaa/habib_api
 .modal-content {
     background: rgba(16, 30, 54, 0.93);
     border: 1px solid rgba(168, 194, 236, 0.32);
@@ -546,24 +543,8 @@ body {
     box-shadow: 0 30px 70px rgba(3, 9, 22, 0.65);
 }
 
-<<<<<<< HEAD
 .modal-content h3 {
     margin-bottom: 10px;
-=======
-.modal-content h3 { margin-bottom:12px; }
-.form-group label { color: #d8e7ff; }
-.form-group input { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #fff; }
-
-/* Misc */
-.loading { text-align:center; padding:20px; color: #9fb2ea; }
-
-@media (max-width: 768px) {
-    body { padding: 20px; }
-    .header { padding: 22px; }
-    .api-key-row {
-        flex-direction: column;
-    }
->>>>>>> chaizaa/habib_api
 }
 
 .form-group label {
@@ -644,6 +625,10 @@ body {
 
     .workflow-list span {
         max-width: 44px;
+    }
+
+    .api-key-row {
+        flex-direction: column;
     }
 }
 
