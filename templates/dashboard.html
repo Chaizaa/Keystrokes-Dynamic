@@ -71,6 +71,10 @@
                         <div class="number" id="hasPassword">-</div>
                         <div class="label">Has Password</div>
                     </div>
+                    <div class="stat-box">
+                        <div class="number" id="apiKeyCount">0</div>
+                        <div class="label">Active API Keys</div>
+                    </div>
                 </div>
                 <p class="stats-note">Live readiness signals are refreshed whenever the profile endpoint is queried.</p>
             </section>
@@ -95,6 +99,48 @@
                         <p>Audit-ready logs support reviews, reporting, and governance checks.</p>
                     </li>
                 </ol>
+            </section>
+
+            <section class="card card-api">
+                <h2>API Integration Keys</h2>
+                <p class="api-note">Generate API keys for partner website integration. A new key is shown only once.</p>
+
+                <div class="api-form-grid">
+                    <div class="form-group">
+                        <label for="partnerName">Partner Name *</label>
+                        <input id="partnerName" type="text" maxlength="255" placeholder="Example: Partner A">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiRateLimit">Rate Limit / Hour</label>
+                        <input id="apiRateLimit" type="number" min="1" max="100000" value="100">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="apiDescription">Description</label>
+                        <input id="apiDescription" type="text" placeholder="Optional note for this key">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="allowedOrigins">Allowed Origins (comma separated)</label>
+                        <input id="allowedOrigins" type="text" placeholder="partner-a.com, app.partner-a.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="expiresDays">Expires In (days)</label>
+                        <input id="expiresDays" type="number" min="1" max="3650" placeholder="Optional">
+                    </div>
+                </div>
+
+                <button id="generateApiKeyBtn" class="btn btn-primary" onclick="generateApiKey()">Generate API Key</button>
+
+                <div id="apiKeyResult" class="api-key-result" style="display:none;">
+                    <label for="newApiKeyValue">New API Key (save now):</label>
+                    <div class="api-key-row">
+                        <input id="newApiKeyValue" type="text" readonly>
+                        <button class="btn btn-secondary" onclick="copyNewApiKey()">Copy</button>
+                    </div>
+                </div>
+
+                <h3 class="api-list-title">Existing Keys</h3>
+                <div id="apiKeyListLoading" class="loading-mini">Loading API keys...</div>
+                <div id="apiKeysList" class="api-key-list"></div>
             </section>
 
             <section class="card card-actions">

@@ -22,26 +22,35 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-# Core models — imported after db is defined to avoid circular imports
-from .user import User                                               # noqa: E402
-from .keystroke_vector import KeystrokeVector, UsersVector           # noqa: E402
-from .feature_vector import EnrollmentVector, FeatureVector          # noqa: E402  (deprecated stubs)
-from .admin_audit import AdminAudit                                  # noqa: E402
-from .login_attempt import LoginAttempt                              # noqa: E402
-from .client import Client                                           # noqa: E402
-from .dataset import DatasetSubject, DatasetEntry                    # noqa: E402
-from .user_ml_model import UserMLModel                               # noqa: E402
+# Core models - imported after db is defined to avoid circular imports
+from .user import User  # noqa: E402
+from .keystroke_vector import KeystrokeVector, UsersVector  # noqa: E402
+from .feature_vector import EnrollmentVector, FeatureVector  # noqa: E402
+from .admin_audit import AdminAudit  # noqa: E402
+from .login_attempt import LoginAttempt  # noqa: E402
+from .client import Client  # noqa: E402
+from .dataset import DatasetEntry, DatasetSubject  # noqa: E402
+from .user_ml_model import UserMLModel  # noqa: E402
+
+# Partner/API models
+from .api_key import APIKey  # noqa: E402
+from .enrollment_log import EnrollmentLog  # noqa: E402
+from .verification_log import VerificationLog  # noqa: E402
 
 __all__ = [
     "db",
     "User",
-    "UsersVector",
-    "KeystrokeVector",    # deprecated alias → UsersVector
-    "FeatureVector",      # deprecated alias → UsersVector
-    "EnrollmentVector",   # deprecated alias → UsersVector
+  "UsersVector",
+  "KeystrokeVector",  # deprecated alias -> UsersVector
+  "FeatureVector",  # deprecated alias -> UsersVector
+  "EnrollmentVector",  # deprecated alias -> UsersVector
     "AdminAudit",
     "LoginAttempt",
+  "Client",
     "DatasetSubject",
     "DatasetEntry",
     "UserMLModel",
+    "APIKey",
+    "EnrollmentLog",
+    "VerificationLog",
 ]
