@@ -22,6 +22,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+<<<<<<< HEAD
 # Core models — imported after db is defined to avoid circular imports
 from .user import User                                               # noqa: E402
 from .keystroke_vector import KeystrokeVector, UsersVector           # noqa: E402
@@ -31,6 +32,18 @@ from .login_attempt import LoginAttempt                              # noqa: E40
 from .client import Client                                           # noqa: E402
 from .dataset import DatasetSubject, DatasetEntry                    # noqa: E402
 from .user_ml_model import UserMLModel                               # noqa: E402
+=======
+from .feature_vector import EnrollmentVector, FeatureVector
+from .keystroke_vector import KeystrokeVector
+from .login_attempt import LoginAttempt
+
+# Import models for easy access
+from .user import User
+from .admin_audit import AdminAudit
+from .api_key import APIKey
+from .enrollment_log import EnrollmentLog
+from .verification_log import VerificationLog
+>>>>>>> chaizaa/habib_api
 
 __all__ = [
     "db",
@@ -40,8 +53,14 @@ __all__ = [
     "FeatureVector",      # deprecated alias → UsersVector
     "EnrollmentVector",   # deprecated alias → UsersVector
     "AdminAudit",
+<<<<<<< HEAD
     "LoginAttempt",
     "DatasetSubject",
     "DatasetEntry",
     "UserMLModel",
+=======
+    "APIKey",
+    "EnrollmentLog",
+    "VerificationLog",
+>>>>>>> chaizaa/habib_api
 ]
