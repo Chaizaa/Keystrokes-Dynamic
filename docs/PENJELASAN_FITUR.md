@@ -999,12 +999,12 @@ rollover_ratio = 0.33  # OK (< 80%)
 ```javascript
 // Frontend menampilkan:
 if (quality_label === 'good') {
-  showMessage('✅ Sample berkualitas tinggi! (Score: 100/100)');
+  showMessage('✅ Sample berkualitas tinggi! (Score: 30/30)');
 } else if (quality_label === 'questionable') {
-  showMessage('⚠️ Sample OK tapi ada irregularity (Score: 70/100)');
+  showMessage('⚠️ Sample OK tapi ada irregularity (Score: 21/30)');
   showWarnings(quality_warnings);
 } else {
-  showMessage('❌ Sample kurang baik (Score: 45/100)');
+  showMessage('❌ Sample kurang baik (Score: 14/30)');
   showWarnings(quality_warnings);
 }
 ```

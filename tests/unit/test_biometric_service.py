@@ -133,7 +133,7 @@ class TestBiometricServiceEnrollmentStatus:
         assert result["enrolled"] is False
         assert result["ready_for_login"] is False
         assert result["minimum_samples"] == 3
-        assert result["recommended_samples"] == 10
+        assert result["recommended_samples"] == 30
 
     def test_get_enrollment_status_with_samples(self, biometric_service, db_session, sample_user):
         """Test enrollment status for user with samples"""
@@ -155,7 +155,7 @@ class TestBiometricServiceEnrollmentStatus:
 
         assert result["count"] == 5
         assert result["enrolled"] is True  # >= 3 samples
-        assert result["ready_for_login"] is False  # < 10 samples
+        assert result["ready_for_login"] is False  # < 30 samples
 
     def test_get_enrollment_status_ready_for_login(
         self, biometric_service, db_session, sample_user
@@ -163,8 +163,8 @@ class TestBiometricServiceEnrollmentStatus:
         """Test enrollment status when user is ready for login"""
         from app.models import KeystrokeVector
 
-        # Create 10 keystroke samples
-        for i in range(10):
+        # Create 30 keystroke samples
+        for i in range(30):
             sample = KeystrokeVector(
                 user_id=sample_user.id,
                 h_vector=f"[0.{i}, 0.2, 0.3]",
@@ -177,9 +177,9 @@ class TestBiometricServiceEnrollmentStatus:
 
         result = biometric_service.get_enrollment_status("testuser")
 
-        assert result["count"] == 10
+        assert result["count"] == 30
         assert result["enrolled"] is True
-        assert result["ready_for_login"] is True  # >= 10 samples
+        assert result["ready_for_login"] is True  # >= 30 samples
 
 
 class TestBiometricServiceVerification:

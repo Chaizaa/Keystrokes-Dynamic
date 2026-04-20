@@ -228,7 +228,7 @@ def dataset_register():
 
     Request JSON:
         name_initial  str   (optional)
-        password      str   (required) Password the subject will type 100 times
+        password      str   (required) Password the subject will type 30 times
 
     Response JSON:
         subject_code   str

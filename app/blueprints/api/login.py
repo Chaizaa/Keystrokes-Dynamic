@@ -305,7 +305,7 @@ def login():
                     ip_address=ip_address,
                     user_agent=user_agent,
                 )
-                _rec = getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 100)
+                _rec = getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 30)
                 payload = {
                     "success": False,
                     "message": f"Enrollment incomplete ({enrollment_count}/{_rec})",
