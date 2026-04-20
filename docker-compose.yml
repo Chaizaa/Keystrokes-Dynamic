@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: keystrokes-dynamic
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: development
+      PORT: "5000"
+      SECRET_KEY: local-dev-secret-change-me
+      DATABASE_TYPE: sqlite
+      DATABASE_PATH: data/biometric_auth.db
+      MIN_ENROLLMENT_SAMPLES: "30"
+      RECOMMENDED_SAMPLES: "30"
+      ML_BACKEND: rf
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
