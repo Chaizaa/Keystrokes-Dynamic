@@ -10,7 +10,22 @@ This checklist is for developers who want to run and validate the app locally us
 
 ## First Run
 
-1. Build and start containers:
+1. Create local env file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Optional config sanity check:
+
+```powershell
+docker compose config
+```
+
+Expected:
+- compose file resolves without errors.
+
+3. Build and start containers:
 
 ```powershell
 docker compose up --build -d
@@ -20,7 +35,7 @@ Expected:
 - `app` container is created and running.
 - first build can take a few minutes.
 
-2. Verify container status:
+4. Verify container status:
 
 ```powershell
 docker compose ps
@@ -29,7 +44,7 @@ docker compose ps
 Expected:
 - service `app` shows `running` and then `healthy`.
 
-3. Check health endpoints:
+5. Check health endpoints:
 
 ```powershell
 Invoke-WebRequest http://localhost:5000/health/live
@@ -39,7 +54,7 @@ Invoke-WebRequest http://localhost:5000/health/ready
 Expected:
 - both return HTTP `200`.
 
-4. Open app in browser:
+6. Open app in browser:
 
 ```text
 http://localhost:5000

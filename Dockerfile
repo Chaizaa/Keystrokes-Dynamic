@@ -8,7 +8,8 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash appuser
 
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
@@ -16,7 +17,10 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 5000
 
