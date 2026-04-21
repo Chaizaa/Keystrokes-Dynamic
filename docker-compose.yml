@@ -10,6 +10,7 @@ services:
       - .env
     environment:
       FLASK_ENV: ${FLASK_ENV:-development}
+      HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-5000}
       SECRET_KEY: ${SECRET_KEY:-local-dev-secret-change-me}
       DATABASE_TYPE: ${DATABASE_TYPE:-sqlite}
