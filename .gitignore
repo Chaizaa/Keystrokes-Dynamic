@@ -129,6 +129,7 @@ scripts/update_paper.py
 docs/RESEARCH_PAPER*.md
 docs/RESEARCH_PAPER*.docx
 docs/~$*.docx
+papers/drafts/from_docs/
 scripts/md_to_docx.py
 papers/outputs/
 papers/references/*.docx

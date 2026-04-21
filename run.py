@@ -54,8 +54,11 @@ if __name__ == "__main__":
     if os.getenv("CLEAN_CACHE", "1") == "1":
         clean_cache()
 
+    # Host is configurable so Docker can bind to 0.0.0.0 while local runs stay on 127.0.0.1.
+    host = os.getenv("HOST", "127.0.0.1")
+
     # Get port from environment or default to 5000
     port = int(os.getenv("PORT", 5000))
 
     # Run application
-    app.run(host="127.0.0.1", port=port, debug=app.config.get("DEBUG", False))
+    app.run(host=host, port=port, debug=app.config.get("DEBUG", False))
