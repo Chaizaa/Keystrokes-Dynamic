@@ -2,99 +2,26 @@
 
 {% block title %}Admin Enrollment Removed{% endblock %}
 
-{% block extra_css %}
-<style>
-  .notice-wrap {
-    min-height: 100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding: 20px;
-    background:
-      radial-gradient(circle at 10% 12%, rgba(255, 122, 42, 0.18), transparent 34%),
-      radial-gradient(circle at 85% 7%, rgba(255, 122, 42, 0.08), transparent 32%),
-      linear-gradient(160deg, #06080d 0%, #090c12 52%, #050608 100%);
-  }
-
-  .notice-card {
-    max-width: 860px;
-    width:100%;
-    padding: 26px;
-    border-radius: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: linear-gradient(160deg, rgba(18, 22, 30, 0.98), rgba(10, 13, 18, 0.98));
-    box-shadow: 0 20px 40px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255, 122, 42, 0.09);
-  }
-
-  .notice-title {
-    color:#f8fafc;
-    margin-bottom:8px;
-    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
-    font-size: 30px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-  }
-
-  .notice-muted { color: #aab2bf; }
-
-  .notice-actions {
-    margin-top: 14px;
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
-    align-items:center;
-  }
-
-  .notice-spacer { flex: 1; }
-
-  .command-wrap { margin-top:16px; }
-
-  .command-label {
-    color:#b7bfcd;
-    font-weight:700;
-    display:block;
-    margin-bottom:8px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 11px;
-  }
-
-  .notice-card pre {
-    margin: 0;
-    background: linear-gradient(160deg, rgba(10, 13, 18, 0.94), rgba(6, 8, 12, 0.94));
-    border: 1px solid rgba(255,255,255,0.14);
-    padding: 12px;
-    border-radius: 2px;
-    color:#f8fafc;
-    box-shadow: inset 0 0 0 1px rgba(255, 122, 42, 0.06);
-    overflow-x: auto;
-  }
-
-  @media (max-width: 720px) {
-    .notice-wrap { padding: 12px; }
-    .notice-card { padding: 18px; }
-    .notice-title { font-size: 24px; }
-  }
-</style>
-{% endblock %}
-
 {% block body %}
-<div class="notice-wrap">
-  <div class="notice-card">
-    <h2 class="notice-title">Admin Enrollment Removed</h2>
-    <p class="notice-muted">The interactive <strong>/admin/register</strong> enrollment endpoint has been removed to avoid exposing admin creation publicly.</p>
+<div class="min-h-screen flex items-center justify-center p-5 bg-dark-obsidian relative overflow-hidden">
+  <!-- Decorative Background -->
+  <div class="absolute top-10 left-[10%] w-96 h-96 bg-neon-orange rounded-full mix-blend-screen filter blur-3xl opacity-[0.15]"></div>
+  <div class="absolute bottom-10 right-[15%] w-96 h-96 bg-neon-orange rounded-full mix-blend-screen filter blur-3xl opacity-[0.08]"></div>
+  
+  <div class="relative z-10 w-full max-w-4xl p-6 md:p-8 rounded-sm border border-white border-opacity-10 bg-obsidian-lighter shadow-[0_20px_40px_rgba(0,0,0,0.45),inset_0_0_0_1px_rgba(255,122,42,0.09)]">
+    <h2 class="text-white font-brutal text-2xl md:text-3xl uppercase tracking-widest mb-2">Admin Enrollment Removed</h2>
+    <p class="text-gray-400">The interactive <strong>/admin/register</strong> enrollment endpoint has been removed to avoid exposing admin creation publicly.</p>
 
-    <p style="margin-top:12px">To create or promote an admin account, edit and run the developer script <code>scripts/create_admin_manual.py</code> on the server or a trusted dev machine.</p>
+    <p class="mt-3 text-gray-300">To create or promote an admin account, edit and run the developer script <code class="bg-dark-obsidian px-1.5 py-0.5 rounded border border-gray-700 text-sm text-neon-orange-light">scripts/create_admin_manual.py</code> on the server or a trusted dev machine.</p>
 
-    <div class="notice-actions">
+    <div class="mt-5 flex flex-wrap items-center gap-3">
       <a class="btn btn-primary" href="/admin/login">Go to Admin Login</a>
       <a class="btn btn-secondary" href="/">Return to Site</a>
-      <div class="notice-spacer"></div>
     </div>
 
-    <div class="command-wrap">
-      <label class="command-label">Create Admin (Developer)</label>
-      <pre>python scripts/create_admin_manual.py</pre>
+    <div class="mt-6">
+      <label class="block text-[#b7bfcd] font-bold mb-2 uppercase tracking-widest text-[11px]">Create Admin (Developer)</label>
+      <pre class="m-0 bg-dark-obsidian border border-white border-opacity-10 p-3 rounded-sm text-gray-100 overflow-x-auto shadow-[inset_0_0_0_1px_rgba(255,122,42,0.06)]">python scripts/create_admin_manual.py</pre>
     </div>
   </div>
 </div>

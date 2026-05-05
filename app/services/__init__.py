@@ -6,7 +6,7 @@ Business logic layer for the application
 from app.services.auth_service import AuthService
 from app.services.api_key_service import APIKeyService
 from app.services.biometric_service import BiometricService
-from app.services.ml_keystroke_verifier import MLKeystrokeVerifier
+from app.services.base_model_service import BaseMLModelService, FEATURE_COLUMNS, TrainResult
 from app.services.ml_model_service import MLModelService, ml_model_service
 from app.services.registry import ServiceRegistry
 from app.services.resolution import resolve_service, resolve_service_from_app
@@ -16,7 +16,9 @@ __all__ = [
 	"AuthService",
 	"APIKeyService",
 	"BiometricService",
-	"MLKeystrokeVerifier",
+	"BaseMLModelService",
+	"FEATURE_COLUMNS",
+	"TrainResult",
 	"MLModelService",
 	"ml_model_service",
 	"ServiceRegistry",

@@ -45,16 +45,20 @@ class User(UserMixin, db.Model):
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
     email_verification_sent_at = db.Column(db.DateTime, nullable=True)
     # Hashed short code (6-digit) used for verification when short-code flow is enabled
-    email_verification_code_hash = db.Column(db.String(128), nullable=True)
+    email_verification_code_hash = db.Column(db.String(255), nullable=True)
 
     # Password-reset fields (separate from email-verification so the two flows don't collide).
     # Used by both admin-initiated reset (signed-URL token) and user-initiated reset (6-digit code).
     password_reset_sent_at = db.Column(db.DateTime, nullable=True)
-    password_reset_code_hash = db.Column(db.String(128), nullable=True)
+    password_reset_code_hash = db.Column(db.String(255), nullable=True)
 
     # Two-Factor Authentication fields
     two_factor_enabled = db.Column(db.Boolean, default=False, nullable=False)
     two_factor_secret = db.Column(db.String(255), nullable=True)
+
+    # Login tracking
+    last_login = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_login_ip = db.Column(db.String(45), nullable=True)  # IPv6 max 45 chars
 
     # Password strength metadata (mirrors users_vectors aggregate)
     password_strength = db.Column(db.String(32), nullable=True)   # 'weak', 'medium', 'strong'

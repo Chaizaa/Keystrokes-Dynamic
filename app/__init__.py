@@ -235,7 +235,10 @@ def create_app(config_name="development"):
     # Inject development toggles into templates
     @app.context_processor
     def inject_dev_flags():
-        flags = {"DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False)}
+        flags = {
+            "DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False),
+            "RECOMMENDED_SAMPLES": int(app.config.get("RECOMMENDED_SAMPLES", 30)),
+        }
         # In non-production mode Talisman is not initialized, so csp_nonce() would
         # be undefined in templates. Provide a no-op fallback so templates that
         # use {{ csp_nonce() }} still render correctly in development.

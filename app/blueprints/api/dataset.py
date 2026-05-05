@@ -18,12 +18,14 @@ import re
 import traceback
 
 from flask import Response, current_app, jsonify, request
+from sqlalchemy import select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import limiter
 from app.models import db
 
 from ._shared import api_bp
+from .helpers import process_events
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +98,11 @@ def dataset_export():
     from app.models.dataset import DatasetEntry, DatasetSubject
 
     rows = (
-        db.session.query(DatasetEntry, DatasetSubject)
-        .join(DatasetSubject, DatasetEntry.subject_id == DatasetSubject.id)
-        .order_by(DatasetSubject.subject_code, DatasetEntry.repetition)
+        db.session.execute(
+            select(DatasetEntry, DatasetSubject)
+            .join(DatasetSubject, DatasetEntry.subject_id == DatasetSubject.id)
+            .order_by(DatasetSubject.subject_code, DatasetEntry.repetition)
+        )
         .all()
     )
 
@@ -339,7 +343,7 @@ def dataset_submit():
                 "error":   "Token sesi tidak valid. Muat ulang halaman dan mulai sesi baru.",
             }), 401
 
-        subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
+        subject = db.session.execute(select(DatasetSubject).where(DatasetSubject.subject_code == subject_code)).scalars().first()
         if subject is None:
             return jsonify({"success": False, "error": "Subjek tidak ditemukan. Silakan daftar terlebih dahulu."}), 404
 
@@ -350,10 +354,7 @@ def dataset_submit():
 
         global_rep = collected_so_far + 1
 
-        # Process keystroke events
-        import app.blueprints.api as api_mod
-
-        result = api_mod.process_web_events(raw_events, username=f"dataset::{subject_code}")
+        result = process_events(raw_events, username=f"dataset::{subject_code}")
         if result["status"] != "success":
             return jsonify({"success": False, "error": result.get("msg", "Gagal memproses data ketikan.")}), 400
 
@@ -438,7 +439,7 @@ def dataset_status(subject_code):
             DatasetSubject,
         )
 
-        subject = DatasetSubject.query.filter_by(subject_code=subject_code).first()
+        subject = db.session.execute(select(DatasetSubject).where(DatasetSubject.subject_code == subject_code)).scalars().first()
         if subject is None:
             return jsonify({"success": False, "error": "Subjek tidak ditemukan."}), 404
 

@@ -90,14 +90,28 @@
     position: relative;
 }
 
+.input-wrapper input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 48px;
+}
+
 .toggle-password {
     position: absolute;
     right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 0;
+    bottom: 0;
+    margin: auto 0;
+    transform: none;
     cursor: pointer;
     color: #a0a0a0;
     transition: color 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
 }
 
 .toggle-password:hover {
@@ -330,6 +344,10 @@ button[type="submit"]:disabled, #submitBtn:disabled {
     cursor: not-allowed;
     transform: none;
 }
+input[type="password"] {
+     -webkit-appearance: none;
+     appearance: none;
+}
 
 /* Result Box */
 #resultBox {
@@ -352,6 +370,7 @@ button[type="submit"]:disabled, #submitBtn:disabled {
     background: rgba(239, 68, 68, 0.15);
     border: 1px solid rgba(239, 68, 68, 0.3);
     color: #f87171;
+     z-index: 2;
 }
 
 /* Username Status */
@@ -448,25 +467,25 @@ button[type="submit"]:disabled, #submitBtn:disabled {
 .status-indicator.success {
     background: rgba(255, 122, 42, 0.15);
     border: 1px solid rgba(255, 122, 42, 0.35);
-    color: #ffd1a8;
+    color: #ffffff;
 }
 
 .status-indicator.error {
     background: rgba(239, 68, 68, 0.15);
     border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #f87171;
+    color: #ffffff;
 }
 
 .status-indicator.info {
     background: rgba(255, 122, 42, 0.12);
     border: 1px solid rgba(255, 122, 42, 0.34);
-    color: #ffd1a8;
+    color: #ffffff;
 }
 
 .status-indicator.checking {
     background: rgba(255, 122, 42, 0.12);
     border: 1px solid rgba(255, 122, 42, 0.34);
-    color: #ffd1a8;
+    color: #ffffff;
 }
 
 .status-indicator.hidden {
@@ -512,9 +531,9 @@ button[type="submit"]:disabled, #submitBtn:disabled {
     display: none;
 }
 .toast.show { display: block; }
-.toast-info { background: rgba(255, 122, 42, 0.12); color: #ffdcc2; }
-.toast-warn { background: rgba(249, 115, 22, 0.10); color: #ffd6bf; }
-.toast-error { background: rgba(239, 68, 68, 0.10); color: #ffdada; }
+.toast-info { background: rgba(255, 122, 42, 0.12); color: #ffffff; }
+.toast-warn { background: rgba(249, 115, 22, 0.10); color: #ffffff; }
+.toast-error { background: rgba(239, 68, 68, 0.10); color: #ffffff; }
 
 @media (max-width: 580px) {
     .auth-box {
@@ -732,12 +751,42 @@ textarea::placeholder {
     color: #687181;
 }
 
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none;
+}
+
+input[type="password"] {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
 .input-wrapper {
     position: relative;
 }
 
+.input-wrapper input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 48px;
+}
+
 .toggle-password {
+    position: absolute;
+    right: 16px;
+    top: 0;
+    bottom: 0;
+    margin: auto 0;
+    transform: none;
     color: #7f8997;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    z-index: 2;
 }
 
 .toggle-password:hover {
@@ -852,7 +901,7 @@ button[type="submit"]:hover,
 .alert.success {
     background: rgba(255, 122, 42, 0.12);
     border: 1px solid rgba(255, 122, 42, 0.35);
-    color: #ffd1a8;
+    color: #ffffff;
 }
 
 #resultBox.error,
@@ -862,7 +911,7 @@ button[type="submit"]:hover,
 .alert.error {
     background: rgba(239, 68, 68, 0.11);
     border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #fca5a5;
+    color: #ffffff;
 }
 
 .username-status.checking,
@@ -870,7 +919,7 @@ button[type="submit"]:hover,
 .status-indicator.info {
     background: rgba(255, 122, 42, 0.11);
     border: 1px solid rgba(255, 122, 42, 0.32);
-    color: #ffd1a8;
+    color: #ffffff;
 }
 
 .status-cta-text {
@@ -918,17 +967,17 @@ button[type="submit"]:hover,
 
 .toast-info {
     background: rgba(255, 122, 42, 0.15);
-    color: #ffdcc2;
+    color: #ffffff;
 }
 
 .toast-warn {
     background: rgba(245, 158, 11, 0.15);
-    color: #fde68a;
+    color: #ffffff;
 }
 
 .toast-error {
     background: rgba(239, 68, 68, 0.13);
-    color: #fecaca;
+    color: #ffffff;
 }
 
 .verify-actions {
@@ -973,4 +1022,5 @@ button[type="submit"]:hover,
         flex: 1 1 auto;
     }
 }
+
 
