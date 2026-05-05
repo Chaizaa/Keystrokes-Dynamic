@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 from . import db
 
+import uuid6
+from sqlalchemy.dialects.postgresql import UUID
 
 class VerificationLog(db.Model):
     """
@@ -34,8 +36,8 @@ class VerificationLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     api_key_id = db.Column(db.Integer, db.ForeignKey("api_keys.id"), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
-    
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id"), nullable=True, index=True)
+
     # User information
     username = db.Column(db.String(80), nullable=False, index=True)
     

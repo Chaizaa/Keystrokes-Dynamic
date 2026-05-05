@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 
 from . import db
 
+import uuid6
+from sqlalchemy.dialects.postgresql import UUID
+
 
 class AdminAudit(db.Model):
     """
@@ -36,7 +39,7 @@ class AdminAudit(db.Model):
     }
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     username = db.Column(db.String(80), nullable=True, index=True)
     action = db.Column(db.String(64), nullable=False, index=True)
     details = db.Column(db.JSON, nullable=True)

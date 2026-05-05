@@ -17,6 +17,8 @@ from sqlalchemy.orm.attributes import set_committed_value
 from . import db
 from .user import User
 
+import uuid6
+from sqlalchemy.dialects.postgresql import UUID
 
 class UsersVector(db.Model):
     """
@@ -36,12 +38,7 @@ class UsersVector(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
     # --- Identity ---
-    user_id = db.Column(
-        db.Integer,
-        db.ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     username = db.Column(db.Text, nullable=True, index=True)
     timestamp = db.Column(
         db.Text,
