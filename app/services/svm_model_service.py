@@ -252,7 +252,7 @@ class SVMModelService(BaseMLModelService):
         row = self.get_model_row_any(username)
         if row is None:
             row = UserMLModel(
-                user_id=int(user.id), username=username,
+                user_id=user.id, username=username,
                 model_blob=blob, threshold=float(best_threshold),
                 feature_names_json=json.dumps(FEATURE_COLUMNS),
                 model_type=self.MODEL_TYPE, sklearn_version=None,
@@ -264,7 +264,7 @@ class SVMModelService(BaseMLModelService):
             )
             db.session.add(row)
         else:
-            row.user_id = int(user.id)
+            row.user_id = user.id
             row.model_blob = blob
             row.threshold = float(best_threshold)
             row.feature_names_json = json.dumps(FEATURE_COLUMNS)
