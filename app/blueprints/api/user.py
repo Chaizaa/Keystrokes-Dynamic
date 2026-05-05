@@ -295,3 +295,19 @@ def deactivate_user_api_key(api_key_id: int):
         print(f"[ERROR] deactivate_user_api_key: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "message": "Failed to deactivate API key"}), 500
+
+@api_bp.route("/user/api-keys/<int:api_key_id>/delete", methods=["POST", "DELETE"])
+@login_required
+@_limiter.limit("30 per hour")
+def delete_user_api_key(api_key_id: int):
+    """Delete one API key that belongs to the authenticated user."""
+    try:
+        success = APIKeyService.delete_key(api_key_id, user_id=current_user.id)
+        if not success:
+            return jsonify({"success": False, "message": "API key not found"}), 404
+        return jsonify({"success": True, "message": "API key deleted"}), 200
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Failed to delete API key"}), 500

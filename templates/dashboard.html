@@ -1,456 +1,165 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Keystroke Biometric{% endblock %}
+{% block title %}Terminal Console // JANUS{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<style>
+    .blueprint-grid {
+        background-size: 40px 40px;
+        background-image: 
+            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    .cut-tl { clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px); }
+    .data-card {
+        background: #050505;
+        border: 1px solid #18181b; /* zinc-900 */
+        transition: all 0.3s ease;
+    }
+    .data-card:hover {
+        border-color: #FF4500;
+        background: #080808;
+    }
+</style>
 {% endblock %}
 
 {% block body %}
-
-<div class="dashboard-shell">
-    <div class="dash-orb dash-orb-one" aria-hidden="true"></div>
-    <div class="dash-orb dash-orb-two" aria-hidden="true"></div>
-
-    <div class="container">
-        <div class="header">
-            <div class="header-main">
-                <p class="header-kicker">SecureAuth Control Layer</p>
-                <h1>Security Dashboard</h1>
-                <p class="header-subtitle">Track verification posture, user readiness, and account controls in one operational view.</p>
+<div class="min-h-screen bg-black blueprint-grid p-6 lg:p-12">
+    <div class="max-w-7xl mx-auto">
+        
+        <!-- Dashboard Header -->
+        <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-zinc-800 pb-10">
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-2 h-2 bg-[#FF4500] animate-pulse"></div>
+                    <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">Operational Node // Active</span>
+                </div>
+                <h1 class="font-brutal text-5xl md:text-7xl text-white uppercase leading-none mb-2">Command Console</h1>
+                <p class="text-zinc-500 text-sm uppercase tracking-widest max-w-xl">
+                    Centralized management for biometric telemetry, identity verification, and security cluster integration.
+                </p>
             </div>
-            <div class="user-badge">
-                <span class="badge-label">Active User</span>
-                <span id="headerUsername">Loading...</span>
+            <div class="bg-zinc-900/50 border border-zinc-800 p-4 cut-tl min-w-[240px]">
+                <div class="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Identified Subject</div>
+                <div id="headerUsername" class="text-white font-mono text-xl uppercase tracking-widest italic font-bold">Loading...</div>
             </div>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loadingSection" class="py-24 flex flex-col items-center justify-center space-y-4">
+            <div class="w-12 h-12 border-2 border-[#FF4500] border-t-transparent animate-spin"></div>
+            <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest animate-pulse">Synchronizing Data Node...</p>
         </div>
 
-        <div class="value-pills" aria-label="Platform values">
-            <span>Transparency</span>
-            <span>Reliability</span>
-            <span>Privacy</span>
-            <span>Governance</span>
-        </div>
-
-        <div id="loadingSection" class="card loading">
-            <div class="spinner"></div>
-            <p>Loading your profile...</p>
-        </div>
-
-        <div id="mainContent" class="main-layout" style="display: none;">
-            <section class="card card-profile">
-                <h2>Profile Information</h2>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="label">Username</div>
-                        <div class="value" id="username">-</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="label">Email</div>
-                        <div class="value" id="email">-</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="label">Account Created</div>
-                        <div class="value" id="createdAt">-</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="label">Email Verified</div>
-                        <div class="value" id="emailVerified">-</div>
-                    </div>
+        <!-- Main Dashboard Content -->
+        <div id="mainContent" class="hidden space-y-12">
+            
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="data-card p-8">
+                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">Biometric Samples</div>
+                    <div id="enrollmentCount" class="text-6xl font-brutal text-white">0</div>
+                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Enrolled Patterns</div>
                 </div>
-            </section>
-
-            <section class="card card-stats">
-                <h2>Biometric Statistics</h2>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="number" id="enrollmentCount">0</div>
-                        <div class="label">Enrollment Samples</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="number" id="hasPassword">-</div>
-                        <div class="label">Has Password</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="number" id="apiKeyCount">0</div>
-                        <div class="label">Active API Keys</div>
-                    </div>
+                <div class="data-card p-8">
+                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">API Security</div>
+                    <div id="apiKeyCount" class="text-6xl font-brutal text-white">0</div>
+                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Active Keys</div>
                 </div>
-                <p class="stats-note">Live readiness signals are refreshed whenever the profile endpoint is queried.</p>
-            </section>
-
-            <section class="card card-workflow">
-                <h2>How Verification Stays Reliable</h2>
-                <ol class="workflow-list">
-                    <li>
-                        <span>01</span>
-                        <p>Behavioral features are captured from natural typing patterns.</p>
-                    </li>
-                    <li>
-                        <span>02</span>
-                        <p>Models score each interaction and generate confidence context.</p>
-                    </li>
-                    <li>
-                        <span>03</span>
-                        <p>Policy thresholds evaluate trust and trigger the right action path.</p>
-                    </li>
-                    <li>
-                        <span>04</span>
-                        <p>Audit-ready logs support reviews, reporting, and governance checks.</p>
-                    </li>
-                </ol>
-            </section>
-
-            <section class="card card-api">
-                <h2>API Integration Keys</h2>
-                <p class="api-note">Generate API keys for partner website integration. A new key is shown only once.</p>
-
-                <div class="api-form-grid">
-                    <div class="form-group">
-                        <label for="partnerName">Partner Name *</label>
-                        <input id="partnerName" type="text" maxlength="255" placeholder="Example: Partner A">
-                    </div>
-                    <div class="form-group">
-                        <label for="apiRateLimit">Rate Limit / Hour</label>
-                        <input id="apiRateLimit" type="number" min="1" max="100000" value="100">
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="apiDescription">Description</label>
-                        <input id="apiDescription" type="text" placeholder="Optional note for this key">
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="allowedOrigins">Allowed Origins (comma separated)</label>
-                        <input id="allowedOrigins" type="text" placeholder="partner-a.com, app.partner-a.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="expiresDays">Expires In (days)</label>
-                        <input id="expiresDays" type="number" min="1" max="3650" placeholder="Optional">
-                    </div>
+                <div class="data-card p-8">
+                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">Trust Status</div>
+                    <div id="hasPassword" class="text-4xl font-brutal text-white uppercase">Validating</div>
+                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Hash Verification</div>
                 </div>
+            </div>
 
-                <button id="generateApiKeyBtn" class="btn btn-primary" onclick="generateApiKey()">Generate API Key</button>
-
-                <div id="apiKeyResult" class="api-key-result" style="display:none;">
-                    <label for="newApiKeyValue">New API Key (save now):</label>
-                    <div class="api-key-row">
-                        <input id="newApiKeyValue" type="text" readonly>
-                        <button class="btn btn-secondary" onclick="copyNewApiKey()">Copy</button>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <!-- Profile Section -->
+                <section>
+                    <div class="flex items-center gap-4 mb-8">
+                        <h2 class="font-brutal text-2xl text-white uppercase tracking-widest">Subject Profile</h2>
+                        <div class="h-[1px] flex-grow bg-zinc-800"></div>
                     </div>
-                </div>
+                    <div class="space-y-4">
+                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
+                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">System UID</span>
+                            <span id="username" class="text-sm font-mono text-white">---</span>
+                        </div>
+                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
+                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Email Node</span>
+                            <span id="email" class="text-sm font-mono text-white">---</span>
+                        </div>
+                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
+                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Registration</span>
+                            <span id="createdAt" class="text-sm font-mono text-white">---</span>
+                        </div>
+                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
+                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Verification Status</span>
+                            <span id="emailVerified" class="text-sm font-mono text-[#FF4500] uppercase">---</span>
+                        </div>
+                    </div>
+                </section>
 
-                <h3 class="api-list-title">Existing Keys</h3>
-                <div id="apiKeyListLoading" class="loading-mini">Loading API keys...</div>
-                <div id="apiKeysList" class="api-key-list"></div>
-            </section>
+                <!-- Actions Section -->
+                <section>
+                    <div class="flex items-center gap-4 mb-8">
+                        <h2 class="font-brutal text-2xl text-white uppercase tracking-widest">Control Protocols</h2>
+                        <div class="h-[1px] flex-grow bg-zinc-800"></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <a href="{{ url_for('main.api_key_dashboard') }}" class="p-6 bg-white text-black text-center font-bold text-[11px] uppercase tracking-widest hover:bg-zinc-200 transition-all">Manage API Keys</a>
+                        <button onclick="logout()" class="p-6 bg-[#FF4500] text-black text-center font-bold text-[11px] uppercase tracking-widest hover:bg-opacity-90 transition-all">Terminate Session</button>
+                    </div>
+                </section>
+            </div>
 
-            <section class="card card-actions">
-                <h2>Account Actions</h2>
-                <p class="actions-copy">Use secure recovery for credential reset or end the current session.</p>
-                <div class="actions-row">
-                    <button id="resetBtn" class="btn btn-primary" onclick="startResetFlow()">
-                        Reset Password
-                    </button>
-                    <button class="btn btn-danger" onclick="logout()">
-                        Logout
-                    </button>
+            <!-- Protocol Status -->
+            <section class="border-t border-zinc-800 pt-12 pb-24">
+                <div class="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.4em] mb-8">Verification Protocol Logs</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+                    <div class="space-y-2">
+                        <div class="text-white text-xs font-bold uppercase">01 // Capture</div>
+                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Behavioral features captured from natural typing patterns.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-white text-xs font-bold uppercase">02 // Score</div>
+                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Models score each interaction and generate confidence context.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-white text-xs font-bold uppercase">03 // Policy</div>
+                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Policy thresholds evaluate trust and trigger action path.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-white text-xs font-bold uppercase">04 // Audit</div>
+                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Logs support reviews, reporting, and governance checks.</p>
+                    </div>
                 </div>
             </section>
         </div>
     </div>
 </div>
+{% endblock %}
 
-<script>
-    function escapeHtml(value) {
-        return String(value || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function formatDateTime(dateString) {
-        if (!dateString) return '-';
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard_service.js') }}"></script>
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', () => {
+        // The dashboard_service.js uses DashboardService class
+        // We'll initialize it and let it handle the data loading
+        if (typeof DashboardService !== 'undefined') {
+            const service = new DashboardService();
+            service.init().then(() => {
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('mainContent').classList.remove('hidden');
+            }).catch(err => {
+                console.error('Failed to load dashboard:', err);
+                if (window.showToast) window.showToast('Node sync failed', 'error');
             });
-        } catch (e) {
-            return dateString;
         }
-    }
-
-    async function loadUserInfo() {
-        try {
-            const response = await fetch('/api/user/info', { credentials: 'same-origin' });
-            if (response.status === 401) {
-                window.location.href = '/login';
-                return;
-            }
-            if (!response.ok) {
-                const txt = await response.text().catch(() => '');
-                console.error('Failed to load user info:', response.status, txt);
-                alert('Failed to load profile - please refresh or login again.');
-                return;
-            }
-
-            const data = await response.json().catch(err => {
-                console.error('Invalid JSON from /api/user/info', err);
-                return null;
-            });
-            if (!data) return;
-
-            document.getElementById('headerUsername').textContent = data.username;
-            document.getElementById('username').textContent = data.username;
-            document.getElementById('email').textContent = data.email || '-';
-            document.getElementById('createdAt').textContent = formatDateTime(data.created_at || data.last_login || data.session_start);
-            document.getElementById('emailVerified').textContent = data.email_verified ? 'Yes' : 'No';
-            document.getElementById('enrollmentCount').textContent = (typeof data.enrollment_count !== 'undefined') ? data.enrollment_count : 0;
-            document.getElementById('hasPassword').textContent = data.has_password ? 'Yes' : 'No';
-            document.getElementById('apiKeyCount').textContent = (typeof data.api_key_count !== 'undefined') ? data.api_key_count : 0;
-
-            document.getElementById('loadingSection').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-        } catch (error) {
-            console.error('Error loading user info:', error);
-            alert('Failed to load profile.');
-        }
-    }
-
-    async function loadApiKeys() {
-        const loadingEl = document.getElementById('apiKeyListLoading');
-        const listEl = document.getElementById('apiKeysList');
-        loadingEl.style.display = 'block';
-        listEl.innerHTML = '';
-
-        try {
-            const resp = await fetch('/api/user/api-keys?include_inactive=true', {
-                method: 'GET',
-                credentials: 'same-origin'
-            });
-            if (resp.status === 401) {
-                window.location.href = '/login';
-                return;
-            }
-
-            const body = await resp.json().catch(() => ({}));
-            if (!resp.ok || body.success === false) {
-                throw new Error(body.message || 'Failed to load API keys');
-            }
-
-            const keys = body.keys || [];
-            const activeCount = keys.filter(k => k.is_active).length;
-            document.getElementById('apiKeyCount').textContent = activeCount;
-
-            if (!keys.length) {
-                listEl.innerHTML = '<div class="empty-state">No API keys yet.</div>';
-                return;
-            }
-
-            listEl.innerHTML = keys.map((key) => {
-                const statusClass = key.is_active ? 'badge-active' : 'badge-inactive';
-                const statusText = key.is_active ? 'Active' : 'Inactive';
-                const deactivateBtn = key.is_active
-                    ? `<button class="btn btn-danger btn-sm" onclick="deactivateApiKey(${key.id})">Deactivate</button>`
-                    : '';
-
-                return `
-                    <div class="api-key-item ${key.is_active ? '' : 'inactive'}">
-                        <div class="api-key-header-row">
-                            <h4>${escapeHtml(key.partner_name)}</h4>
-                            <span class="status-badge ${statusClass}">${statusText}</span>
-                        </div>
-                        <div class="api-key-meta">
-                            <div><strong>Key Prefix:</strong> ${escapeHtml(key.key_prefix)}...</div>
-                            <div><strong>Rate Limit:</strong> ${escapeHtml(key.rate_limit)} / hour</div>
-                            <div><strong>Created:</strong> ${escapeHtml(formatDateTime(key.created_at))}</div>
-                            <div><strong>Last Used:</strong> ${escapeHtml(formatDateTime(key.last_used_at))}</div>
-                            <div><strong>Expires:</strong> ${escapeHtml(formatDateTime(key.expires_at))}</div>
-                            <div><strong>Description:</strong> ${escapeHtml(key.description || '-')}</div>
-                            <div><strong>Origins:</strong> ${escapeHtml(key.allowed_origins || 'all')}</div>
-                            <div><strong>Stats:</strong> enroll ${escapeHtml((key.stats && key.stats.total_enrollments) || 0)}, verify ${escapeHtml((key.stats && key.stats.total_verifications) || 0)}</div>
-                        </div>
-                        <div class="api-key-actions">${deactivateBtn}</div>
-                    </div>
-                `;
-            }).join('');
-        } catch (error) {
-            console.error('Error loading API keys:', error);
-            listEl.innerHTML = `<div class="error-state">${escapeHtml(error.message || 'Failed to load API keys')}</div>`;
-        } finally {
-            loadingEl.style.display = 'none';
-        }
-    }
-
-    async function generateApiKey() {
-        const partnerName = document.getElementById('partnerName').value.trim();
-        const description = document.getElementById('apiDescription').value.trim();
-        const rateLimit = document.getElementById('apiRateLimit').value;
-        const allowedOrigins = document.getElementById('allowedOrigins').value.trim();
-        const expiresDays = document.getElementById('expiresDays').value.trim();
-        const btn = document.getElementById('generateApiKeyBtn');
-        const originalText = btn.textContent;
-
-        if (!partnerName) {
-            alert('Partner Name is required.');
-            return;
-        }
-
-        btn.disabled = true;
-        btn.textContent = 'Generating...';
-
-        try {
-            const payload = {
-                partner_name: partnerName,
-                description: description || null,
-                rate_limit: rateLimit ? Number(rateLimit) : 100,
-                allowed_origins: allowedOrigins || null,
-                expires_days: expiresDays ? Number(expiresDays) : null
-            };
-
-            const resp = await fetch('/api/user/api-keys/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify(payload)
-            });
-
-            const body = await resp.json().catch(() => ({}));
-            if (!resp.ok || body.success === false) {
-                throw new Error(body.message || 'Failed to generate API key');
-            }
-
-            const keyValue = body.api_key || '';
-            document.getElementById('newApiKeyValue').value = keyValue;
-            document.getElementById('apiKeyResult').style.display = 'block';
-            document.getElementById('newApiKeyValue').select();
-            alert(body.warning || 'API key generated. Save it now.');
-
-            document.getElementById('expiresDays').value = '';
-            await loadApiKeys();
-        } catch (error) {
-            console.error('generateApiKey error:', error);
-            alert(error.message || 'Failed to generate API key.');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
-        }
-    }
-
-    async function copyNewApiKey() {
-        const keyInput = document.getElementById('newApiKeyValue');
-        const keyValue = keyInput.value;
-        if (!keyValue) {
-            alert('No API key available to copy.');
-            return;
-        }
-
-        try {
-            await navigator.clipboard.writeText(keyValue);
-            alert('API key copied to clipboard.');
-        } catch (error) {
-            keyInput.select();
-            document.execCommand('copy');
-            alert('API key copied.');
-        }
-    }
-
-    async function deactivateApiKey(keyId) {
-        const confirmed = typeof showConfirmModal === 'function'
-            ? await showConfirmModal('Deactivate API Key', 'Are you sure you want to deactivate this API key?', {
-                confirmText: 'Deactivate',
-                cancelText: 'Cancel',
-                destructive: true
-            })
-            : window.confirm('Deactivate this API key?');
-
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch(`/api/user/api-keys/${keyId}/deactivate`, {
-                method: 'POST',
-                credentials: 'same-origin'
-            });
-            const body = await resp.json().catch(() => ({}));
-            if (!resp.ok || body.success === false) {
-                throw new Error(body.message || 'Failed to deactivate API key');
-            }
-            await loadApiKeys();
-        } catch (error) {
-            console.error('deactivateApiKey error:', error);
-            alert(error.message || 'Failed to deactivate API key.');
-        }
-    }
-
-    async function startResetFlow() {
-        const username = document.getElementById('username').textContent || document.getElementById('headerUsername').textContent || '';
-        const btn = document.getElementById('resetBtn');
-        const originalText = btn ? btn.textContent : null;
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-        }
-
-        // Fallback redirect in case email sending blocks for too long
-        const redirectUrl = `/reset/verify-code?username=${encodeURIComponent(username)}`;
-        let didNavigate = false;
-        const fallback = setTimeout(() => {
-            if (btn) btn.textContent = originalText || 'Reset Password';
-            didNavigate = true;
-            window.location.href = redirectUrl;
-        }, 5000);
-
-        try {
-            const resp = await fetch('/api/send_reset_verification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username }),
-                credentials: 'same-origin'
-            });
-            const body = await resp.json().catch(() => ({}));
-            clearTimeout(fallback);
-            if (resp.ok) {
-                didNavigate = true;
-                window.location.href = redirectUrl;
-            } else {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = originalText || 'Reset Password';
-                }
-                alert(body.message || 'Failed to send reset verification');
-            }
-        } catch (error) {
-            clearTimeout(fallback);
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = originalText || 'Reset Password';
-            }
-            if (didNavigate) return;
-            if (error && (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('aborted')))) {
-                console.debug('Fetch aborted due to navigation; ignoring.');
-                return;
-            }
-            console.error('Reset flow error:', error);
-            alert('Network error. Please try again.');
-        }
-    }
+    });
 
     function logout() {
-        showConfirmModal('Logout', 'Are you sure you want to logout?', {
-            confirmText: 'Logout',
-            cancelText: 'Cancel',
-            destructive: false
-        }).then(ok => { if (ok) window.location.href = '/logout'; });
+        window.location.href = "{{ url_for('auth.logout') }}";
     }
-
-    document.addEventListener('DOMContentLoaded', async () => {
-        await loadUserInfo();
-        await loadApiKeys();
-    });
 </script>
 {% endblock %}

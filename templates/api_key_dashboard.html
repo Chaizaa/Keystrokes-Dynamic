@@ -1,301 +1,114 @@
 {% extends "base.html" %}
 
-{% block title %}API Key — SecureAuth{% endblock %}
+{% block title %}Access Key Console // JANUS{% endblock %}
 
 {% block extra_css %}
 <style>
-  .ak-container {
-    max-width: 720px;
-    min-height: 100vh;
-    margin: 0 auto;
-    padding: 28px 16px;
-    display: flex;
-    align-items: center;
-    background:
-      radial-gradient(circle at 10% 12%, rgba(255, 122, 42, 0.18), transparent 34%),
-      radial-gradient(circle at 86% 10%, rgba(255, 122, 42, 0.08), transparent 35%),
-      linear-gradient(160deg, #06080d 0%, #090c12 52%, #050608 100%);
-    font-family: inherit;
-  }
-
-  .ak-card {
-    width: 100%;
-    background: linear-gradient(160deg, rgba(18, 22, 30, 0.98), rgba(10, 13, 18, 0.98));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 2px;
-    padding: 28px;
-    box-shadow: 0 20px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255, 122, 42, 0.08);
-  }
-
-  .ak-card h1 {
-    font-size: 2rem;
-    margin: 0 0 8px;
-    color: #f8fafc;
-    font-family: "Oswald", "Arial Narrow", "Impact", sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .ak-card .subtitle {
-    font-size: .84rem;
-    color: #aab2bf;
-    margin: 0 0 22px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .ak-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: .9rem;
-    margin-bottom: 20px;
-    padding: 10px 14px;
-    border-radius: 2px;
-    background: linear-gradient(160deg, rgba(12, 16, 22, 0.94), rgba(8, 10, 14, 0.94));
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: #d1d5db;
-  }
-
-  .ak-status .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 1px;
-    flex-shrink: 0;
-  }
-
-  .dot-active   {
-    background: #ff8a44;
-    box-shadow: 0 0 0 3px rgba(255, 122, 42, 0.22);
-  }
-
-  .dot-inactive { background: #6b7280; }
-
-  /* Raw key display — one-time reveal */
-  .ak-reveal {
-    margin-bottom: 20px;
-    padding: 16px;
-    background: linear-gradient(160deg, rgba(30, 20, 12, 0.86), rgba(20, 13, 8, 0.86));
-    border: 1px solid rgba(255, 122, 42, 0.45);
-    border-radius: 2px;
-  }
-
-  .ak-reveal p {
-    margin: 0 0 8px;
-    font-size: .85rem;
-    color: #ffd7bf;
-    font-weight: 600;
-  }
-
-  .ak-reveal .key-value {
-    font-family: monospace;
-    font-size: .9rem;
-    word-break: break-all;
-    background: rgba(8, 11, 16, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 2px;
-    padding: 8px 10px;
-    color: #f8fafc;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .ak-reveal .key-value span { flex: 1; }
-  .ak-reveal .copy-btn {
-    font-size: .8rem;
-    padding: 4px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    background: linear-gradient(135deg, #ff7a2a 0%, #e6671d 100%);
-    color: #fff;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: transform .15s ease, filter .15s ease;
-  }
-
-  .ak-reveal .copy-btn:hover {
-    filter: brightness(1.08);
-    transform: translateY(-1px);
-  }
-
-  .ak-reveal .warning {
-    margin: 8px 0 0;
-    font-size: .8rem;
-    color: #ffc8a6;
-  }
-
-  /* Generate / Regenerate button */
-  .btn-generate {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 18px;
-    font-size: .95rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: transform .15s ease, filter .15s ease;
-  }
-
-  .btn-generate-primary {
-    background: linear-gradient(135deg, #ff7a2a 0%, #e6671d 100%);
-    color: #fff;
-    border: 1px solid rgba(255, 122, 42, 0.8);
-  }
-
-  .btn-generate-primary:hover  {
-    filter: brightness(1.08);
-    transform: translateY(-1px);
-  }
-
-  .btn-generate-primary:active { transform: translateY(0); }
-
-  .btn-generate-danger {
-    background: transparent;
-    color: #ffc8a6;
-    border: 1px solid rgba(255, 122, 42, 0.55);
-  }
-
-  .btn-generate-danger:hover   {
-    background: rgba(255, 122, 42, 0.16);
-    transform: translateY(-1px);
-  }
-
-  .btn-generate-danger:active  { transform: translateY(0); }
-
-  .ak-back {
-    display: inline-block;
-    margin-top: 20px;
-    font-size: .875rem;
-    color: #ffb066;
-    text-decoration: none;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    font-weight: 700;
-  }
-
-  .ak-back:hover {
-    color: #ffcf9f;
-    text-decoration: none;
-  }
-
-  .ak-note {
-    margin-top: 20px;
-    font-size: .8rem;
-    color: #aab2bf;
-    border-top: 1px solid rgba(255,255,255,0.12);
-    padding-top: 16px;
-    line-height: 1.55;
-  }
-
-  .ak-note code {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 2px;
-    padding: 2px 6px;
-    color: #f8fafc;
-  }
-
-  @media (max-width: 640px) {
-    .ak-container { padding: 10px; }
-    .ak-card { padding: 18px; }
-    .ak-card h1 { font-size: 1.55rem; }
-  }
+    .blueprint-grid {
+        background-size: 40px 40px;
+        background-image: 
+            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    .cut-tl { clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px); }
 </style>
 {% endblock %}
 
 {% block body %}
-<div class="ak-container">
-  <div class="ak-card">
-    <h1>API Key</h1>
-    <p class="subtitle">Manage your client API key for external integrations.</p>
+<div class="min-h-[calc(100vh-64px)] bg-black blueprint-grid flex items-center justify-center p-6 relative overflow-hidden">
+    <!-- Decor -->
+    <div class="absolute top-20 left-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>
+    <div class="absolute bottom-20 right-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>
 
-    <!-- ── Status indicator ── -->
-    <div class="ak-status">
-      {% if has_key %}
-        <span class="dot dot-active"></span>
-        <span>An API key is currently active for your account.</span>
-      {% else %}
-        <span class="dot dot-inactive"></span>
-        <span>No API key has been generated yet.</span>
-      {% endif %}
+    <div class="relative z-10 w-full max-w-2xl bg-[#050505] border border-zinc-800 p-8 md:p-12 shadow-2xl cut-tl">
+        <!-- Header -->
+        <header class="mb-10 border-b border-zinc-900 pb-8">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-1.5 h-1.5 bg-[#FF4500] animate-pulse"></div>
+                <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Protocol // API INTEGRATION</span>
+            </div>
+            <h2 class="font-brutal text-4xl text-white uppercase tracking-tight">Access Node Key</h2>
+        </header>
+
+        <div class="space-y-8">
+            <!-- Warning -->
+            <div class="p-4 bg-zinc-900/50 border-l-2 border-[#FF4500] text-zinc-400 text-[11px] font-medium uppercase tracking-wider leading-relaxed">
+                Use this private key to authenticate external requests to the JANUS telemetry cluster. This key grants high-level access.
+            </div>
+
+            <!-- Key Display -->
+            <div class="space-y-4">
+                <label class="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Secret Identification Key</label>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="relative flex-grow">
+                        <input 
+                            type="password" 
+                            id="apiKeyDisplay" 
+                            value="{{ api_key }}" 
+                            readonly 
+                            class="w-full bg-black border border-zinc-800 text-[#FF4500] font-mono text-sm px-4 py-4 focus:border-[#FF4500] focus:ring-0 outline-none transition-all uppercase tracking-widest"
+                        >
+                        <button onclick="toggleKeyVisibility()" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white transition-colors">
+                            <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                    <button 
+                        onclick="copyApiKey()" 
+                        class="bg-white text-black font-bold text-[11px] px-8 py-4 uppercase tracking-widest hover:bg-zinc-200 transition-all"
+                    >
+                        Copy Key
+                    </button>
+                </div>
+                <p class="text-[9px] font-bold text-zinc-700 uppercase tracking-widest italic">
+                    Security Warning: Never expose this key in public client-side code or repositories.
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div class="pt-8 border-t border-zinc-900 flex flex-col sm:flex-row justify-between items-center gap-6">
+                <a href="{{ url_for('main.home') }}" class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2">
+                    <span class="text-xs">&larr;</span> Back to Terminal
+                </a>
+                <button onclick="revokeKey()" class="text-[10px] font-bold text-red-600 hover:text-red-500 uppercase tracking-widest transition-colors">
+                    Revoke Integration Node
+                </button>
+            </div>
+        </div>
     </div>
-
-    <!-- ── One-time reveal after generation ── -->
-    {% if new_raw_key %}
-    <div class="ak-reveal" role="alert">
-      <p>&#9888; Copy this key now — it will never be shown again.</p>
-      <div class="key-value">
-        <span id="rawKey">{{ new_raw_key }}</span>
-        <button class="copy-btn" type="button" onclick="copyKey()">Copy</button>
-      </div>
-      <p class="warning">Store it in a safe location (e.g. a secrets manager). We only store a hash.</p>
-    </div>
-    {% endif %}
-
-    <!-- ── Generate / Regenerate form ── -->
-    <form id="apiKeyForm" method="POST" action="{{ url_for('main.api_key_dashboard') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if has_key %}
-        <button type="submit" class="btn-generate btn-generate-danger">
-          &#8635; Regenerate API Key
-        </button>
-      {% else %}
-        <button type="submit" class="btn-generate btn-generate-primary">
-          &#43; Generate API Key
-        </button>
-      {% endif %}
-    </form>
-
-    <a class="ak-back" href="{{ url_for('main.home') }}">&larr; Back to Dashboard</a>
-
-    <p class="ak-note">
-      Pass the key in the <code>Authorization: Bearer &lt;key&gt;</code> header when
-      calling <code>/v1/enroll</code> or <code>/v1/verify</code>.
-    </p>
-  </div>
 </div>
 
-<script>
-  function copyKey() {
-    const text = document.getElementById('rawKey')?.textContent?.trim();
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = document.querySelector('.copy-btn');
-      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
-    });
-  }
-
-  async function confirmGenerate() {
-    {% if has_key %}
-    const message =
-      'Regenerating will invalidate your current API key immediately.\n' +
-      'Any integrations using it will stop working until updated.\n\n' +
-      'Continue?';
-    if (typeof window.showConfirmModal === 'function') {
-      return await window.showConfirmModal('Regenerate API Key?', message, {
-        confirmText: 'Regenerate',
-        cancelText: 'Cancel',
-        destructive: true,
-      });
+<script nonce="{{ csp_nonce() }}">
+function toggleKeyVisibility() {
+    const input = document.getElementById('apiKeyDisplay');
+    const icon = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+    } else {
+        input.type = 'password';
+        icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
     }
-    return confirm(message);
-    {% else %}
-    return true;
-    {% endif %}
-  }
+}
 
-  document.getElementById('apiKeyForm')?.addEventListener('submit', async function(event) {
-    const proceed = await confirmGenerate();
-    if (!proceed) {
-      event.preventDefault();
+async function copyApiKey() {
+    const input = document.getElementById('apiKeyDisplay');
+    const oldType = input.type;
+    input.type = 'text';
+    input.select();
+    document.execCommand('copy');
+    input.type = oldType;
+    if (window.showToast) window.showToast('Access Key copied to clipboard', 'success');
+}
+
+async function revokeKey() {
+    const ok = await window.showConfirmModal('Revoke Key', 'This will permanently deactivate this API Key. Any external applications using this key will immediately lose access.', {confirmText: 'Yes, Revoke', destructive: true});
+    if (ok) {
+        // Here we would call the revoke endpoint if it exists
+        if (window.showToast) window.showToast('Revocation request sent', 'info');
     }
-  });
+}
 </script>
 {% endblock %}

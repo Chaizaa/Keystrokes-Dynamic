@@ -1,262 +1,479 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}OBSIDIAN // Advanced Security Systems{% endblock %}
+{% block title %}JANUS // Biometric Identity Systems{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+    href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Oswald:wght@300..700&display=swap"
+    rel="stylesheet">
+
+<!-- Tailwind CSS Injection -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'void': '#030303',
+                    'surface': '#0F0F0F',
+                    'border-dim': '#27272A',
+                    'stark': '#F4F4F5',
+                    'safety': '#FF4500',
+                    'muted': '#71717A'
+                },
+                fontFamily: {
+                    'sans': ['"Figtree"', 'sans-serif'],
+                    'mono': ['"JetBrains Mono"', 'monospace'],
+                    'brutal': ['"Oswald"', 'sans-serif'],
+                },
+                letterSpacing: {
+                    'widest-xl': '0.3em',
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    /* Application Shell Lock - Prevents scrolling, forces full height */
+    body,
+    html {
+        background-color: theme('colors.void');
+        color: theme('colors.stark');
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* Typography Utilities */
+    .vertical-text {
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        transform: rotate(180deg);
+    }
+
+    .stroke-text {
+        color: transparent;
+        -webkit-text-stroke: 1px theme('colors.stark');
+    }
+
+    /* Heavy Noise Overlay */
+    .static-noise {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 9998;
+        opacity: 0.06;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Blueprint Grid */
+    .blueprint-grid {
+        background-size: 40px 40px;
+        background-image:
+            linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    }
+
+    /* Chamfered Layout Shapes */
+    .cut-tl {
+        clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+    }
+
+    /* Target Reticle */
+    .reticle {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border: 1px solid theme('colors.safety');
+    }
+
+    .reticle-tl {
+        top: -1px;
+        left: -1px;
+        border-right: none;
+        border-bottom: none;
+    }
+</style>
 {% endblock %}
 
 {% block body %}
-<div class="landing-shell">
-    <div class="scanlines"></div>
-    <div class="vignette"></div>
+<div
+    class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col h-full bg-void w-full cursor-crosshair overflow-hidden">
 
-    <nav class="command-nav tactical-panel" aria-label="Primary">
-        <div class="nav-left">
-            <a href="/" class="brand-link" aria-label="OBSIDIAN home">
-                <svg class="brand-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
-                <span class="brand-text">OBSIDIAN</span>
+    <!-- Noise Overlay -->
+    <div class="static-noise"></div>
+
+    <!-- Tactical Header Navigation -->
+    <header class="border-b border-border-dim bg-void flex justify-between items-stretch h-16 shrink-0 relative z-50">
+
+        <!-- Header Left Section -->
+        <div class="flex items-stretch h-full">
+            <!-- Logo -->
+            <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+                <span class="font-brutal text-2xl font-bold tracking-widest text-stark">JANUS</span>
+            </div>
+        </div>
+
+        <!-- Header Right Section -->
+        <div class="flex items-stretch font-sans h-full">
+            <a href="/register"
+                class="px-6 md:px-8 flex items-center text-[11px] font-bold text-stark bg-void hover:text-safety border-l border-border-dim uppercase tracking-widest transition-colors h-full">
+                Register
             </a>
-            <div class="nav-links">
-                <a href="#capabilities">[ CAPABILITIES ]</a>
-                <a href="#infrastructure">[ LATTICE OS ]</a>
-                <a href="#telemetry">[ TELEMETRY ]</a>
-            </div>
-        </div>
-
-        <div class="nav-right">
-            <div class="system-clock">
-                SYS.VER_9.4 // <span id="live-time">--</span><br>
-                ENCRYPTION: <span class="clock-value">QUANTUM-RESISTANT</span>
-            </div>
-            <div class="network-pill">
-                <span class="network-dot" aria-hidden="true"></span>
-                <span>NETWORK SECURE</span>
-            </div>
-        </div>
-    </nav>
-
-    <header class="landing-hero bg-grid" aria-label="Hero">
-        <canvas id="data-mesh" aria-hidden="true"></canvas>
-
-        <div class="hero-word" aria-hidden="true">SHIELD</div>
-
-        <div class="hero-inner">
-            <section class="hero-copy-wrap reveal">
-                <div class="hero-tag">
-                    <span class="hero-tag-line" aria-hidden="true"></span>
-                    <span>FOR EVERY SECOND // NEXT-GEN PERIMETER DEFENSE</span>
-                </div>
-
-                <h1>Absolute <span>Dominance.</span></h1>
-
-                <p>
-                    OBSIDIAN transforms disjointed sensors into a singular, intelligent neural network.
-                    Autonomous threat detection, multi-spectrum analysis, and kinetic response mechanisms
-                    operating in sub-millisecond latency.
-                </p>
-
-                <div class="hero-actions">
-                    <a href="/register" class="btn-primary">
-                        Initiate Protocol
-                        <svg class="btn-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </a>
-                    <a href="#infrastructure" class="btn-outline">View Architecture</a>
-                </div>
-            </section>
-
-            <aside class="hero-diagnostics reveal" aria-label="System diagnostics">
-                <div class="tactical-panel diagnostics-panel">
-                    <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-tr"></div>
-                    <div class="crosshair-corner cc-bl"></div><div class="crosshair-corner cc-br"></div>
-
-                    <div class="diag-head">
-                        <h2>SYSTEM DIAGNOSTICS</h2>
-                        <span>LIVE FEED</span>
-                    </div>
-
-                    <div class="diag-block">
-                        <div class="diag-row"><span>SPATIAL AWARENESS MESH</span><span>99.8%</span></div>
-                        <div class="diag-track"><div class="diag-fill" style="width:99.8%"></div></div>
-                    </div>
-
-                    <div class="diag-metrics">
-                        <div>
-                            <p>THREAT ASSESS</p>
-                            <strong>0.012<span>ms</span></strong>
-                        </div>
-                        <div>
-                            <p>ACTIVE NODES</p>
-                            <strong>24,198</strong>
-                        </div>
-                    </div>
-
-                    <div class="diag-radar" aria-hidden="true">
-                        <div class="radar-line-h"></div>
-                        <div class="radar-line-v"></div>
-                        <div class="radar-ring outer"></div>
-                        <div class="radar-ring inner"></div>
-                    </div>
-                </div>
-            </aside>
+            <a href="/login"
+                class="px-6 md:px-8 flex items-center text-[11px] font-bold text-void bg-safety hover:bg-opacity-90 uppercase tracking-widest transition-colors h-full">
+                Login
+            </a>
         </div>
     </header>
 
-    <div class="marquee-bar" aria-label="Global system feed">
-        <div class="marquee-track">
-            <span>// GLOBAL THREAT LEVEL: NOMINAL</span>
-            <span>// LATTICE OS V9 ONLINE</span>
-            <span>// ALL SENSOR ARRAYS CALIBRATED</span>
-            <span>// EDGE PROCESSING: OPTIMAL</span>
-            <span>// GLOBAL THREAT LEVEL: NOMINAL</span>
-            <span>// LATTICE OS V9 ONLINE</span>
-            <span>// ALL SENSOR ARRAYS CALIBRATED</span>
-            <span>// EDGE PROCESSING: OPTIMAL</span>
-        </div>
-    </div>
+    <!-- Middle App Shell Area (Sidebars + Main Content) -->
+    <div class="flex-grow flex relative w-full overflow-hidden">
 
-    <main class="capabilities-main" id="capabilities">
-        <section class="section-intro reveal">
-            <div class="intro-kicker">
-                <span class="kicker-dot"></span>
-                <span>Tactical Capabilities</span>
-            </div>
-            <h2>Multi-Domain <br>Integration</h2>
-        </section>
+        <!-- Main Content Area -->
+        <div class="flex-grow flex flex-col relative z-10 overflow-hidden">
 
-        <section class="feature-grid reveal" aria-label="Capabilities">
-            <article class="feature-card tactical-panel">
-                <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-br"></div>
-                <div class="feature-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                </div>
-                <h3>Sensor Fusion</h3>
-                <p>Aggregates telemetry from distributed radar, EO/IR cameras, and acoustic sensors into a singular operational picture.</p>
-                <div class="feature-track"><div class="feature-fill"></div></div>
-            </article>
+            <!-- Hero Split Canvas -->
+            <main class="flex-grow flex flex-col xl:flex-row overflow-hidden">
 
-            <article class="feature-card tactical-panel">
-                <div class="crosshair-corner cc-tr"></div><div class="crosshair-corner cc-bl"></div>
-                <div class="feature-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                </div>
-                <h3>Computer Vision</h3>
-                <p>Proprietary neural networks classify targets instantly, eliminating false positives and dynamically prioritizing verified threats.</p>
-                <div class="feature-track"><div class="feature-fill"></div></div>
-            </article>
+                <!-- Left: Typography & Actions with Topographical Scanner -->
+                <div id="hero-left-col"
+                    class="w-full xl:w-5/12 bg-void border-r border-border-dim flex flex-col relative z-10 overflow-hidden">
 
-            <article class="feature-card tactical-panel">
-                <div class="crosshair-corner cc-tl"></div><div class="crosshair-corner cc-br"></div>
-                <div class="feature-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                </div>
-                <h3>Kinetic Response</h3>
-                <p>Autonomous or human-in-the-loop engagement via deployed drone interceptors, electronic warfare modules, and sonic deterrents.</p>
-                <div class="feature-track"><div class="feature-fill"></div></div>
-            </article>
-        </section>
+                    <!-- TOPOGRAPHICAL SCANNER CANVAS -->
+                    <canvas id="topo-bg-canvas"
+                        class="absolute inset-0 w-full h-full z-0 pointer-events-none opacity-80"></canvas>
 
-        <section class="lattice-wrapper tactical-panel reveal" id="infrastructure">
-            <div class="lattice-grid">
-                <div class="lattice-left">
-                    <p class="architecture-badge">SOFTWARE ARCHITECTURE</p>
-                    <h2>Lattice Core</h2>
-                    <p>
-                        Hardware is only as capable as the software commanding it. Lattice OS processes millions of data points
-                        at the edge, abstracting complexity to provide operators with decisive, actionable intelligence.
-                    </p>
-                    <ul>
-                        <li><span>+</span><span>Hardware Agnostic Integration</span></li>
-                        <li><span>+</span><span>Distributed Edge Compute Network</span></li>
-                        <li><span>+</span><span>Automated Sensor-to-Shooter Loop</span></li>
-                    </ul>
-                </div>
+                    <!-- Content layer -->
+                    <div class="flex-grow p-8 md:p-12 lg:p-16 flex flex-col justify-center relative z-10">
+                        <h1 class="font-brutal text-6xl md:text-8xl leading-[0.85] uppercase mb-8 mt-12 tracking-tight">
+                            <span class="block text-stark">JANUS</span>
+                        </h1>
 
-                <div class="lattice-right" aria-hidden="true">
-                    <div class="node-visual">
-                        <div class="ring ring-a"></div>
-                        <div class="ring ring-b"></div>
-                        <div class="ring ring-c"></div>
-                        <div class="core-node">OS</div>
+                        <p
+                            class="text-xs md:text-sm text-muted leading-relaxed max-w-md font-bold mb-12 uppercase tracking-wider">
+                            JANUS as Web Based Biometric Authentication System using Keystroke Dynamics with Support
+                            Vector Machine Algorithm.
+                        </p>
 
-                        <div class="sat sat-top">RAD</div>
-                        <div class="sat sat-bottom">EO/IR</div>
-                        <div class="sat sat-left">C2</div>
-                        <div class="sat sat-right">UAV</div>
+                        <div class="flex flex-col gap-4 font-sans">
+                            <div class="relative w-full max-w-md">
+                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-safety font-bold">></span>
+                                <input type="text" id="keystroke-demo-input"
+                                    class="w-full bg-void border border-border-dim focus:border-safety focus:ring-0 focus:outline-none text-safety font-sans py-4 pl-8 pr-4 transition-colors uppercase tracking-widest placeholder-muted"
+                                    placeholder="TYPE HERE TO GENERATE TELEMETRY" autocomplete="off" spellcheck="false">
+                            </div>
+                            <div
+                                class="text-[10px] text-muted uppercase tracking-widest flex items-center mt-2 font-bold">
+                                <div class="w-1.5 h-1.5 bg-safety rounded-full mr-3 animate-pulse"></div>
+                                AWAITING KEYSTROKE INPUT
+                            </div>
+                        </div>
                     </div>
-                    <p class="lattice-note note-top">COMPILING TOPOGRAPHY...</p>
-                    <p class="lattice-note note-bottom">STATUS: SECURE</p>
+                </div>
+
+                <!-- Right: Interactive Canvas & Data Stream -->
+                <div class="w-full xl:w-7/12 relative bg-void blueprint-grid flex flex-col overflow-hidden">
+
+                    <!-- Floating Top Title -->
+                    <div
+                        class="absolute top-8 left-1/2 -translate-x-1/2 text-[10px] font-bold text-muted uppercase tracking-[0.2em] z-10 font-sans pointer-events-none">
+                        Dwell & Flight Time
+                    </div>
+
+                    <!-- Canvas Container -->
+                    <div class="flex-grow relative overflow-hidden" id="canvas-container">
+                        <canvas id="topo-scanner" class="absolute inset-0 w-full h-full"></canvas>
+                    </div>
+
+                    <!-- Live Telemetry Box -->
+                    <div
+                        class="absolute bottom-8 right-8 bg-void border border-border-dim p-6 min-w-[220px] cut-tl z-20 shadow-2xl font-sans">
+                        <div class="reticle reticle-tl"></div>
+                        <div
+                            class="text-[10px] text-safety font-bold uppercase tracking-widest mb-4 border-b border-border-dim pb-3">
+                            Live Telemetry
+                        </div>
+                        <div class="space-y-3 text-[11px]">
+                            <div class="flex justify-between items-center gap-8">
+                                <span class="text-muted font-bold">KEYS LOGGED</span>
+                                <span class="font-bold text-stark" id="stat-keys">0</span>
+                            </div>
+                            <div class="flex justify-between items-center gap-8">
+                                <span class="text-muted font-bold">AVG DWELL</span>
+                                <span class="font-bold text-stark" id="stat-dwell">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+
+            <!-- Bottom Static Orange Bar -->
+            <div class="bg-safety py-2 border-t border-b border-border-dim flex justify-center items-center shrink-0">
+                <div class="text-[10px] font-bold text-void uppercase tracking-widest font-sans">
+                    // KEYSTROKE DYNAMICS
                 </div>
             </div>
-        </section>
 
-        <section class="stats-banner reveal" id="telemetry">
-            <h2>Operational Supremacy</h2>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <strong class="counter" data-target="360">0</strong>
-                    <p>Degree Vision</p>
-                </div>
-                <div class="stat-item">
-                    <strong><span class="counter" data-target="15">0</span><small>ms</small></strong>
-                    <p>Latency Loop</p>
-                </div>
-                <div class="stat-item">
-                    <strong class="counter" data-target="24">0</strong>
-                    <p>Hour Autonomy</p>
-                </div>
-                <div class="stat-item">
-                    <strong><span class="counter" data-target="99">0</span><small>%</small></strong>
-                    <p>Target ID Accuracy</p>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="landing-footer">
-        <div class="footer-grid">
-            <section>
-                <h2>
-                    <svg class="brand-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
-                    OBSIDIAN
-                </h2>
-                <p>
-                    Engineering asymmetric advantage. We build software-defined hardware to secure the most critical perimeters on Earth.
-                </p>
-                <a href="/register" class="btn-outline footer-cta">Contact Defense Systems</a>
-            </section>
-
-            <section>
-                <h3>Platform</h3>
-                <ul>
-                    <li><a href="#capabilities">Sensor Arrays</a></li>
-                    <li><a href="#capabilities">Autonomous Interceptors</a></li>
-                    <li><a href="#infrastructure">Lattice Software</a></li>
-                    <li><a href="#telemetry">Deployment Logistics</a></li>
-                </ul>
-            </section>
-
-            <section>
-                <h3>Clearance & Compliance</h3>
-                <p>
-                    Certain systems and capabilities are highly classified and subject to export restrictions.
-                    Authorized government personnel only.
-                </p>
-                <a href="/login" class="portal-login">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                    <span>SECURE PORTAL LOGIN</span>
-                </a>
-            </section>
         </div>
 
-        <div class="footer-bottom">
-            <span>&copy; <span id="current-year"></span> OBSIDIAN DEFENSE SYSTEMS.</span>
-            <span>RESTRICTED ARCHITECTURE // GLOBAL NODE ACTIVE</span>
-        </div>
-    </footer>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --------------------------------------------------------
+        // 1. TOPOGRAPHICAL SCANNER EFFECT (LEFT COLUMN)
+        // --------------------------------------------------------
+        const topoBgCanvas = document.getElementById('topo-bg-canvas');
+        const heroLeftCol = document.getElementById('hero-left-col');
+        if (!topoBgCanvas || !heroLeftCol) return;
+
+        const topoBgCtx = topoBgCanvas.getContext('2d');
+
+        let tWidth, tHeight;
+        let tMouse = { x: -1000, y: -1000 };
+
+        function initTopoBg() {
+            tWidth = topoBgCanvas.width = heroLeftCol.offsetWidth;
+            tHeight = topoBgCanvas.height = heroLeftCol.offsetHeight;
+        }
+
+        window.addEventListener('resize', initTopoBg);
+
+        heroLeftCol.addEventListener('mousemove', (e) => {
+            const rect = topoBgCanvas.getBoundingClientRect();
+            tMouse.x = e.clientX - rect.left;
+            tMouse.y = e.clientY - rect.top;
+        });
+
+        heroLeftCol.addEventListener('mouseleave', () => {
+            tMouse.x = -1000;
+            tMouse.y = -1000;
+        });
+
+        const gridSpacing = 35;
+
+        function animateTopoBg() {
+            if (!tWidth || !tHeight) {
+                requestAnimationFrame(animateTopoBg);
+                return;
+            }
+
+            topoBgCtx.clearRect(0, 0, tWidth, tHeight);
+
+            const cols = Math.floor(tWidth / gridSpacing) + 2;
+            const rows = Math.floor(tHeight / gridSpacing) + 2;
+            const points = [];
+
+            for (let i = 0; i < cols; i++) {
+                points[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    let bx = i * gridSpacing;
+                    let by = j * gridSpacing;
+
+                    let dx = tMouse.x - bx;
+                    let dy = tMouse.y - by;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+
+                    let radius = 180;
+                    let active = dist < radius;
+                    let elevation = 0;
+
+                    if (active) {
+                        elevation = Math.exp(-(dist * dist) / (radius * radius * 0.5)) * 40;
+                    }
+
+                    points[i][j] = {
+                        x: bx,
+                        y: by - elevation,
+                        dist: dist,
+                        active: active
+                    };
+                }
+            }
+
+            topoBgCtx.lineWidth = 1;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    let p = points[i][j];
+                    if (p.active) {
+                        topoBgCtx.beginPath();
+                        if (i < cols - 1 && points[i + 1][j].active) {
+                            topoBgCtx.moveTo(p.x, p.y);
+                            topoBgCtx.lineTo(points[i + 1][j].x, points[i + 1][j].y);
+                        }
+                        if (j < rows - 1 && points[i][j + 1].active) {
+                            topoBgCtx.moveTo(p.x, p.y);
+                            topoBgCtx.lineTo(points[i][j + 1].x, points[i][j + 1].y);
+                        }
+                        topoBgCtx.strokeStyle = `rgba(255, 69, 0, ${0.5 * (1 - p.dist / 180)})`;
+                        topoBgCtx.stroke();
+                    }
+                }
+            }
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    let p = points[i][j];
+                    topoBgCtx.beginPath();
+                    topoBgCtx.arc(p.x, p.y, p.active ? 2 : 1, 0, Math.PI * 2);
+                    if (p.active) {
+                        topoBgCtx.fillStyle = `rgba(255, 69, 0, ${Math.max(0.3, 1 - p.dist / 180)})`;
+                    } else {
+                        topoBgCtx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                    }
+                    topoBgCtx.fill();
+                }
+            }
+
+            if (tMouse.x > 0 && tMouse.y > 0) {
+                topoBgCtx.beginPath();
+                topoBgCtx.strokeStyle = 'rgba(255, 69, 0, 0.8)';
+                topoBgCtx.moveTo(tMouse.x - 12, tMouse.y);
+                topoBgCtx.lineTo(tMouse.x + 12, tMouse.y);
+                topoBgCtx.moveTo(tMouse.x, tMouse.y - 12);
+                topoBgCtx.lineTo(tMouse.x, tMouse.y + 12);
+                topoBgCtx.stroke();
+            }
+
+            requestAnimationFrame(animateTopoBg);
+        }
+
+        // --------------------------------------------------------
+        // 2. KEYSTROKE DYNAMICS VISUALIZATION (RIGHT COLUMN)
+        // --------------------------------------------------------
+        const canvas = document.getElementById('topo-scanner');
+        const container = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        const demoInput = document.getElementById('keystroke-demo-input');
+
+        let width, height;
+        const statKeys = document.getElementById('stat-keys');
+        const statDwell = document.getElementById('stat-dwell');
+
+        function initCanvas() {
+            width = canvas.width = container.offsetWidth;
+            height = canvas.height = container.offsetHeight;
+        }
+        window.addEventListener('resize', initCanvas);
+
+        let keyEvents = [];
+        let activeKeys = {};
+        let totalKeys = 0;
+        let recentDwells = [];
+
+        if (demoInput) {
+            demoInput.addEventListener('keydown', (e) => {
+                if (!activeKeys[e.key]) activeKeys[e.key] = Date.now();
+            });
+
+            demoInput.addEventListener('keyup', (e) => {
+                if (activeKeys[e.key]) {
+                    const dwell = Date.now() - activeKeys[e.key];
+                    addKeyEvent(e.key, dwell, Date.now());
+                    delete activeKeys[e.key];
+                }
+            });
+        }
+
+        function addKeyEvent(key, dwell, timestamp) {
+            keyEvents.push({
+                key: key,
+                dwell: dwell,
+                time: timestamp,
+                x: width + 50
+            });
+
+            totalKeys++;
+            statKeys.innerText = totalKeys;
+
+            recentDwells.push(dwell);
+            if (recentDwells.length > 5) recentDwells.shift();
+            const currentAvgDwell = Math.round(recentDwells.reduce((a, b) => a + b, 0) / recentDwells.length);
+            statDwell.innerText = currentAvgDwell + 'ms';
+        }
+
+        function animateScanner() {
+            if (!width || !height || !isFinite(width) || !isFinite(height)) {
+                requestAnimationFrame(animateScanner);
+                return;
+            }
+
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.strokeStyle = '#27272A';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
+            ctx.stroke();
+
+            const scanX = width - ((Date.now() / 15) % width);
+            ctx.fillStyle = '#FF4500';
+            ctx.fillRect(scanX, 0, 1, height);
+
+            let grad = ctx.createLinearGradient(scanX, 0, scanX + 30, 0);
+            grad.addColorStop(0, 'rgba(255, 69, 0, 0.15)');
+            grad.addColorStop(1, 'rgba(255, 69, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(scanX + 1, 0, 30, height);
+
+            const speed = 4;
+            ctx.font = "bold 10px 'JetBrains Mono', monospace";
+            ctx.textAlign = "center";
+
+            for (let i = keyEvents.length - 1; i >= 0; i--) {
+                let ev = keyEvents[i];
+                ev.x -= speed;
+
+                if (ev.x < -50) {
+                    keyEvents.splice(i, 1);
+                    continue;
+                }
+
+                const barHeight = Math.min(ev.dwell * 1.5, height * 0.8);
+                const isAnomaly = ev.dwell > 300 || ev.dwell < 30;
+
+                ctx.fillStyle = isAnomaly ? '#FF4500' : '#F4F4F5';
+                ctx.fillRect(ev.x - 3, (height / 2) - (barHeight / 2), 6, barHeight);
+
+                if (i > 0) {
+                    const prevEv = keyEvents[i - 1];
+                    ctx.beginPath();
+                    ctx.moveTo(ev.x, height / 2);
+                    ctx.lineTo(ev.x + (prevEv.x - ev.x) / 2, height / 2);
+                    ctx.lineTo(ev.x + (prevEv.x - ev.x) / 2, height / 2 + (isAnomaly ? 10 : -10));
+                    ctx.lineTo(prevEv.x, height / 2 + (isAnomaly ? 10 : -10));
+                    ctx.strokeStyle = isAnomaly ? 'rgba(255, 69, 0, 0.5)' : 'rgba(244, 244, 245, 0.2)';
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#71717A';
+                ctx.fillText(ev.key.toUpperCase(), ev.x, (height / 2) + (barHeight / 2) + 20);
+
+                ctx.fillStyle = isAnomaly ? '#FF4500' : '#F4F4F5';
+                ctx.fillText(ev.dwell + 'ms', ev.x, (height / 2) - (barHeight / 2) - 10);
+            }
+
+            requestAnimationFrame(animateScanner);
+        }
+
+        setTimeout(() => {
+            initTopoBg();
+            animateTopoBg();
+            initCanvas();
+            animateScanner();
+        }, 100);
+    });
+</script>
 {% endblock %}

@@ -315,3 +315,15 @@ class APIKeyService:
             stats["verification_success_rate"] = 0
         
         return stats
+
+    @staticmethod
+    def delete_key(api_key_id, user_id=None):
+        """
+        Permanently delete an API key and all associated logs.
+        """
+        api_key = db.session.get(APIKey, api_key_id)
+        if not api_key: return False
+        if user_id is not None and api_key.user_id != user_id: return False
+        db.session.delete(api_key)
+        db.session.commit()
+        return True

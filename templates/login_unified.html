@@ -1,399 +1,424 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Sign In | SecureAuth{% endblock %}
+{% block title %}JANUS // System Login{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap" rel="stylesheet">
+
+<!-- Tailwind CSS Injection -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'void': '#000000',      /* Pure Black */
+                    'surface': '#020202',   /* Hampir Hitam Murni */
+                    'border-dim': '#18181b',/* Subtle border */
+                    'stark': '#FFFFFF',     /* Pure White */
+                    'safety': '#FF4500',    /* Neon Orange */
+                    'muted': '#71717A',     /* Zinc 500 */
+                    'alert-bg': '#1a120c',  /* Dark Brownish Tint */
+                    'alert-border': '#3a2010'
+                },
+                fontFamily: {
+                    'sans': ['"Figtree"', 'sans-serif'],
+                    'mono': ['"Figtree"', 'sans-serif'],
+                    'brutal': ['"Figtree"', 'sans-serif'],
+                },
+                letterSpacing: {
+                    'widest-xl': '0.3em',
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    body,
+    html {
+        background-color: theme('colors.void');
+        color: theme('colors.stark');
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+    }
+
+    /* Backgrounds */
+    .static-noise {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.015;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .blueprint-grid {
+        position: fixed;
+        inset: 0;
+        background-size: 40px 40px;
+        background-image:
+            linear-gradient(to right, rgba(255, 255, 255, 0.008) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.008) 1px, transparent 1px);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: theme('colors.void');
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: theme('colors.border-dim');
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: theme('colors.safety');
+    }
+
+    /* Custom Input */
+    .tactical-input {
+        background: theme('colors.void');
+        border: 1px solid theme('colors.border-dim');
+        color: theme('colors.stark');
+        transition: all 0.2s ease;
+        font-family: 'Figtree', sans-serif;
+    }
+
+    .tactical-input:focus {
+        border-color: theme('colors.safety');
+        outline: none;
+        box-shadow: 0 0 10px rgba(255, 69, 0, 0.1);
+    }
+</style>
 {% endblock %}
 
 {% block body %}
-<div id="loginRoot" class="auth-container bg-gradient" data-dev-lenient="{{ DEV_LENIENT_RATELIMIT | tojson }}">
-    <div class="auth-box">
-        <div class="logo">
-            <div class="logo-text">SecureAuth</div>
+<div
+    class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
+
+    <!-- Background Elements -->
+    <div class="static-noise"></div>
+    <div class="blueprint-grid z-0 pointer-events-none"></div>
+
+    <!-- Topographical Grid (Mouse React) - Opacity dikembalikan agar terlihat jelas -->
+    <canvas id="topo-bg-canvas" class="fixed inset-0 w-full h-full z-0 opacity-60 pointer-events-none"></canvas>
+
+    <!-- Tactical Header -->
+    <header
+        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 relative z-50 sticky top-0">
+        <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+            <a href="/"
+                class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
         </div>
-        <h2>Sign In</h2>
-        <!-- admin badge removed; admin logins are handled at /admin/login -->
-        <p class="subtitle">Biometric Authentication Platform</p>
-        
-        <div class="info-box">
-            New user? <a href="/register">Create an account</a>
-        </div>
-    
-    <form id="loginForm" onsubmit="return handleLogin(event)">
-        <div class="form-group">
-            <label for="username">Username or email</label>
-            <input 
-                type="text" 
-                id="username" 
-                placeholder="Username or email" 
-                autocomplete="off"
-                required>
-            <div id="usernameStatus" class="username-status hidden"></div>
-        </div>
-        
-        <div class="form-group">
-            <label for="passwordField">
-                Password
-                <span class="tip-text">Type naturally as you did during enrollment</span>
-            </label>
-            <div class="input-wrapper">
-                <input 
-                    type="password" 
-                    id="passwordField" 
-                    placeholder="Enter your password" 
-                    autocomplete="off"
-                    required>
-                <span class="toggle-password" onclick="togglePassword()" id="toggleIcon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                </span>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
+
+        <!-- Centered Login Card -->
+        <div
+            class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+
+            <div class="mb-8 text-center">
+                <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">
+                    Login
+                </h1>
             </div>
+
+            <!-- Redirect to Register -->
+            <div class="bg-alert-bg border border-alert-border p-4 text-xs text-stark mb-8">
+                New user? <a href="/register" class="text-safety font-bold hover:underline">Create an account</a>
+            </div>
+
+            <form id="login-form" class="flex flex-col gap-5" onsubmit="event.preventDefault();">
+
+                <!-- Username -->
+                <div>
+                    <label
+                        class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+                        <span>Username or Email</span>
+                    </label>
+                    <input type="text" id="login-username"
+                        class="w-full tactical-input py-3 px-4 text-xs tracking-wider" autocomplete="off"
+                        spellcheck="false" placeholder="Enter Identifier">
+
+                    <!-- Checking Status Box (Appears on blur) -->
+                    <div id="username-status-box"
+                        class="hidden bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide">
+                        Checking...
+                    </div>
+                </div>
+
+                <!-- Password with Biometrics -->
+                <div>
+                    <label
+                        class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+                        <span>Password</span>
+                        <span id="sys-message" class="text-safety"></span>
+                    </label>
+                    <div class="relative w-full">
+                        <input type="password" id="login-password"
+                            class="w-full tactical-input py-3 pl-4 pr-12 text-xs tracking-wider text-stark"
+                            autocomplete="off" placeholder="••••••••" onpaste="return false;" oncopy="return false;"
+                            oncut="return false;" ondrop="return false;">
+
+                        <!-- Toggle Password Visibility -->
+                        <button type="button" id="toggle-pwd"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-stark transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-[9px] text-muted mt-2 uppercase tracking-widest">Type rhythmically to verify your
+                        biometric signature.</p>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="btn-login"
+                    class="w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Login
+                </button>
+
+            </form>
         </div>
-        
-        <button type="submit" id="submitBtn">
-            Sign In
-        </button>
-    </form>
-    
-    <div id="resultBox"></div>
-    <!-- Dev-only debug panel: visible when DEV_LENIENT is enabled -->
-    <div id="debugPanel" class="hidden" style="margin-top: 12px; font-size:13px; color:#b8c5d6;">
-        <label><input type="checkbox" id="debugToggle"> Request debug info from server</label>
-        <pre id="debugOutput" class="hidden" style="margin-top:8px; background: rgba(0,0,0,0.15); padding:8px; border-radius:6px; white-space:pre-wrap; color:#fff; max-height:200px; overflow:auto;"></pre>
-    </div>
+    </main>
+
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-    // If redirected from registration or reset flow, prefill username and show a friendly toast
-    (function prefillFromQuery() {
-        try {
-            const params = new URLSearchParams(window.location.search);
-            const preUser = params.get('username');
-            const from = params.get('from');
-            const resetFlag = params.get('reset');
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 1. Topographical Canvas (Mouse Reaction) ---
+        const topoBgCanvas = document.getElementById('topo-bg-canvas');
+        if (topoBgCanvas) {
+            const topoBgCtx = topoBgCanvas.getContext('2d');
+            let tWidth, tHeight;
+            let tMouse = { x: -1000, y: -1000 };
 
-            if (preUser) {
-                const el = document.getElementById('username');
-                if (el) {
-                    el.value = decodeURIComponent(preUser);
-                    try { el.focus(); } catch (e) {}
-                }
-
-                // If this is a reset flow, focus the password field to encourage signing in
-                if (resetFlag === '1') {
-                    try {
-                        setTimeout(() => {
-                            const pf = document.getElementById('passwordField');
-                            if (pf) pf.focus();
-                        }, 50);
-                    } catch (e) { /* noop */ }
-                }
+            function initTopoBg() {
+                tWidth = topoBgCanvas.width = window.innerWidth;
+                tHeight = topoBgCanvas.height = window.innerHeight;
             }
+            window.addEventListener('resize', initTopoBg);
 
-            if (from === 'register') {
-                try { showToast('Account created — please sign in', 'info', 4000); } catch(e){}
-            }
-
-            if (resetFlag === '1') {
-                try { showToast('Re-enrollment complete — please sign in', 'success', 5000); } catch(e){}
-            }
-        } catch (e) {
-            console.warn('Prefill query parsing failed', e);
-        }
-    })();
-
-    // ============================================================================
-    // KEYSTROKE CAPTURE
-    // ============================================================================
-    let rawEvents = [];
-    let activeKeys = {};
-    let typingStartTime = null;
-    let isFirstKeystroke = true;
-    let usernameCheckTimeout = null;
-    let isSubmitting = false;
-    const SUCCESS_REDIRECT_DELAY_MS = 250;
-    const FORM_RESET_DELAY_MS = 600;
-    
-    const usernameField = document.getElementById('username');
-    const passwordField = document.getElementById('passwordField');
-    const submitBtn = document.getElementById('submitBtn');
-    const resultBox = document.getElementById('resultBox');
-    const usernameStatus = document.getElementById('usernameStatus');
-    // ============================================================================
-    // USERNAME VALIDATION (Live Check)
-    // ============================================================================
-    usernameField.addEventListener('blur', function() {
-        let username = this.value.trim();
-        
-        if (!username) {
-            usernameStatus.classList.add('hidden');
-            return;
-        }
-        
-        // Normalize email identifiers to lowercase for lookup
-        if (username.includes('@')) username = username.toLowerCase();
-
-        // Show checking status
-        usernameStatus.className = 'username-status checking';
-        usernameStatus.textContent = 'Checking...';
-        
-        // Clear previous timeout
-        if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout);
-        
-        // Debounce: wait 300ms before checking
-        usernameCheckTimeout = setTimeout(() => {
-            fetch('/api/check_username', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, mode: 'login' })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (!data.exists) {
-                    usernameStatus.className = 'username-status error';
-                    usernameStatus.textContent = 'User not found, please register first';
-                } else if (data.exists && !data.can_login) {
-                    usernameStatus.className = 'username-status error';
-                    usernameStatus.textContent = 'Enrollment incomplete. Complete registration first';
-                } else {
-                    usernameStatus.classList.add('hidden');
-                }
-            })
-            .catch(err => {
-                console.error('Username check error:', err);
-                usernameStatus.className = 'username-status error';
-                usernameStatus.textContent = 'Error checking user';
+            // Track mouse globally
+            window.addEventListener('mousemove', (e) => {
+                tMouse.x = e.clientX;
+                tMouse.y = e.clientY;
             });
-        }, 300);
-    });
-    
-    // ============================================================================
-    // PASSWORD FIELD EVENTS
-    // ============================================================================
-    passwordField.addEventListener('keydown', function(e) {
-        // [CRITICAL FIX] Exclude Enter key - it's only for form submission, NOT part of keystroke pattern!
-        // This must match register.html behavior for consistency
-        if (e.key === 'Enter') {
-            return; // Let it propagate to form submit, don't record as keystroke
-        }
-        
-        // Ignore other special keys (but allow Backspace)
-        if (e.key.length > 1 && e.key !== 'Backspace') return;
-        
-        const key = e.key;
-        const code = e.code;
-        const now = performance.now();
 
-        // Start timer on first keystroke
-        if (isFirstKeystroke) {
-            typingStartTime = now;
-            isFirstKeystroke = false;
-        }
+            const gridSpacing = 40;
+            function animateTopoBg() {
+                if (!tWidth || !tHeight) { requestAnimationFrame(animateTopoBg); return; }
+                topoBgCtx.clearRect(0, 0, tWidth, tHeight);
+                const cols = Math.floor(tWidth / gridSpacing) + 2;
+                const rows = Math.floor(tHeight / gridSpacing) + 2;
+                const points = [];
 
-        // Handle auto-repeat: prevent the browser from inserting repeated
-        // characters into the visible input while still recording the repeat
-        // event for backend analysis (matches register.html behavior).
-        const isModifier = (e.key.length > 1 && e.key !== 'Backspace');
-        if (e.repeat && !isModifier) {
-            e.preventDefault();
-            rawEvents.push({ evt: 'd', key: key, code: code, t: now, isRepeat: true });
-            return;
-        }
-
-        // Record keydown if key is not already considered pressed
-        if (!activeKeys[code]) {
-            rawEvents.push({ evt: 'd', key: key, code: code, t: now, isRepeat: false });
-            activeKeys[code] = now;
-
-            // Debug log for troubleshooting
-            console.log(`[KEYDOWN] Key: ${key}, Code: ${code}, Events: ${rawEvents.length}`);
-        }
-    });
-    
-    passwordField.addEventListener('keyup', function(e) {
-        // [CRITICAL FIX] Exclude Enter key - it's only for form submission, NOT part of keystroke pattern!
-        if (e.key === 'Enter') {
-            return; // Skip recording
-        }
-        
-        // Ignore other special keys (but allow Backspace)
-        if (e.key.length > 1 && e.key !== 'Backspace') return;
-        
-        const key = e.key;
-        const code = e.code;
-        const now = performance.now();
-
-        if (activeKeys[code]) {
-            rawEvents.push({ evt: 'u', key: key, code: code, t: now });
-            delete activeKeys[code];
-
-            // Debug log for troubleshooting
-            console.log(`[KEYUP] Key: ${key}, Code: ${code}, Events: ${rawEvents.length}`);
-        }
-    });
-    
-    function resetTimer() {
-        typingStartTime = null;
-        isFirstKeystroke = true;
-    }
-
-    // ============================================================================
-    // PASSWORD VISIBILITY TOGGLE
-    // ============================================================================
-    function togglePassword() {
-        const input = passwordField;
-        const icon = document.getElementById('toggleIcon');
-        
-        const pathVisible = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
-        const pathHidden = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
-        
-        if (input.type === 'password') {
-            input.type = 'text';
-            icon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${pathHidden}</svg>`;
-        } else {
-            input.type = 'password';
-            icon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${pathVisible}</svg>`;
-        }
-    }
-    
-    // ============================================================================
-    // FORM SUBMISSION
-    // ============================================================================
-    // DEV toggle: read injected flag from DOM (injected via context processor)
-    const LOGIN_DEV_LENIENT = (function() {
-        try {
-            const root = document.getElementById('loginRoot');
-            return root ? root.dataset.devLenient === 'true' : false;
-        } catch (e) { return false; }
-    })();
-    
-    // Show debug panel when in dev
-    try {
-        if (LOGIN_DEV_LENIENT) {
-            const dbg = document.getElementById('debugPanel');
-            if (dbg) dbg.classList.remove('hidden');
-        }
-    } catch(e){}
-
-    function handleLogin(event) {
-        event.preventDefault();
-        
-        if (isSubmitting) return false;
-        
-        let username = usernameField.value.trim();
-        if (username.includes('@')) username = username.toLowerCase();
-        const debugRequest = document.getElementById('debugToggle') ? document.getElementById('debugToggle').checked : false;
-        
-        if (!username) {
-            showResult('Please enter username', 'error');
-            return false;
-        }
-        
-        // Debug logging only in dev mode to avoid unnecessary UI jank.
-        if (LOGIN_DEV_LENIENT) {
-            console.log(`[DEBUG] Captured ${rawEvents.length} keystroke events`);
-            console.log('[DEBUG] Events:', rawEvents);
-        }
-        
-        // Minimum 4 events = 2 characters (each char has keydown + keyup)
-        if (rawEvents.length < 4) {
-            showResult(`Insufficient keystroke data (${rawEvents.length} events). Type your password naturally (minimum 2 characters).`, 'error');
-            return false;
-        }
-        
-        // Disable form
-        isSubmitting = true;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner"></span> Verifying...';
-        
-        resetTimer();
-        
-        // Send to unified login endpoint
-        fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: username,
-                events: rawEvents,
-                debug: debugRequest || LOGIN_DEV_LENIENT
-            })
-        })
-        .then(r => r.json().then(data => ({status: r.status, body: data})))
-        .then(({status, body}) => {
-            if (status === 200 && body.success) {
-                // SUCCESS
-                showResult(body.message, 'success');
-                // Redirect quickly for snappier UX once verification succeeds.
-                setTimeout(() => {
-                    window.location.href = '/home';
-                }, SUCCESS_REDIRECT_DELAY_MS);
-                
-            } else {
-                // FAILED
-                let message = body.message || 'Login failed';
-                
-                if (body.reason === 'rate_limit_exceeded') {
-                    message += '<br><small>Too many failed attempts. Please wait 15 minutes.</small>';
-                } else if (body.reason === 'impostor_detected') {
-                    message += '<br><small>Type with the same rhythm as during enrollment</small>';
-                } else if (body.reason === 'no_enrollment') {
-                    message += '<br><small><a href="/register" style="color: #ffb066;">Register first</a></small>';
-                } else if (body.reason === 'PASSWORD_MISMATCH' || body.reason === 'hash_mismatch') {
-                    message = 'Incorrect password. Make sure you type the same password used during registration.';
-                }
-                
-                showResult(message, 'error');
-
-                // Show debug output if present
-                try {
-                    const dbgOut = document.getElementById('debugOutput');
-                    if (body.debug && dbgOut) {
-                        dbgOut.classList.remove('hidden');
-                        dbgOut.textContent = JSON.stringify(body.debug, null, 2);
+                for (let i = 0; i < cols; i++) {
+                    points[i] = [];
+                    for (let j = 0; j < rows; j++) {
+                        let bx = i * gridSpacing, by = j * gridSpacing;
+                        let dx = tMouse.x - bx, dy = tMouse.y - by;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        let radius = 250, active = dist < radius;
+                        let elevation = active ? Math.exp(-(dist * dist) / (radius * radius * 0.5)) * 50 : 0;
+                        points[i][j] = { x: bx, y: by - elevation, dist: dist, active: active };
                     }
-                } catch(e) { console.warn('Could not show debug output', e); }
+                }
 
-                // Re-enable form
-                setTimeout(() => {
-                    resetForm();
-                }, FORM_RESET_DELAY_MS);
+                topoBgCtx.lineWidth = 1;
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        if (p.active) {
+                            topoBgCtx.beginPath();
+                            if (i < cols - 1 && points[i + 1][j].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i + 1][j].x, points[i + 1][j].y); }
+                            if (j < rows - 1 && points[i][j + 1].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i][j + 1].x, points[i][j + 1].y); }
+                            topoBgCtx.strokeStyle = `rgba(255, 69, 0, ${0.4 * (1 - p.dist / 250)})`;
+                            topoBgCtx.stroke();
+                        }
+                    }
+                }
+
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        topoBgCtx.beginPath();
+                        topoBgCtx.arc(p.x, p.y, p.active ? 2 : 1, 0, Math.PI * 2);
+                        topoBgCtx.fillStyle = p.active ? `rgba(255, 69, 0, ${Math.max(0.2, 1 - p.dist / 250)})` : 'rgba(255, 255, 255, 0.03)';
+                        topoBgCtx.fill();
+                    }
+                }
+                requestAnimationFrame(animateTopoBg);
             }
-        })
-        .catch(err => {
-            console.error('Login error:', err);
-            console.error('[FULL ERROR DETAILS]:', err.message, err.stack);
-            showResult('Server error. Please try again.', 'error');
-            setTimeout(() => {
-                resetForm();
-            }, FORM_RESET_DELAY_MS);
+            initTopoBg(); animateTopoBg();
+        }
+
+        // --- 2. Login Logic & Biometric Keystroke Harvesting ---
+        const usernameInput = document.getElementById('login-username');
+        const pwdInput = document.getElementById('login-password');
+        const statusBox = document.getElementById('username-status-box');
+        const sysMsg = document.getElementById('sys-message');
+        const loginBtn = document.getElementById('btn-login');
+        const togglePwd = document.getElementById('toggle-pwd');
+
+        let rawKeyEvents = [];
+        let activeKeys = {};
+
+        function printMsg(msg, isError = true) {
+            sysMsg.innerText = msg;
+            sysMsg.className = isError ? "text-safety" : "text-[#FFFFFF]";
+            setTimeout(() => { if (sysMsg.innerText === msg) sysMsg.innerText = ""; }, 4000);
+        }
+
+        // Toggle Password Visibility
+        togglePwd.addEventListener('click', () => {
+            const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            pwdInput.setAttribute('type', type);
         });
-        
-        return false;
-    }
-    
-    // ============================================================================
-    // UI HELPERS
-    // ============================================================================
-    function showResult(message, type) {
-        resultBox.innerHTML = message;
-        resultBox.className = type;
-        resultBox.style.display = 'block';
-    }
-    
-    function resetForm() {
-        rawEvents = [];
-        activeKeys = {};
-        isSubmitting = false;
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Sign In';
-        resetTimer();
-        passwordField.value = '';
-        resultBox.style.display = 'none';
-    }
+
+        // Check Username on Blur
+        usernameInput.addEventListener('blur', async () => {
+            const username = usernameInput.value.trim();
+            if (username.length < 3) return;
+
+            statusBox.classList.remove('hidden');
+            statusBox.innerText = "Checking...";
+            statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-muted mt-2 tracking-wide";
+
+            try {
+                const res = await fetch('/api/check_username', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, mode: 'login' })
+                });
+                const data = await res.json();
+
+                if (data.can_login) {
+                    statusBox.innerText = "Operator Verified. Proceed with password.";
+                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-stark mt-2 tracking-wide";
+                } else if (data.exists && !data.can_login) {
+                    statusBox.innerText = `Enrollment Incomplete (${data.enrollment_count}/10).`;
+                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+                } else {
+                    statusBox.innerText = "Operator Not Found.";
+                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+                }
+            } catch (err) {
+                statusBox.innerText = "System Error Check";
+                statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+            }
+        });
+
+        // Keystroke Capture
+        pwdInput.addEventListener('keydown', (e) => {
+            if (e.repeat) return; // Prevent Auto-Repeat keys ruining telemetry
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performLogin();
+                return;
+            }
+
+            rawKeyEvents.push({
+                type: 'keydown',
+                key: e.key,
+                code: e.code,
+                timestamp: Date.now()
+            });
+            if (!activeKeys[e.key]) activeKeys[e.key] = Date.now();
+        });
+
+        pwdInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') return;
+
+            rawKeyEvents.push({
+                type: 'keyup',
+                key: e.key,
+                code: e.code,
+                timestamp: Date.now()
+            });
+
+            if (activeKeys[e.key]) {
+                delete activeKeys[e.key];
+            }
+        });
+
+        pwdInput.addEventListener('input', () => {
+            if (pwdInput.value === '') {
+                rawKeyEvents = [];
+                activeKeys = {};
+            }
+        });
+
+        // Submit Login Sample
+        loginBtn.addEventListener('click', performLogin);
+
+        async function performLogin() {
+            const username = usernameInput.value.trim();
+            const pwd = pwdInput.value;
+
+            if (!username) { usernameInput.focus(); return; }
+            if (!pwd) { pwdInput.focus(); return; }
+            if (rawKeyEvents.length < 2) {
+                printMsg("INVALID TELEMETRY. TYPE NORMALLY.");
+                pwdInput.value = ''; rawKeyEvents = []; activeKeys = {};
+                return;
+            }
+
+            loginBtn.innerText = "AUTHENTICATING...";
+            loginBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        events: rawKeyEvents
+                    })
+                });
+                const data = await res.json();
+
+                if (res.status === 200 && data.success) {
+                    loginBtn.innerText = "ACCESS GRANTED";
+                    loginBtn.className = "w-full bg-stark text-void font-bold text-[11px] uppercase tracking-widest py-4 mt-2";
+
+                    // Handle 2FA redirect or normal login redirect
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/';
+                    }, 500);
+                } else {
+                    // Extracting ML Verification Rejection or Auth Rejection
+                    printMsg(data.message || "AUTHENTICATION FAILED", true);
+                    pwdInput.value = '';
+                    rawKeyEvents = [];
+                    activeKeys = {};
+
+                    loginBtn.innerText = "LOGIN";
+                    loginBtn.disabled = false;
+                }
+            } catch (err) {
+                printMsg("NETWORK ERROR", true);
+                loginBtn.innerText = "LOGIN";
+                loginBtn.disabled = false;
+            }
+        }
+    });
 </script>
 {% endblock %}
-<script src="{{ url_for('static', filename='js/keystroke.js') }}"></script>
-<script>

@@ -126,7 +126,7 @@ class LoginAttempt(db.Model):
             biometric_tier=biometric_tier,
         )
         db.session.add(attempt)
-        db.session.commit()
+        db.session.flush()  # Visible within current transaction; caller commits
         return attempt
 
     # ----------------------------------------------------------- class queries

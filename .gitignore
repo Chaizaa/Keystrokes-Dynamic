@@ -126,18 +126,47 @@ scripts/show_metrics.py
 scripts/update_paper.py
 
 # Research paper drafts and generated docs (not for version control)
+docs/
 docs/RESEARCH_PAPER*.md
 docs/RESEARCH_PAPER*.docx
 docs/~$*.docx
+papers/
 papers/drafts/from_docs/
 scripts/md_to_docx.py
-papers/outputs/
-papers/references/*.docx
-papers/references/~$*.docx
-papers/references/*.pdf
-conference_*.tex
+
+# Local template artifacts
+templates/_archive/
+templates/tmp_register.html
+
 
 # Microsoft Office temp/lock files
 ~$*.docx
 ~$*.xlsx
 ~$*.pptx
+
+# Local AI/copilot memory artifacts (workspace-specific)
+memories/
+
+# Local Copilot/agent customization files
+.github/
+
+# Generated catalog artifact
+docs/python_function_catalog.md
+
+# Node & Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.parcel-cache/
+dist/
+build/
+
+# Local utility/migration scripts (one-off, contain local credentials)
+migrate_db.py
+merge_railway_to_pg.py
+inspect_railway_db.py
+migration_out.txt
+fix_extras.py
+fix_style.py

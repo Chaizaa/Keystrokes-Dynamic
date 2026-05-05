@@ -1,14 +1,27 @@
-# Developer First-Run Checklist (Docker)
+# Developer Runbook - Workspace Version (Keystrokes-Dynamic)
 
-This checklist is for developers who want to run and validate the app locally using Docker.
+This is the workspace-specific first-run guide for this repository.
+
+## Workspace Snapshot
+
+1. Main app service in Docker Compose: `app`
+2. App port mapping: `5000:5000`
+3. Health endpoints:
+- `/health/live`
+- `/health/ready`
+4. Data persistence mode:
+- bind mount `./data:/app/data`
+
+Note:
+- Because this workspace uses bind mount for data, it is normal that Docker Desktop "Volumes" page does not show a named volume for this app.
 
 ## Prerequisites
 
-1. Docker Desktop is installed and running.
-2. Port `5000` is free on your machine.
-3. You are in project root.
+1. Docker Desktop installed and running.
+2. Port `5000` is available.
+3. Run commands from repository root.
 
-## First Run
+## First Run (PowerShell)
 
 1. Create local env file:
 
@@ -16,90 +29,82 @@ This checklist is for developers who want to run and validate the app locally us
 Copy-Item .env.example .env
 ```
 
-2. Optional config sanity check:
+2. Check Docker + Compose:
+
+```powershell
+docker --version
+docker compose version
+```
+
+3. Validate compose config:
 
 ```powershell
 docker compose config
 ```
 
 Expected:
-- compose file resolves without errors.
+- no parse error
+- service `app` appears
 
-3. Build and start containers:
+4. Build and start stack:
 
 ```powershell
 docker compose up --build -d
 ```
 
-Expected:
-- `app` container is created and running.
-- first build can take a few minutes.
-
-4. Verify container status:
+5. Verify status:
 
 ```powershell
 docker compose ps
 ```
 
 Expected:
-- service `app` shows `running` and then `healthy`.
+- `app` transitions to `healthy`
 
-5. Check health endpoints:
+6. Verify health endpoints:
 
 ```powershell
-Invoke-WebRequest http://localhost:5000/health/live
-Invoke-WebRequest http://localhost:5000/health/ready
+Invoke-WebRequest http://localhost:5000/health/live -UseBasicParsing | Select-Object StatusCode
+Invoke-WebRequest http://localhost:5000/health/ready -UseBasicParsing | Select-Object StatusCode
 ```
 
 Expected:
-- both return HTTP `200`.
+- both return `200`
 
-6. Open app in browser:
+7. Open app:
 
 ```text
 http://localhost:5000
 ```
 
-## Manual User Flow Validation
+## Manual Functional Validation
 
-1. Register a new user:
+1. Registration flow:
 - open `/register`
-- fill username + email
-- type password in the keystroke capture form
-- keep submitting samples until enrollment reaches target
+- submit username + email
+- complete keystroke enrollment samples until target reached
 
-Expected:
-- enrollment progress increases each sample
-- registration flow completes without server errors
-
-2. Login as that user:
+2. Login flow:
 - open `/login`
-- type the same password rhythm
+- type same password rhythm
+- verify redirect to dashboard
+
+3. Dashboard API key flow:
+- generate one key
+- verify key appears one-time in result panel
+- deactivate key
+
+4. Password reset flow:
+- trigger reset from dashboard
+- complete verification and set new password
 
 Expected:
-- successful login to dashboard
+- no 500 errors
+- clear validation messages for invalid input
 
-3. Dashboard API key checks:
-- on dashboard, generate a key with partner name
-- confirm key appears once in result panel
-- deactivate the key
+## Automated Smoke Validation
 
-Expected:
-- generate endpoint returns success
-- key list updates correctly
-- deactivate endpoint returns success
-
-4. Reset password flow:
-- click reset password from dashboard
-- continue code verification + new password flow
-
-Expected:
-- if SMTP is configured: reset code flow works end-to-end
-- if SMTP is not configured: user gets clear failure message, app stays stable
-
-## Automated Quick Smoke
-
-Run this from host:
+Run from host:
 
 ```powershell
 docker compose exec app python quick_smoke.py
@@ -111,12 +116,31 @@ Expected output:
 SMOKE_CHECK: PASS
 ```
 
+## Runtime and Data Notes
+
+1. Flask host behavior:
+- local non-Docker default host: `127.0.0.1`
+- Docker Compose sets `HOST=0.0.0.0`
+
+2. Database persistence:
+- SQLite file is persisted in local folder `./data`
+
+3. Secrets:
+- do not commit `.env`
+- rotate any real credentials before sharing workspace
+
 ## Useful Commands
 
 View logs:
 
 ```powershell
 docker compose logs -f app
+```
+
+Restart app service:
+
+```powershell
+docker compose restart app
 ```
 
 Stop stack:
@@ -132,14 +156,26 @@ docker compose down
 docker compose up --build -d
 ```
 
-## Quick Troubleshooting
+Inspect mount mode used by container:
+
+```powershell
+$cid = docker compose ps -q app
+docker inspect $cid --format "{{json .Mounts}}"
+```
+
+## Troubleshooting
 
 1. `docker` command not found:
-- install Docker Desktop or reopen terminal after installation.
+- reopen terminal after Docker install
+- confirm Docker Desktop is running
 
-2. service stuck `unhealthy`:
-- run `docker compose logs -f app`
-- check DB migration/startup errors.
+2. Container healthy but host cannot access app:
+- ensure app binds to `0.0.0.0` in Docker (`HOST` env)
+- check with `docker compose logs -f app`
 
-3. port `5000` already in use:
-- stop conflicting process, or change port mapping in `docker-compose.yml`.
+3. Service stuck `unhealthy`:
+- inspect logs and health endpoint route behavior
+- run `docker compose logs --tail 100 app`
+
+4. Port `5000` already in use:
+- stop conflicting process or remap port in `docker-compose.yml`

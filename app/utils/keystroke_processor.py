@@ -1,358 +1,224 @@
 """
-Utility functions for keystroke biometric processing.
+Utility for keystroke biometric processing.
 
-Public API
-----------
-- ``process_web_events(raw_events_from_js, username)``
-    Parse raw JS key-down/key-up events and extract timing feature vectors.
-
-- ``assess_sample_quality(features)``
-    Score a feature dict and return quality label + warnings.
-
-- ``compute_vector_stats(vec)``
-    Calculate mean, std, min, max, and CV for a list of floats.
+Provides the KeystrokeProcessor class to parse raw events into timing features.
 """
 
+from __future__ import annotations
+
 import hashlib
-import json
 import statistics
-from typing import Dict, List, Tuple
+from collections import deque
+from typing import Deque, Dict, List, Optional, Tuple
 
 
-def round_to_decimals(value: float, decimals: int = 4) -> float:
+class KeystrokeProcessor:
     """
-    Round a float value to a specific number of decimal places.
-    
-    Args:
-        value: float value to round
-        decimals: number of decimal places (default 5)
-    
-    Returns:
-        rounded float value, or None if input is None
+    Processor to convert raw JS events into biometric timing vectors.
     """
-    if value is None:
-        return None
-    return round(float(value), decimals)
 
-
-def round_vector(vec: List[float], decimals: int = 4) -> List[float]:
-    """
-    Round all values in a timing vector to specified decimal places.
-    
-    Args:
-        vec: list of float timing values
-        decimals: number of decimal places (default 5)
-    
-    Returns:
-        list of rounded float values
-    """
-    if not vec:
-        return vec
-    return [round(v, decimals) for v in vec]
-
-
-def compute_vector_stats(vec: List[float], decimals: int = 4) -> Dict[str, float]:
-    """
-    Compute descriptive statistics for a timing vector.
-
-    Args:
-        vec: list of float timing values (seconds)
-        decimals: number of decimal places to round to (default 5)
-
-    Returns:
-        dict with keys: mean, std, min, max, cv
-            - cv (coefficient of variation) = std / mean, or 0 when mean == 0
-            - All values rounded to specified decimal places
-    """
-    if not vec:
-        return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "cv": 0.0}
-    mean = statistics.mean(vec)
-    std  = statistics.stdev(vec) if len(vec) > 1 else 0.0
-    cv   = (std / mean) if mean != 0.0 else 0.0
-    return {
-        "mean": round_to_decimals(mean, decimals),
-        "std":  round_to_decimals(std, decimals),
-        "min":  round_to_decimals(min(vec), decimals),
-        "max":  round_to_decimals(max(vec), decimals),
-        "cv":   round_to_decimals(cv, decimals),
-    }
-
-
-def assess_sample_quality(features: Dict) -> Dict:
-    """
-    Assess the quality of a single keystroke sample and return non-blocking warnings.
-
-    Args:
-        features: feature dict returned by process_web_events() with optional
-                  keys: H_vector, DD_vector, UD_vector, typing_rollover_ratio
-
-    Returns:
-        dict with keys:
-          - quality_label (str): 'good', 'questionable', or 'poor'
-          - quality_score (int): 0–100
-          - quality_warnings (list[str]): human-readable warning messages
-    """
-    warnings = []
-    score = 100
-
-    H_vec  = features.get("H_vector", [])
-    DD_vec = features.get("DD_vector", [])
-    UD_vec = features.get("UD_vector", [])
-
-    # Check 1: Extremely long hold times (> 1 second)
-    long_holds = [h for h in H_vec if h > 1.0]
-    if long_holds:
-        warnings.append(f"Very long hold times detected: {len(long_holds)} keys held > 1s")
-        score -= 20
-
-    # Check 2: Extremely long pauses (DD > 2 seconds)
-    long_pauses = [dd for dd in DD_vec if dd > 2.0]
-    if long_pauses:
-        warnings.append(f"Long pauses detected: {len(long_pauses)} intervals > 2s")
-        score -= 15
-
-    # Check 3: Extremely fast typing (DD < 0.05s = 50ms)
-    super_fast = [dd for dd in DD_vec if 0 < dd < 0.05]
-    if len(super_fast) > len(DD_vec) * 0.3:
-        warnings.append(f"Unusually fast typing: {len(super_fast)} intervals < 50ms")
-        score -= 10
-
-    # Check 4: High variance in timing (inconsistent typing)
-    if len(DD_vec) > 1:
-        dd_mean = statistics.mean(DD_vec)
-        dd_std  = statistics.stdev(DD_vec)
-        if dd_mean > 0 and dd_std > dd_mean * 1.5:
-            warnings.append("High timing variance detected (inconsistent rhythm)")
-            score -= 10
-
-    # Check 5: UD vector — terlalu banyak negatif (rollover ekstrem)  ✅ sekarang dipakai
-    if UD_vec:
-        neg_ud = [ud for ud in UD_vec if ud < -0.2]
-        if len(neg_ud) > len(UD_vec) * 0.5:
-            warnings.append(f"Extreme key overlap detected: {len(neg_ud)} UD intervals < -200ms")
-            score -= 10
-
-    # Check 6: Too many rollovers (> 80%)
-    rollover_ratio = features.get("typing_rollover_ratio", 0)
-    if rollover_ratio > 0.8:
-        warnings.append(f"Very high rollover rate: {rollover_ratio*100:.0f}%")
-        score -= 5
-
-    if score >= 80:
-        quality_label = "good"
-    elif score >= 60:
-        quality_label = "questionable"
-    else:
-        quality_label = "poor"
-
-    return {
-        "quality_label":    quality_label,
-        "quality_score":    max(0, score),
-        "quality_warnings": warnings,
-    }
-
-
-def process_web_events(raw_events_from_js: List[Dict], username: str) -> Dict:
-    """
-    Parse raw keystroke events from JavaScript and extract biometric timing features.
-
-    Expected event format (each item in list)::
-
-        {"t": <unix ms>, "evt": "d"|"u", "code": "KeyA", "key": "a"}
-
-    Args:
-        raw_events_from_js: list of key-event dicts sent by the frontend
-        username: username of the user being measured (used for logging)
-
-    Returns:
-        dict with keys:
-          - status (str): 'success' or 'error'
-          - features (dict): timing vectors + aggregate statistics  *(on success)*
-          - password_hash (str): SHA-256 of reconstructed password  *(on success)*
-          - real_password_string (str): plaintext password           *(on success)*
-          - msg (str): human-readable error description              *(on error)*
-    """
-    raw_events_from_js.sort(key=lambda x: x["t"])
-
-    # Strip modifier key events (Shift, Ctrl, Alt, Meta, CapsLock) before processing.
-    # These should never be in the vector — filter here as a backend safety net.
-    _MODIFIER_CODES = {
+    MODIFIER_CODES = {
         "ShiftLeft", "ShiftRight",
         "ControlLeft", "ControlRight",
         "AltLeft", "AltRight",
         "MetaLeft", "MetaRight",
         "CapsLock",
     }
-    raw_events_from_js = [
-        x for x in raw_events_from_js if x.get("code") not in _MODIFIER_CODES
-    ]
 
-    if not raw_events_from_js:
-        return {"status": "error", "msg": "Data kosong"}
+    def __init__(self, max_allowed_backspace: int = 4, decimals: int = 4):
+        self.max_allowed_backspace = max_allowed_backspace
+        self.decimals = decimals
 
-    start_time        = raw_events_from_js[0]["t"]
-    end_time          = raw_events_from_js[-1]["t"]
-    total_duration_sec = (end_time - start_time) / 1000.0
+    def round_val(self, value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return None
+        return round(float(value), self.decimals)
 
-    backspace_count = sum(
-        1 for x in raw_events_from_js if x["code"] == "Backspace" and x["evt"] == "d"
-    )
+    def round_vec(self, vec: List[float]) -> List[float]:
+        return [round(v, self.decimals) for v in vec]
 
-    MAX_ALLOWED_BACKSPACE = 4
-    if backspace_count > MAX_ALLOWED_BACKSPACE:
+    def compute_vector_stats(self, vec: List[float]) -> Dict[str, float]:
+        if not vec:
+            return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "cv": 0.0}
+        
+        mean = statistics.mean(vec)
+        std = statistics.stdev(vec) if len(vec) > 1 else 0.0
+        cv = (std / mean) if mean != 0.0 else 0.0
+        
         return {
-            "status": "error",
-            "msg": f"Terlalu banyak hapus ({backspace_count}x). Maksimal {MAX_ALLOWED_BACKSPACE}x. Ulangi ketikan ini.",
+            "mean": self.round_val(mean),
+            "std": self.round_val(std),
+            "min": self.round_val(min(vec)),
+            "max": self.round_val(max(vec)),
+            "cv": self.round_val(cv),
         }
 
-    # ✅ Hapus MAX_HOLD_NORMAL, MAX_HOLD_MODIFIER, MAX_HOLD_FOR_REPEAT — tidak dipakai
-    temp_keystrokes = []
-    # Each entry in temp_dict is a FIFO queue of (down_time, char) tuples.
-    # A queue (not a single entry) handles fast same-key typing where the second
-    # keydown can arrive before the first keyup (e.g. both 't' in "test123").
-    temp_dict: Dict[str, list] = {}
+    def assess_quality(self, features: Dict) -> Dict:
+        """Score a sample and return quality label + warnings."""
+        warnings = []
+        score = 100
 
-    for x in raw_events_from_js:
-        k_id = x["code"]
+        h_vec = features.get("H_vector", [])
+        dd_vec = features.get("DD_vector", [])
+        ud_vec = features.get("UD_vector", [])
 
-        if k_id == "Enter" or x.get("key") == "Enter":
-            continue
+        if any(h > 1.0 for h in h_vec):
+            warnings.append("Very long hold times detected (> 1s)")
+            score -= 20
 
-        if x["evt"] == "d":
-            # Push to the per-key queue — always, even if the key is already "down"
-            # (handles genuine fast same-key press before prior keyup arrives)
-            if k_id not in temp_dict:
-                temp_dict[k_id] = []
-            temp_dict[k_id].append((x["t"], x["key"]))
+        if any(dd > 2.0 for dd in dd_vec):
+            warnings.append("Long pauses detected (> 2s)")
+            score -= 15
 
-        elif x["evt"] == "u":
-            if k_id in temp_dict and temp_dict[k_id]:
-                # Pop the oldest pending keydown (FIFO pairing)
-                down_time, char_at_down = temp_dict[k_id].pop(0)
-                if not temp_dict[k_id]:
-                    del temp_dict[k_id]
-                up_time = x["t"]
+        super_fast = sum(1 for dd in dd_vec if 0 < dd < 0.05)
+        if super_fast > len(dd_vec) * 0.3:
+            warnings.append("Unusually fast typing (< 50ms)")
+            score -= 10
 
-                # ✅ Hapus is_modifier & limit — tidak dipakai untuk filter apapun
-                temp_keystrokes.append(
-                    {
-                        "key_char":     char_at_down,
-                        "key_code":     k_id,
-                        "down":         down_time,
-                        "up":           up_time,
-                        "is_backspace": (k_id == "Backspace"),
-                    }
-                )
+        if len(dd_vec) > 1:
+            mean_v = statistics.mean(dd_vec)
+            if mean_v > 0 and statistics.stdev(dd_vec) > mean_v * 1.5:
+                warnings.append("High timing variance (inconsistent rhythm)")
+                score -= 10
 
-    temp_keystrokes.sort(key=lambda x: x["down"])
-    if not temp_keystrokes:
-        return {"status": "error", "msg": "Data tidak valid."}
+        neg_ud = sum(1 for ud in ud_vec if ud < -0.2)
+        if neg_ud > len(ud_vec) * 0.5:
+            warnings.append("Extreme key overlap detected")
+            score -= 10
 
-    # Handle Backspace
-    final_stack = []
-    for item in temp_keystrokes:
-        if item["is_backspace"]:
-            if final_stack:
-                final_stack.pop()
-        else:
-            final_stack.append(item)
+        if features.get("typing_rollover_ratio", 0) > 0.8:
+            score -= 5
 
-    if len(final_stack) < 2:
-        return {"status": "error", "msg": "Password terlalu pendek."}
+        label = "good" if score >= 80 else ("questionable" if score >= 60 else "poor")
+        return {
+            "quality_label": label,
+            "quality_score": max(0, score),
+            "quality_warnings": warnings,
+        }
 
-    real_password_string = ""
-    char_sequence        = []
-    masked_sequence      = []
+    def process(self, raw_events: List[Dict], username: str) -> Dict:
+        """Parse raw events into features and reconstructed password."""
+        raw_events = sorted(raw_events, key=lambda x: x["t"])
+        raw_events = [x for x in raw_events if x.get("code") not in self.MODIFIER_CODES]
 
-    for k in final_stack:
-        if len(k["key_char"]) == 1:
-            real_password_string += k["key_char"]
-            char_sequence.append(k["key_char"])
-            masked_sequence.append("*")
-        else:
-            real_password_string += f"[{k['key_char']}]"
-            char_sequence.append(f"[{k['key_char']}]")
-            masked_sequence.append("[key]")
+        if not raw_events:
+            return {"status": "error", "msg": "Data kosong"}
 
-    password_hash = hashlib.sha256(real_password_string.encode()).hexdigest()
+        total_duration = (raw_events[-1]["t"] - raw_events[0]["t"]) / 1000.0
+        backspace_count = sum(1 for x in raw_events if x["code"] == "Backspace" and x["evt"] == "d")
 
-    # Extract timing features
-    H_vector  = []
-    DD_vector = []
-    UD_vector = []
-    UU_vector = []
-    DU_vector = []
+        if backspace_count > self.max_allowed_backspace:
+            return {
+                "status": "error",
+                "msg": f"Terlalu banyak hapus ({backspace_count}x). Maksimal {self.max_allowed_backspace}x.",
+            }
 
-    for i, k in enumerate(final_stack):
-        hold_time = (k["up"] - k["down"]) / 1000.0
-        H_vector.append(hold_time)
+        temp_keystrokes = []
+        temp_dict: Dict[str, Deque[Tuple[int, str]]] = {}
 
-        if i > 0:
-            prev_k = final_stack[i - 1]
-            DD_vector.append((k["down"] - prev_k["down"]) / 1000.0)
-            UD_vector.append((k["down"] - prev_k["up"])   / 1000.0)
-            UU_vector.append((k["up"]   - prev_k["up"])   / 1000.0)
-            DU_vector.append((k["up"]   - prev_k["down"]) / 1000.0)
+        for x in raw_events:
+            k_id = x["code"]
+            if k_id == "Enter" or x.get("key") == "Enter":
+                continue
 
-    overlap_count  = sum(1 for ud in UD_vector if ud < 0)
-    rollover_ratio = overlap_count / len(UD_vector) if UD_vector else 0
+            if x["evt"] == "d":
+                temp_dict.setdefault(k_id, deque()).append((x["t"], x["key"]))
+            elif x["evt"] == "u":
+                if k_id in temp_dict and temp_dict[k_id]:
+                    down_t, char = temp_dict[k_id].popleft()
+                    if not temp_dict[k_id]:
+                        del temp_dict[k_id]
+                    temp_keystrokes.append({
+                        "char": char, "code": k_id, "down": down_t, "up": x["t"],
+                        "is_backspace": (k_id == "Backspace")
+                    })
 
-    # Typing speed: characters per second (excluding backspaces)
-    char_count   = len(final_stack)
-    typing_speed = char_count / total_duration_sec if total_duration_sec > 0 else 0.0
+        temp_keystrokes.sort(key=lambda x: x["down"])
+        if not temp_keystrokes:
+            return {"status": "error", "msg": "Data tidak valid."}
 
-    # Per-vector statistics (including coefficient of variation)
-    H_stats  = compute_vector_stats(H_vector)
-    DD_stats = compute_vector_stats(DD_vector)
-    UD_stats = compute_vector_stats(UD_vector)
-    UU_stats = compute_vector_stats(UU_vector)
-    DU_stats = compute_vector_stats(DU_vector)
+        # Backspace handling
+        final_stack = []
+        for item in temp_keystrokes:
+            if item["is_backspace"]:
+                if final_stack: final_stack.pop()
+            else:
+                final_stack.append(item)
 
-    # Round raw vectors to 5 decimal places
-    DECIMALS = 4
-    H_vector_rounded  = round_vector(H_vector, DECIMALS)
-    DD_vector_rounded = round_vector(DD_vector, DECIMALS)
-    UD_vector_rounded = round_vector(UD_vector, DECIMALS)
-    UU_vector_rounded = round_vector(UU_vector, DECIMALS)
-    DU_vector_rounded = round_vector(DU_vector, DECIMALS)
+        if len(final_stack) < 2:
+            return {"status": "error", "msg": "Password terlalu pendek."}
 
-    features = {
-        # Raw timing vectors (rounded to 5 decimal places)
-        "H_vector":  H_vector_rounded,
-        "DD_vector": DD_vector_rounded,
-        "UD_vector": UD_vector_rounded,
-        "UU_vector": UU_vector_rounded,
-        "DU_vector": DU_vector_rounded,
-        # Nested stats dicts (convenient for downstream processing)
-        "H_stats":   H_stats,
-        "DD_stats":  DD_stats,
-        "UD_stats":  UD_stats,
-        "UU_stats":  UU_stats,
-        "DU_stats":  DU_stats,
-        # Flat stats matching UsersVector model columns
-        "H_mean":  H_stats["mean"],  "H_std":  H_stats["std"],
-        "H_min":   H_stats["min"],   "H_max":  H_stats["max"],  "H_cv":  H_stats["cv"],
-        "DD_mean": DD_stats["mean"], "DD_std": DD_stats["std"],
-        "DD_min":  DD_stats["min"],  "DD_max": DD_stats["max"], "DD_cv": DD_stats["cv"],
-        "UD_mean": UD_stats["mean"], "UD_std": UD_stats["std"],
-        "UD_min":  UD_stats["min"],  "UD_max": UD_stats["max"], "UD_cv": UD_stats["cv"],
-        "UU_mean": UU_stats["mean"], "UU_std": UU_stats["std"],
-        "UU_min":  UU_stats["min"],  "UU_max": UU_stats["max"], "UU_cv": UU_stats["cv"],
-        "DU_mean": DU_stats["mean"], "DU_std": DU_stats["std"],
-        "DU_min":  DU_stats["min"],  "DU_max": DU_stats["max"], "DU_cv": DU_stats["cv"],
-        # Aggregate metrics (also rounded to 5 decimals for consistency)
-        "char_count":            char_count,
-        "total_duration":        round_to_decimals(total_duration_sec, DECIMALS),
-        "typing_speed":          round_to_decimals(typing_speed, DECIMALS),
-        "typing_rollover_ratio": round_to_decimals(rollover_ratio, DECIMALS),
-        "backspace_count":       backspace_count,
-        "char_sequence":         char_sequence,
-        "masked_sequence":       masked_sequence,
-    }
+        # Password reconstruction
+        real_password = ""
+        char_seq = []
+        mask_seq = []
+        for k in final_stack:
+            val = k["char"]
+            if len(val) == 1:
+                real_password += val
+                char_seq.append(val)
+                mask_seq.append("*")
+            else:
+                real_password += f"[{val}]"
+                char_seq.append(f"[{val}]")
+                mask_seq.append("[key]")
 
-    return {
-        "status":               "success",
-        "features":             features,
-        "password_hash":        password_hash,
-        "real_password_string": real_password_string,
-    }
+        # Feature extraction
+        h_vec, dd_vec, ud_vec, uu_vec, du_vec = [], [], [], [], []
+        for i, k in enumerate(final_stack):
+            h_vec.append((k["up"] - k["down"]) / 1000.0)
+            if i > 0:
+                prev = final_stack[i-1]
+                dd_vec.append((k["down"] - prev["down"]) / 1000.0)
+                ud_vec.append((k["down"] - prev["up"]) / 1000.0)
+                uu_vec.append((k["up"] - prev["up"]) / 1000.0)
+                du_vec.append((k["up"] - prev["down"]) / 1000.0)
+
+        rollover = sum(1 for ud in ud_vec if ud < 0) / len(ud_vec) if ud_vec else 0
+        speed = len(final_stack) / total_duration if total_duration > 0 else 0.0
+
+        h_s = self.compute_vector_stats(h_vec)
+        dd_s = self.compute_vector_stats(dd_vec)
+        ud_s = self.compute_vector_stats(ud_vec)
+        uu_s = self.compute_vector_stats(uu_vec)
+        du_s = self.compute_vector_stats(du_vec)
+
+        features = {
+            "H_vector": self.round_vec(h_vec),
+            "DD_vector": self.round_vec(dd_vec),
+            "UD_vector": self.round_vec(ud_vec),
+            "UU_vector": self.round_vec(uu_vec),
+            "DU_vector": self.round_vec(du_vec),
+            "H_mean": h_s["mean"], "H_std": h_s["std"], "H_min": h_s["min"], "H_max": h_s["max"], "H_cv": h_s["cv"],
+            "DD_mean": dd_s["mean"], "DD_std": dd_s["std"], "DD_min": dd_s["min"], "DD_max": dd_s["max"], "DD_cv": dd_s["cv"],
+            "UD_mean": ud_s["mean"], "UD_std": ud_s["std"], "UD_min": ud_s["min"], "UD_max": ud_s["max"], "UD_cv": ud_s["cv"],
+            "UU_mean": uu_s["mean"], "UU_std": uu_s["std"], "UU_min": uu_s["min"], "UU_max": uu_s["max"], "UU_cv": uu_s["cv"],
+            "DU_mean": du_s["mean"], "DU_std": du_s["std"], "DU_min": du_s["min"], "DU_max": du_s["max"], "DU_cv": du_s["cv"],
+            "total_duration": self.round_val(total_duration),
+            "typing_speed": self.round_val(speed),
+            "typing_rollover_ratio": self.round_val(rollover),
+            "char_count": len(final_stack),
+            "backspace_count": backspace_count,
+            "char_sequence": char_seq,
+            "masked_sequence": mask_seq,
+        }
+
+        return {
+            "status": "success",
+            "features": features,
+            "password_hash": hashlib.sha256(real_password.encode()).hexdigest(),
+            "real_password_string": real_password,
+        }
+
+
+# Legacy function wrappers for compatibility
+_default_processor = KeystrokeProcessor()
+
+def process_web_events(events, username):
+    return _default_processor.process(events, username)
+
+def assess_sample_quality(features):
+    return _default_processor.assess_quality(features)
+
+def compute_vector_stats(vec):
+    return _default_processor.compute_vector_stats(vec)

@@ -1,23 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-black">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}SecureAuth{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <title>{% block title %}JANUS // Biometric Identity Systems{% endblock %}</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&family=JetBrains+Mono:wght@100..800&family=Oswald:wght@300..700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (Latest Local Version) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+    
+    <style>
+        body {
+            background-color: #000000;
+            color: #FFFFFF;
+            font-family: 'Figtree', sans-serif;
+            cursor: crosshair;
+        }
+        .font-brutal { font-family: 'Oswald', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Force dark inputs globally */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #FFFFFF;
+            -webkit-box-shadow: 0 0 0px 1000px #000000 inset;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        input {
+            background-color: #000000 !important;
+            color: #FFFFFF !important;
+        }
+
+        input::placeholder {
+            color: #27272a !important; /* zinc-800 */
+        }
+        
+        .static-noise {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.05;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    {% block body %}{% endblock %}
-    {% block extra_js %}{% endblock %}
+<body class="h-full flex flex-col selection:bg-[#FF4500] selection:text-black">
+    <div class="static-noise"></div>
+
+    <!-- Navigation -->
+    {% if not hide_nav %}
+    <nav class="sticky top-0 z-50 w-full bg-black/80 backdrop-blur-md border-b border-zinc-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center gap-3">
+                        <span class="font-brutal text-2xl font-bold tracking-widest text-white uppercase">JANUS</span>
+                        <span class="h-4 w-[1px] bg-zinc-800 hidden sm:block"></span>
+                        <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Biometric Secure</span>
+                    </a>
+                </div>
+
+                <div class="flex items-center gap-2 sm:gap-4 md:gap-8">
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('main.home') }}" class="text-[11px] font-bold uppercase tracking-widest {% if request.endpoint == 'main.home' %}text-[#FF4500]{% else %}text-zinc-400 hover:text-white{% endif %} transition-colors px-2 py-1">Dashboard</a>
+                        <a href="{{ url_for('main.api_key_dashboard') }}" class="text-[11px] font-bold uppercase tracking-widest {% if request.endpoint == 'main.api_key_dashboard' %}text-[#FF4500]{% else %}text-zinc-400 hover:text-white{% endif %} transition-colors px-2 py-1">API Keys</a>
+                        
+                        <div class="h-6 w-[1px] bg-zinc-800 mx-2"></div>
+                        
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-bold text-zinc-500 uppercase hidden lg:block">{{ current_user.username }}</span>
+                            <a href="{{ url_for('auth.logout') }}" class="px-4 py-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors border border-zinc-700">Logout</a>
+                        </div>
+                    {% else %}
+                        <a href="{{ url_for('auth.login_page') }}" class="text-[11px] font-bold text-zinc-400 uppercase tracking-widest hover:text-white transition-colors px-3 py-2">Sign In</a>
+                        <a href="{{ url_for('auth.register_page') }}" class="px-6 py-2 bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Content Area -->
+    <main class="flex-grow relative">
+        {% block body %}{% endblock %}
+    </main>
+
+    <!-- Global Scripts -->
     <script nonce="{{ csp_nonce() }}">
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-        
-        // Override fetch to automatically include CSRF token
         const originalFetch = window.fetch;
         window.fetch = function(url, options = {}) {
-            // Only add CSRF for same-origin requests
             if (!url.startsWith('http') || url.startsWith(window.location.origin)) {
                 options.headers = options.headers || {};
                 if (options.method && options.method.toUpperCase() !== 'GET') {
@@ -28,104 +110,58 @@
         };
     </script>
 
-    <!-- Custom confirm modal (used to replace native confirm()) -->
-    <div id="confirmModal" class="confirm-modal" aria-hidden="true" role="dialog" aria-modal="true">
-        <div class="confirm-modal-backdrop"></div>
-        <div class="confirm-modal-panel" role="document" tabindex="-1">
-            <div class="confirm-modal-header">
-                <h3 id="confirmModalTitle">Confirm</h3>
-            </div>
-            <div class="confirm-modal-body" id="confirmModalMessage">Are you sure?</div>
-            <div class="confirm-modal-footer">
-                <button id="confirmCancelBtn" class="btn btn-secondary">Cancel</button>
-                <button id="confirmOkBtn" class="btn btn-danger">Yes, proceed</button>
+    <!-- Confirmation Modal Component -->
+    <div id="confirmModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" onclick="closeConfirmModal(false)"></div>
+        <div class="relative bg-[#050505] border border-zinc-800 p-8 max-w-md w-full shadow-2xl">
+            <h3 id="confirmTitle" class="font-brutal text-xl text-white uppercase tracking-widest mb-4">Confirm Action</h3>
+            <p id="confirmMessage" class="text-zinc-400 text-sm mb-8 leading-relaxed uppercase tracking-wider"></p>
+            <div class="flex justify-end gap-4">
+                <button onclick="closeConfirmModal(false)" class="px-6 py-2 text-zinc-500 hover:text-white text-[11px] font-bold uppercase tracking-widest transition-colors">Cancel</button>
+                <button id="confirmOkBtn" class="px-6 py-2 bg-[#FF4500] text-black text-[11px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors">Confirm</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-24 right-8 z-[100] transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toastContent" class="px-6 py-4 border bg-black shadow-2xl text-[11px] font-bold uppercase tracking-widest"></div>
+    </div>
+
     <script nonce="{{ csp_nonce() }}">
-    (function(){
-        const modal = document.getElementById('confirmModal');
-        const titleEl = document.getElementById('confirmModalTitle');
-        const msgEl = document.getElementById('confirmModalMessage');
-        const okBtn = document.getElementById('confirmOkBtn');
-        const cancelBtn = document.getElementById('confirmCancelBtn');
-        let resolveFn = null;
-        let previousActive = null;
+        let confirmResolve = null;
 
-        function showConfirmModal(title, message, opts) {
-            opts = opts || {};
-            const confirmText = opts.confirmText || 'OK';
-            const cancelText = opts.cancelText || 'Cancel';
-            const destructive = !!opts.destructive;
+        window.showConfirmModal = function(title, message, opts = {}) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = message;
+            const okBtn = document.getElementById('confirmOkBtn');
+            okBtn.innerText = opts.confirmText || 'Confirm';
+            okBtn.onclick = () => closeConfirmModal(true);
+            document.getElementById('confirmModal').classList.remove('hidden');
+            return new Promise((resolve) => { confirmResolve = resolve; });
+        };
 
-            titleEl.textContent = title || 'Confirm';
-            msgEl.textContent = message || '';
-            okBtn.textContent = confirmText;
-            cancelBtn.textContent = cancelText;
-            okBtn.classList.toggle('btn-danger', destructive);
-
-            previousActive = document.activeElement;
-            modal.setAttribute('aria-hidden', 'false');
-            modal.classList.add('active');
-            document.body.classList.add('modal-open');
-
-            // Focus the safer action (Cancel) by default
-            cancelBtn.focus();
-
-            return new Promise((resolve) => { resolveFn = resolve; });
+        function closeConfirmModal(result) {
+            document.getElementById('confirmModal').classList.add('hidden');
+            if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
         }
 
-        function cleanup(result) {
-            modal.classList.remove('active');
-            modal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-            try { if (previousActive) previousActive.focus(); } catch(e) {}
-            if (resolveFn) { resolveFn(result); resolveFn = null; }
-        }
+        window.showToast = function(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const content = document.getElementById('toastContent');
+            content.innerText = message;
+            
+            content.className = 'px-6 py-4 border bg-black shadow-2xl text-[11px] font-bold uppercase tracking-widest ' + 
+                (type === 'error' ? 'border-red-500 text-red-500' : 
+                 type === 'success' ? 'border-green-500 text-green-500' : 
+                 'border-[#FF4500] text-[#FF4500]');
 
-        okBtn.addEventListener('click', () => cleanup(true));
-        cancelBtn.addEventListener('click', () => cleanup(false));
-
-        // Click on backdrop cancels
-        modal.addEventListener('click', function(e) {
-            if (e.target.classList.contains('confirm-modal-backdrop')) {
-                cleanup(false);
-            }
-        });
-
-        // Keyboard handling: Escape to cancel, Tab to trap focus between buttons
-        modal.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') { cleanup(false); }
-            if (e.key === 'Tab') {
-                const focusOrder = [cancelBtn, okBtn];
-                const idx = focusOrder.indexOf(document.activeElement);
-                if (e.shiftKey) {
-                    const next = focusOrder[(idx - 1 + focusOrder.length) % focusOrder.length];
-                    next.focus();
-                } else {
-                    const next = focusOrder[(idx + 1) % focusOrder.length];
-                    next.focus();
-                }
-                e.preventDefault();
-            }
-        });
-
-        // Expose globally
-        window.showConfirmModal = showConfirmModal;
-
-        // Safety: ensure modal is not accidentally left open on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                const c = document.getElementById('confirmModal');
-                if (c) {
-                    c.classList.remove('active');
-                    c.setAttribute('aria-hidden', 'true');
-                }
-                document.body.classList.remove('modal-open');
-            } catch(e) { console.warn('Confirm modal init error', e); }
-        });
-    })();
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+            }, 4000);
+        };
     </script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

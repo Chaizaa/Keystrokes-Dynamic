@@ -28,7 +28,9 @@ def resolve_service_from_app(name: str) -> Any:
         raise RuntimeError("Service resolution requires an active Flask application context")
 
     registry = current_app.extensions.get("service_registry")
-    if registry is None or not registry.has(name):
+    if registry is None:
         raise RuntimeError(f"{name} is not available in app service registry")
-
-    return registry.get(name)
+    try:
+        return registry.get(name)
+    except KeyError as exc:
+        raise RuntimeError(f"{name} is not available in app service registry") from exc

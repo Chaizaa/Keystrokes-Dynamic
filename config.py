@@ -105,8 +105,6 @@ class DevelopmentConfig(Config):
     DEBUG = True
     TESTING = False
     SESSION_COOKIE_SECURE = False
-    # In development we default to lenient client-side rate limit behavior
-    DEV_LENIENT_RATELIMIT = True
 
 
 class ProductionConfig(Config):

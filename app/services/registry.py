@@ -73,4 +73,4 @@ class ServiceRegistry:
 
     def list_registered(self) -> list[str]:
         """Return all registered keys in stable sorted order."""
-        return sorted(set(self._instances).union(self._providers))
+        return sorted(self._instances.keys() | self._providers.keys())

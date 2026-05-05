@@ -10,12 +10,14 @@ POST /api/register_sample
 import json
 import traceback
 from datetime import datetime, timezone
+from typing import Optional
 
 from flask import jsonify, request
 
 from app import limiter as _limiter
 from app.models import AdminAudit, EnrollmentVector, User, db
 from app.services.email_service import email_service
+from app.services.verification_service import verification_service
 from app.utils.password_strength import calculate_password_strength, get_strength_label
 
 # Keep legacy module-level symbols for compatibility with existing imports/tests.
@@ -26,38 +28,13 @@ from ._shared import (
     get_auth_service,
     get_biometric_service,
 )
+from .helpers import assess_quality, error_response, log_audit, process_events, save_biometric_sample
 
 
-# ---------------------------------------------------------------------------
-# Helper: write stats flat dict → model columns
-# ---------------------------------------------------------------------------
-
-def _apply_vector_stats(ev, features: dict) -> None:
-    """Copy flat timing stats from the features dict onto an EnrollmentVector instance.
-
-    Uses the flat keys produced by ``process_web_events`` (H_mean, H_std, …, H_cv, etc.)
-    which are now populated by ``compute_vector_stats`` inside the processor.
-    """
-    for prefix in ("H", "DD", "UD", "UU", "DU"):
-        for stat in ("mean", "std", "min", "max", "cv"):
-            col = f"{prefix}_{stat}"
-            val = features.get(col)
-            if val is not None:
-                setattr(ev, col, val)
+# Local stats helper removed in favor of consolidated save_biometric_sample in .helpers
 
 
-def _process_web_events(username, events):
-    """Call shared keystroke processor via api package export (test-friendly)."""
-    import app.blueprints.api as api_mod
-
-    return api_mod.process_web_events(events, username)
-
-
-def _assess_sample_quality(features):
-    """Call shared quality assessor via api package export (test-friendly)."""
-    import app.blueprints.api as api_mod
-
-    return api_mod.assess_sample_quality(features)
+# Removed local wrappers in favor of .helpers imports
 
 
 def _recommended_samples():
@@ -164,26 +141,26 @@ def _extract_register_payload(data):
 def _validate_register_payload(username, events):
     """Validate required fields and username format for register_sample."""
     if not events or not username:
-        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+        return error_response("Data tidak lengkap", status_code=400)
 
     validation = get_auth_service().validate_username(username)
     if not validation["valid"]:
-        return jsonify({"status": "error", "message": validation["message"]}), 400
+        return error_response(validation["message"], status_code=400)
 
     return None
 
 
 def _prepare_enrollment_features(username, events):
     """Process raw events and enrich features with quality metadata."""
-    result = _process_web_events(username, events)
+    result = process_events(events, username)
     if result["status"] != "success":
-        return None, None, None, jsonify({"status": "error", "message": result["msg"]}), 400
+        return None, None, None, error_response(result["msg"], status_code=400), 400
 
     features = result["features"]
     features["username"] = username
     features["event_type"] = "enrollment"
 
-    quality = _assess_sample_quality(features)
+    quality = assess_quality(features)
     features["quality_label"] = quality["quality_label"]
     features["quality_score"] = quality["quality_score"]
 
@@ -202,19 +179,7 @@ def _set_password_on_existing_user(existing_user, real_pass, username):
         return None, None, (jsonify({"status": "error", "message": "Unable to set password"}), 500)
 
 
-def _log_registration_audit(user):
-    """Write registration audit row; non-blocking on failures."""
-    try:
-        if user:
-            AdminAudit.log(
-                action=AdminAudit.ACTION_REGISTERED,
-                user_id=user.id,
-                username=user.username,
-                details={"email": user.email},
-            )
-            db.session.commit()
-    except Exception:
-        pass
+# Audit logging moved to .helpers.log_audit
 
 
 def _send_registration_verification_email(user, email):
@@ -225,13 +190,14 @@ def _send_registration_verification_email(user, email):
     user = db.session.get(User, user.id)
     try:
         sent_at = datetime.now(timezone.utc)
+        
+        # Use VerificationService to generate code and manage timestamps
+        code = verification_service.generate_6_digit_code()
+        user.email_verification_code_hash = verification_service.hash_code(code)
         user.email_verification_sent_at = sent_at
         db.session.commit()
-        try:
-            token = email_service.generate_token(user.email, salt="email-verify", sent_at=sent_at)
-        except TypeError:
-            token = email_service.generate_token(user.email, salt="email-verify")
-        email_service.send_verification_email(user, token)
+        
+        email_service.send_verification_email(user, code)
         print(f"[INFO] Verification email sent to {user.email}")
     except Exception as e:
         print(f"[WARNING] Failed to send verification email: {e}")
@@ -250,7 +216,8 @@ def _create_user_for_first_sample(username, real_pass, email, features):
         return None, None, (jsonify(err_payload), 400)
 
     user = user_result.get("user")
-    _log_registration_audit(user)
+    if user:
+        log_audit(AdminAudit.ACTION_REGISTERED, user.id, user.username, {"email": user.email})
 
     if user:
         try:
@@ -343,36 +310,8 @@ def _resolve_enrollment_user_id(user, username):
     return None
 
 
-def _save_enrollment_vector(username, features, password_hash, user):
-    """Persist one enrollment sample to EnrollmentVector table."""
-    try:
-        uid = _resolve_enrollment_user_id(user, username)
-        if uid is not None:
-            features["user_id"] = int(uid)
-
-        ev = EnrollmentVector(username=username, user_id=uid, event_type="enrollment")
-        ev.timestamp = datetime.now(timezone.utc).isoformat()
-        ev.total_duration = features.get("total_duration")
-        ev.typing_speed = features.get("typing_speed")
-
-        # Raw vectors
-        for vec_name in ("H", "DD", "UD", "UU", "DU"):
-            setattr(ev, f"{vec_name}_vector", json.dumps(features.get(f"{vec_name}_vector", [])))
-
-        # Flat stats (mean, std, min, max, cv)
-        _apply_vector_stats(ev, features)
-
-        if password_hash:
-            ev.password_hash = password_hash
-
-        db.session.add(ev)
-        db.session.commit()
-        return None
-
-    except Exception as e:
-        print(f"[ERROR] register_sample save_data: {e}")
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": "Database error saving sample"}), 500
+# Handled by consolidated helper in .helpers
+pass
 
 
 def _schedule_auto_training_if_ready(username, new_count):
@@ -427,7 +366,7 @@ def _schedule_auto_training_if_ready(username, new_count):
 # ---------------------------------------------------------------------------
 
 @api_bp.route("/check_username", methods=["POST"])
-@_limiter.limit("10 per minute")
+@_limiter.limit("60 per minute")
 def check_username():
     """Check username availability for registration or login."""
     try:
@@ -519,10 +458,13 @@ def register_sample():
             features["password_score"] = 0
             strength_result = {"strength": "unknown", "score": 0}
 
-        # Save enrollment vector via SQLAlchemy
-        save_error = _save_enrollment_vector(username, features, password_hash, user)
+        # Save enrollment sample via consolidated helper
+        user_id = _resolve_enrollment_user_id(user, username)
+        _, save_error = save_biometric_sample(username, user_id, features, password_hash)
         if save_error:
             return save_error
+        
+        db.session.commit()
 
         new_status = get_biometric_service().get_enrollment_status(username)
         new_count = new_status["count"]
