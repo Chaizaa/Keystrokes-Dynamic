@@ -219,7 +219,7 @@ def create_app(config_name="development"):
     def load_user(user_id):
         from app.models import User
 
-        return db.session.get(User, int(user_id))
+        return db.session.get(User, user_id)
 
     # CSRF Protection (exempt API routes)
     csrf.init_app(app)

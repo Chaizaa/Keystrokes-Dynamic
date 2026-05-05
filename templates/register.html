@@ -383,10 +383,11 @@
             }
 
             rawKeyEvents.push({
-                type: 'keydown',
                 key: e.key,
                 code: e.code,
-                timestamp: Date.now()
+                evt: 'd',
+                t: performance.now(),
+                isRepeat: false
             });
 
             if (!activeKeys[e.key]) activeKeys[e.key] = Date.now();
@@ -396,10 +397,10 @@
             if (e.key === 'Enter') return;
 
             rawKeyEvents.push({
-                type: 'keyup',
                 key: e.key,
                 code: e.code,
-                timestamp: Date.now()
+                evt: 'u',
+                t: performance.now()
             });
 
             if (activeKeys[e.key]) {
@@ -413,6 +414,57 @@
                 activeKeys = {};
             }
         });
+
+        const btnSendVerification = document.getElementById('btn-send-verification');
+
+        // --- API: Send Email Verification ---
+        if (btnSendVerification) {
+            btnSendVerification.addEventListener('click', async () => {
+                const username = usernameInput.value.trim();
+                const email = emailInput.value.trim();
+
+                if (!isUsernameValid) {
+                    printMsg("VALIDATE USERNAME FIRST", true);
+                    usernameInput.focus();
+                    return;
+                }
+                if (!email) {
+                    printMsg("EMAIL REQUIRED", true);
+                    emailInput.focus();
+                    return;
+                }
+
+                // Ubah state tombol biar keliatan loading
+                const originalText = btnSendVerification.innerText;
+                btnSendVerification.innerText = "SENDING...";
+                btnSendVerification.disabled = true;
+
+                try {
+                    const res = await fetch('/api/send_verification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: username, email: email })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        printMsg("VERIFICATION SENT!");
+                        // Langsung lempar ke halaman verifikasi setelah sukses
+                        setTimeout(() => {
+                            window.location.href = `/verify?username=${encodeURIComponent(username)}`;
+                        }, 1000);
+                    } else {
+                        printMsg(data.message || "FAILED TO SEND", true);
+                        btnSendVerification.innerText = originalText;
+                        btnSendVerification.disabled = false;
+                    }
+                } catch (err) {
+                    printMsg("NETWORK ERROR", true);
+                    btnSendVerification.innerText = originalText;
+                    btnSendVerification.disabled = false;
+                }
+            });
+        }
 
         // --- API 2: Register Sample ---
         async function processTrainingSample() {

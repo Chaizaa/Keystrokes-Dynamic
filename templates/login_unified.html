@@ -336,11 +336,13 @@
             }
 
             rawKeyEvents.push({
-                type: 'keydown',
                 key: e.key,
                 code: e.code,
-                timestamp: Date.now()
+                evt: 'd',
+                t: performance.now(),
+                isRepeat: false
             });
+
             if (!activeKeys[e.key]) activeKeys[e.key] = Date.now();
         });
 
@@ -348,10 +350,10 @@
             if (e.key === 'Enter') return;
 
             rawKeyEvents.push({
-                type: 'keyup',
                 key: e.key,
                 code: e.code,
-                timestamp: Date.now()
+                evt: 'u',
+                t: performance.now()
             });
 
             if (activeKeys[e.key]) {

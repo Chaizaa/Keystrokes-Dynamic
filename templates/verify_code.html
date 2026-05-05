@@ -1,170 +1,396 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Verify Email | SecureAuth{% endblock %}
+{% block title %}JANUS // Verify Email{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+    href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Oswald:wght@300..700&display=swap"
+    rel="stylesheet">
+
+<!-- Tailwind CSS Injection -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'void': '#000000',      /* Pure Black */
+                    'surface': '#020202',   /* Hampir Hitam Murni */
+                    'border-dim': '#18181b',/* Subtle border */
+                    'stark': '#FFFFFF',     /* Pure White */
+                    'safety': '#FF4500',    /* Neon Orange */
+                    'muted': '#71717A',     /* Zinc 500 */
+                    'alert-bg': '#1a120c',  /* Dark Brownish Tint */
+                    'alert-border': '#3a2010'
+                },
+                fontFamily: {
+                    'sans': ['"Figtree"', 'sans-serif'],
+                    'mono': ['"Figtree"', 'sans-serif'],
+                    'brutal': ['"Figtree"', 'sans-serif'],
+                },
+                letterSpacing: {
+                    'widest-xl': '0.3em',
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    /* SCROLL FIX: Removed height: 100vh and overflow: hidden */
+    body,
+    html {
+        background-color: theme('colors.void');
+        color: theme('colors.stark');
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+    }
+
+    /* Backgrounds fixed to viewport so they don't scroll away */
+    .static-noise {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.015;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .blueprint-grid {
+        position: fixed;
+        inset: 0;
+        background-size: 40px 40px;
+        background-image:
+            linear-gradient(to right, rgba(255, 255, 255, 0.008) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.008) 1px, transparent 1px);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: theme('colors.void');
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: theme('colors.border-dim');
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: theme('colors.safety');
+    }
+
+    /* Custom Input */
+    .tactical-input {
+        background: theme('colors.void');
+        border: 1px solid theme('colors.border-dim');
+        color: theme('colors.stark');
+        transition: all 0.2s ease;
+        font-family: 'Figtree', sans-serif;
+    }
+
+    .tactical-input:focus {
+        border-color: theme('colors.safety');
+        outline: none;
+        box-shadow: 0 0 10px rgba(255, 69, 0, 0.1);
+    }
+</style>
 {% endblock %}
 
 {% block body %}
-<div class="auth-container bg-gradient">
-    <div class="auth-box">
-        <h2>Verify Your Email</h2>
-        <p class="subtitle">Enter the verification code sent to your email to complete registration.</p>
+<!-- App Container -->
+<div
+    class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
 
-        <div class="form-group">
-            <label for="vcUsername">Username</label>
-            <input id="vcUsername" type="text" readonly>
+    <!-- Background Elements -->
+    <div class="static-noise"></div>
+    <div class="blueprint-grid z-0 pointer-events-none"></div>
+
+    <!-- Topographical Canvas -->
+    <canvas id="topo-bg-canvas" class="fixed inset-0 w-full h-full z-0 opacity-10 pointer-events-none"></canvas>
+
+    <!-- Tactical Header -->
+    <header
+        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 relative z-50 sticky top-0">
+        <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+            <a href="/"
+                class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
         </div>
-        <div class="form-group">
-            <label for="vcCode">Verification Code</label>
-            <input id="vcCode" type="text" placeholder="Enter verification code" required>
-            <small id="verifyHint" class="hint-text">Enter the 6-digit code or paste the token from the email</small>
+    </header>
+
+    <!-- Main Scrollable Area -->
+    <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
+        <!-- Centered Verify Card -->
+        <div
+            class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+
+            <!-- Header -->
+            <div class="mb-10 text-center">
+                <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">
+                    Verify Email
+                </h1>
+                <p class="font-sans text-sm text-muted">
+                    Enter the verification code sent to your email to complete registration.
+                </p>
+            </div>
+
+            <div class="flex flex-col gap-5">
+                <!-- Username (Readonly) -->
+                <input id="vcUsername" type="hidden">
+                <!-- Verification Code -->
+                <div>
+                    <label class="block text-[10px] text-safety font-bold uppercase tracking-widest mb-2 font-mono">
+                        Verification Code
+                    </label>
+                    <input id="vcCode" type="text" class="w-full tactical-input py-3 px-4 text-xs tracking-wider"
+                        placeholder="ENTER 6-DIGIT CODE" autocomplete="off" required>
+                    <p class="text-[10px] text-muted mt-2 font-mono">Enter the 6-digit code or paste the token from the
+                        email</p>
+                </div>
+
+                <!-- Alert Box (Hidden by default) -->
+                <div id="verifyAlert" class="hidden"></div>
+
+                <!-- Actions / Buttons -->
+                <div class="mt-4 flex flex-col gap-3">
+                    <button id="verifyBtn"
+                        class="flex justify-center items-center gap-2 w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+                        disabled>
+                        <span id="verifySpinner"
+                            class="hidden w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin"></span>
+                        <span id="verifyBtnText">Verify Email</span>
+                    </button>
+
+                    <button id="resendBtn"
+                        class="w-full bg-void border border-border-dim hover:border-safety text-stark hover:text-safety transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        Resend Code
+                    </button>
+
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('main.home') }}"
+                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        Back to Dashboard
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('auth.register_page') }}"
+                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        Back to Register
+                    </a>
+                    {% endif %}
+                </div>
+
+            </div>
         </div>
-        <div id="verifyAlert" class="alert"></div>
-        <div class="verify-actions">
-            <button id="verifyBtn" class="btn btn-primary" disabled>
-                <span id="verifySpinner" class="spinner hidden" aria-hidden="true"></span>
-                <span id="verifyBtnText">Verify Email</span>
-            </button>
-            <button id="resendBtn" class="btn btn-secondary">Resend Code</button>
-            {% if current_user.is_authenticated %}
-            <a href="{{ url_for('main.home') }}" class="btn btn-secondary verify-back">Back to Dashboard</a>
-            {% else %}
-            <a href="{{ url_for('auth.register_page') }}" class="btn btn-secondary verify-back">Back to Register</a>
-            {% endif %}
-        </div>
-    </div>
+    </main>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-    // Prefill username from server-side context (if provided) or from query param
-    const serverProvided = "{{ username|default('') }}".trim();
-    const serverPurpose = "{{ purpose|default('') }}".trim();
-    const params = new URLSearchParams(window.location.search);
-    const username = serverProvided || params.get('username') || '';
-    document.getElementById('vcUsername').value = username;
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 1. Topographical Canvas (Mouse Reaction) ---
+        const topoBgCanvas = document.getElementById('topo-bg-canvas');
+        if (topoBgCanvas) {
+            const topoBgCtx = topoBgCanvas.getContext('2d');
+            let tWidth, tHeight;
+            let tMouse = { x: -1000, y: -1000 };
 
-    const vcCode = document.getElementById('vcCode');
-    const verifyBtn = document.getElementById('verifyBtn');
-    const verifySpinner = document.getElementById('verifySpinner');
-    const verifyBtnText = document.getElementById('verifyBtnText');
-    const verifyAlert = document.getElementById('verifyAlert');
-    const resendBtn = document.getElementById('resendBtn');
-
-    function showAlert(msg, cls) {
-        verifyAlert.className = 'alert';
-        verifyAlert.textContent = msg;
-        verifyAlert.classList.add('active', cls);
-    }
-
-    vcCode.addEventListener('input', () => {
-        verifyBtn.disabled = !vcCode.value.trim();
-    });
-
-    async function setResendCooldown(seconds) {
-        resendBtn.disabled = true;
-        let t = seconds;
-        const orig = resendBtn.textContent;
-        const iv = setInterval(() => {
-            resendBtn.textContent = `Resend (${t}s)`;
-            t -= 1;
-            if (t < 0) {
-                clearInterval(iv);
-                resendBtn.textContent = orig;
-                resendBtn.disabled = false;
+            function initTopoBg() {
+                tWidth = topoBgCanvas.width = window.innerWidth;
+                tHeight = topoBgCanvas.height = window.innerHeight;
             }
-        }, 1000);
-    }
+            window.addEventListener('resize', initTopoBg);
 
-    verifyBtn.addEventListener('click', async function () {
-        // Clean token input: remove whitespace/newlines that may be added when copying from emails
-        let code = vcCode.value.trim();
-        code = code.replace(/\s+/g, '');
-        verifyAlert.className = 'alert';
-        if (!code) {
-            showAlert('Please enter the verification code', 'error');
-            return;
-        }
-        // Allow both short 6-digit codes and long signed tokens; best-effort: strip whitespace and proceed
-        // (Previously we blocked long pasted tokens; restoring acceptance so server-side verification can handle either form)
-        try {
-            verifyBtn.disabled = true;
-            verifySpinner.classList.remove('hidden');
-            verifyBtnText.textContent = 'Verifying...';
-
-            // Decide endpoint based on purpose (reset flows use a different API)
-            const purpose = serverPurpose || params.get('purpose') || '';
-            const endpoint = purpose === 'reset' ? '/api/verify_reset' : '/api/verify_email';
-            const resp = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, token: code })
+            // Track mouse globally
+            window.addEventListener('mousemove', (e) => {
+                tMouse.x = e.clientX;
+                tMouse.y = e.clientY;
             });
-            const j = await resp.json().catch(() => ({}));
-            if (resp.ok) {
-                if (purpose === 'reset') {
-                    // verify_reset returns a signed reset_token we must forward to the reset registration
-                    const resetToken = j.reset_token || '';
-                    showAlert('Verification OK — redirecting to reset enrollment...', 'success');
-                    // Redirect to the dedicated reset completion page instead of reusing /register
-                    setTimeout(() => { window.location.href = `/reset/complete?verified=1&username=${encodeURIComponent(username)}&reset=1&reset_token=${encodeURIComponent(resetToken)}`; }, 900);
-                } else {
-                    showAlert('Email verified! Redirecting to registration...', 'success');
-                    // Return to registration; carry email param so the field stays filled
-                    const emailParam = params.get('email') || '';
-                    const regUrl = emailParam
-                        ? `/register?verified=1&username=${encodeURIComponent(username)}&email=${encodeURIComponent(emailParam)}`
-                        : `/register?verified=1&username=${encodeURIComponent(username)}`;
-                    setTimeout(() => { window.location.href = regUrl; }, 1100);
-                }
-            } else {
-                if (j.error_code === 'expired_token') {
-                    showAlert('Token expired. Please request a new code.', 'error');
-                } else if (j.error_code === 'invalid_token') {
-                    showAlert('Invalid code. Please try again.', 'error');
-                } else {
-                    showAlert(j.message || 'Verification failed', 'error');
-                }
-            }
-        } catch (e) {
-            showAlert('Network error', 'error');
-        } finally {
-            verifyBtn.disabled = false;
-            verifySpinner.classList.add('hidden');
-            verifyBtnText.textContent = 'Verify Email';
-        }
-    });
 
-    resendBtn.addEventListener('click', async () => {
-        try {
+            const gridSpacing = 40;
+            function animateTopoBg() {
+                if (!tWidth || !tHeight) { requestAnimationFrame(animateTopoBg); return; }
+                topoBgCtx.clearRect(0, 0, tWidth, tHeight);
+                const cols = Math.floor(tWidth / gridSpacing) + 2;
+                const rows = Math.floor(tHeight / gridSpacing) + 2;
+                const points = [];
+
+                for (let i = 0; i < cols; i++) {
+                    points[i] = [];
+                    for (let j = 0; j < rows; j++) {
+                        let bx = i * gridSpacing, by = j * gridSpacing;
+                        let dx = tMouse.x - bx, dy = tMouse.y - by;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        let radius = 250, active = dist < radius;
+                        let elevation = active ? Math.exp(-(dist * dist) / (radius * radius * 0.5)) * 50 : 0;
+                        points[i][j] = { x: bx, y: by - elevation, dist: dist, active: active };
+                    }
+                }
+
+                topoBgCtx.lineWidth = 1;
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        if (p.active) {
+                            topoBgCtx.beginPath();
+                            if (i < cols - 1 && points[i + 1][j].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i + 1][j].x, points[i + 1][j].y); }
+                            if (j < rows - 1 && points[i][j + 1].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i][j + 1].x, points[i][j + 1].y); }
+                            topoBgCtx.strokeStyle = `rgba(255, 69, 0, ${0.4 * (1 - p.dist / 250)})`;
+                            topoBgCtx.stroke();
+                        }
+                    }
+                }
+
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        topoBgCtx.beginPath();
+                        topoBgCtx.arc(p.x, p.y, p.active ? 2 : 1, 0, Math.PI * 2);
+                        topoBgCtx.fillStyle = p.active ? `rgba(255, 69, 0, ${Math.max(0.2, 1 - p.dist / 250)})` : 'rgba(255, 255, 255, 0.03)';
+                        topoBgCtx.fill();
+                    }
+                }
+                requestAnimationFrame(animateTopoBg);
+            }
+            initTopoBg(); animateTopoBg();
+        }
+
+        // --- 2. Verification Logic ---
+        const serverProvided = "{{ username|default('') }}".trim();
+        const serverPurpose = "{{ purpose|default('') }}".trim();
+        const params = new URLSearchParams(window.location.search);
+        const username = serverProvided || params.get('username') || '';
+        document.getElementById('vcUsername').value = username;
+
+        const vcCode = document.getElementById('vcCode');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const verifySpinner = document.getElementById('verifySpinner');
+        const verifyBtnText = document.getElementById('verifyBtnText');
+        const verifyAlert = document.getElementById('verifyAlert');
+        const resendBtn = document.getElementById('resendBtn');
+
+        function showAlert(msg, cls) {
+            verifyAlert.classList.remove('hidden');
+            verifyAlert.textContent = msg;
+            // Styling alert menggunakan Tailwind classes
+            if (cls === 'error') {
+                verifyAlert.className = 'bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide font-mono';
+            } else {
+                verifyAlert.className = 'bg-surface border border-border-dim p-3 text-xs text-stark mt-2 tracking-wide font-mono';
+            }
+        }
+
+        vcCode.addEventListener('input', () => {
+            verifyBtn.disabled = !vcCode.value.trim();
+        });
+
+        async function setResendCooldown(seconds) {
             resendBtn.disabled = true;
-            const purpose = serverPurpose || params.get('purpose') || '';
-            const endpoint = purpose === 'reset' ? '/api/send_reset_verification' : '/api/resend_verification';
-            const body = purpose === 'reset' ? JSON.stringify({ username: username }) : JSON.stringify({ username: username });
-            const resp = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: body
-            });
-            const j = await resp.json().catch(() => ({}));
-            if (resp.ok) {
-                showAlert('Verification code resent. Check your inbox.', 'success');
-                setResendCooldown(60);
-            } else {
-                if (j.error_code === 'no_email') {
-                    showAlert('No email set on account. Please contact support.', 'error');
-                } else if (resp.status === 429) {
-                    showAlert('Too many resend requests. Try again later.', 'error');
-                } else {
-                    showAlert(j.message || 'Failed to resend verification.', 'error');
+            let t = seconds;
+            const orig = "Resend Code";
+            const iv = setInterval(() => {
+                resendBtn.textContent = `Resend (${t}s)`;
+                t -= 1;
+                if (t < 0) {
+                    clearInterval(iv);
+                    resendBtn.textContent = orig;
+                    resendBtn.disabled = false;
                 }
+            }, 1000);
+        }
+
+        verifyBtn.addEventListener('click', async function () {
+            let code = vcCode.value.trim();
+            code = code.replace(/\s+/g, '');
+            verifyAlert.classList.add('hidden'); // Sembunyikan alert saat proses
+
+            if (!code) {
+                showAlert('Please enter the verification code', 'error');
+                return;
+            }
+
+            try {
+                verifyBtn.disabled = true;
+                verifySpinner.classList.remove('hidden');
+                verifyBtnText.textContent = 'VERIFYING...';
+
+                const purpose = serverPurpose || params.get('purpose') || '';
+                const endpoint = purpose === 'reset' ? '/api/verify_reset' : '/api/verify_email';
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, token: code })
+                });
+                const j = await resp.json().catch(() => ({}));
+
+                if (resp.ok) {
+                    if (purpose === 'reset') {
+                        const resetToken = j.reset_token || '';
+                        showAlert('Verification OK — redirecting to reset enrollment...', 'success');
+                        setTimeout(() => { window.location.href = `/reset/complete?verified=1&username=${encodeURIComponent(username)}&reset=1&reset_token=${encodeURIComponent(resetToken)}`; }, 900);
+                    } else {
+                        showAlert('Email verified! Redirecting to registration...', 'success');
+                        const emailParam = params.get('email') || '';
+                        const regUrl = emailParam
+                            ? `/register?verified=1&username=${encodeURIComponent(username)}&email=${encodeURIComponent(emailParam)}`
+                            : `/register?verified=1&username=${encodeURIComponent(username)}`;
+                        setTimeout(() => { window.location.href = regUrl; }, 1100);
+                    }
+                } else {
+                    if (j.error_code === 'expired_token') {
+                        showAlert('Token expired. Please request a new code.', 'error');
+                    } else if (j.error_code === 'invalid_token') {
+                        showAlert('Invalid code. Please try again.', 'error');
+                    } else {
+                        showAlert(j.message || 'Verification failed', 'error');
+                    }
+                }
+            } catch (e) {
+                showAlert('Network error', 'error');
+            } finally {
+                verifyBtn.disabled = false;
+                verifySpinner.classList.add('hidden');
+                verifyBtnText.textContent = 'VERIFY EMAIL';
+            }
+        });
+
+        resendBtn.addEventListener('click', async () => {
+            try {
+                resendBtn.disabled = true;
+                const purpose = serverPurpose || params.get('purpose') || '';
+                const endpoint = purpose === 'reset' ? '/api/send_reset_verification' : '/api/resend_verification';
+                const body = purpose === 'reset' ? JSON.stringify({ username: username }) : JSON.stringify({ username: username });
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: body
+                });
+                const j = await resp.json().catch(() => ({}));
+                if (resp.ok) {
+                    showAlert('Verification code resent. Check your inbox.', 'success');
+                    setResendCooldown(60);
+                } else {
+                    if (j.error_code === 'no_email') {
+                        showAlert('No email set on account. Please contact support.', 'error');
+                    } else if (resp.status === 429) {
+                        showAlert('Too many resend requests. Try again later.', 'error');
+                    } else {
+                        showAlert(j.message || 'Failed to resend verification.', 'error');
+                    }
+                    resendBtn.disabled = false;
+                }
+            } catch (e) {
+                showAlert('Network error', 'error');
                 resendBtn.disabled = false;
             }
-        } catch (e) {
-            showAlert('Network error', 'error');
-            resendBtn.disabled = false;
-        }
+        });
     });
 </script>
 {% endblock %}
