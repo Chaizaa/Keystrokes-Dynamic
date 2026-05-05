@@ -9,6 +9,9 @@ from flask_login import UserMixin
 from sqlalchemy import select, func, event as _sa_event
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import uuid6
+from sqlalchemy.dialects.postgresql import UUID
+
 from . import db
 
 
@@ -27,8 +30,7 @@ class User(UserMixin, db.Model):
 
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, nullable=True, index=True)  # Always equals id; populated via after_insert event
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=lambda: uuid6.uuid7())
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)  # Nullable for migration
     # Role: 'user' or 'admin'
@@ -174,13 +176,3 @@ class User(UserMixin, db.Model):
             "enrollment_count": self.get_enrollment_count(),
             "has_password": bool(self.password_hash),
         }
-
-
-@_sa_event.listens_for(User, "after_insert")
-def _populate_user_id(mapper, connection, target):
-    """Automatically set user_id = id after every INSERT into users."""
-    connection.execute(
-        User.__table__.update()
-        .where(User.__table__.c.id == target.id)
-        .values(user_id=target.id)
-    )

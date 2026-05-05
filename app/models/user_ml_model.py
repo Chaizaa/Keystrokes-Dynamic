@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 
 from . import db
 
+import uuid6
+from sqlalchemy.dialects.postgresql import UUID
 
 class UserMLModel(db.Model):
     """Per-user ML model artifact + threshold."""
@@ -25,14 +27,7 @@ class UserMLModel(db.Model):
     __tablename__ = "user_ml_models"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-
-    user_id = db.Column(
-        db.Integer,
-        db.ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
-    )
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
 
     username = db.Column(db.Text, nullable=False, unique=True, index=True)
 
