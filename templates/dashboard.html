@@ -1,162 +1,482 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
 {% block title %}Terminal Console // JANUS{% endblock %}
 
 {% block extra_css %}
-<style>
-    .blueprint-grid {
-        background-size: 40px 40px;
-        background-image: 
-            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+<!-- Google Fonts: Hanya Figtree -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap"
+    rel="stylesheet">
+
+<!-- Tailwind CSS Injection -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'void': '#000000',      /* Pure Black */
+                    'surface': '#020202',   /* Hampir Hitam Murni */
+                    'border-dim': '#18181b',/* Subtle border */
+                    'stark': '#FFFFFF',     /* Pure White */
+                    'safety': '#FF4500',    /* Neon Orange */
+                    'muted': '#71717A',     /* Zinc 500 */
+                    'alert-bg': '#1a120c',
+                    'alert-border': '#3a2010'
+                },
+                fontFamily: {
+                    /* Paksa semuanya pakai Figtree */
+                    'sans': ['"Figtree"', 'sans-serif'],
+                    'mono': ['"Figtree"', 'sans-serif'],
+                    'brutal': ['"Figtree"', 'sans-serif'],
+                },
+                letterSpacing: {
+                    'widest-xl': '0.3em',
+                }
+            }
+        }
     }
-    .cut-tl { clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px); }
+</script>
+
+<style>
+    /* SCROLL FIX & GLOBAL FONT */
+    body,
+    html {
+        background-color: theme('colors.void');
+        color: theme('colors.stark');
+        font-family: 'Figtree', sans-serif !important;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+    }
+
+    /* Backgrounds */
+    .static-noise {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.015;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .blueprint-grid {
+        position: fixed;
+        inset: 0;
+        background-size: 40px 40px;
+        background-image:
+            linear-gradient(to right, rgba(255, 255, 255, 0.008) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.008) 1px, transparent 1px);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: theme('colors.void');
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: theme('colors.border-dim');
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: theme('colors.safety');
+    }
+
+    /* Custom Shapes */
+    .cut-tl {
+        clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+    }
+
     .data-card {
-        background: #050505;
-        border: 1px solid #18181b; /* zinc-900 */
         transition: all 0.3s ease;
     }
+
     .data-card:hover {
-        border-color: #FF4500;
-        background: #080808;
+        border-color: theme('colors.safety');
+        box-shadow: 0 0 20px rgba(255, 69, 0, 0.05);
     }
 </style>
 {% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-black blueprint-grid p-6 lg:p-12">
-    <div class="max-w-7xl mx-auto">
-        
-        <!-- Dashboard Header -->
-        <header class="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-zinc-800 pb-10">
-            <div>
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="w-2 h-2 bg-[#FF4500] animate-pulse"></div>
-                    <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">Operational Node // Active</span>
-                </div>
-                <h1 class="font-brutal text-5xl md:text-7xl text-white uppercase leading-none mb-2">Command Console</h1>
-                <p class="text-zinc-500 text-sm uppercase tracking-widest max-w-xl">
-                    Centralized management for biometric telemetry, identity verification, and security cluster integration.
-                </p>
-            </div>
-            <div class="bg-zinc-900/50 border border-zinc-800 p-4 cut-tl min-w-[240px]">
-                <div class="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Identified Subject</div>
-                <div id="headerUsername" class="text-white font-mono text-xl uppercase tracking-widest italic font-bold">Loading...</div>
-            </div>
-        </header>
+<!-- App Container -->
+<div
+    class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative">
 
-        <!-- Loading State -->
-        <div id="loadingSection" class="py-24 flex flex-col items-center justify-center space-y-4">
-            <div class="w-12 h-12 border-2 border-[#FF4500] border-t-transparent animate-spin"></div>
-            <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest animate-pulse">Synchronizing Data Node...</p>
+    <!-- Background Elements -->
+    <div class="static-noise"></div>
+    <div class="blueprint-grid z-0 pointer-events-none"></div>
+    <canvas id="topo-bg-canvas" class="fixed inset-0 w-full h-full z-0 opacity-10 pointer-events-none"></canvas>
+
+    <!-- Tactical Header -->
+    <header
+        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 relative z-50 sticky top-0">
+        <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+            <a href="/"
+                class="font-sans text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors uppercase">JANUS</a>
         </div>
+        <!-- Bagian kanan dikosongkan sesuai permintaan -->
+    </header>
 
-        <!-- Main Dashboard Content -->
-        <div id="mainContent" class="hidden space-y-12">
-            
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="data-card p-8">
-                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">Biometric Samples</div>
-                    <div id="enrollmentCount" class="text-6xl font-brutal text-white">0</div>
-                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Enrolled Patterns</div>
+    <!-- Main Scrollable Area -->
+    <main class="flex-grow relative z-10 flex flex-col items-center p-4 md:p-8 lg:p-12">
+        <div class="w-full max-w-6xl">
+
+            <!-- Dashboard Header -->
+            <header
+                class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-border-dim pb-8">
+                <div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-2 h-2 bg-safety"></div>
+                        <span class="text-[10px] font-bold text-muted uppercase tracking-[0.3em] font-sans">Operational
+                            Node // Active</span>
+                    </div>
+                    <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">Command
+                        Console</h1>
+                    <p class="font-sans text-xs text-muted uppercase tracking-widest max-w-xl">
+                        Centralized management for biometric telemetry, identity verification, and security cluster
+                        integration.
+                    </p>
                 </div>
-                <div class="data-card p-8">
-                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">API Security</div>
-                    <div id="apiKeyCount" class="text-6xl font-brutal text-white">0</div>
-                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Active Keys</div>
+                <div class="border border-border-dim p-5 min-w-[240px] flex flex-col justify-center bg-void/50">
+                    <div class="text-[9px] font-bold text-muted uppercase tracking-widest mb-1 font-sans">Identified
+                        Subject</div>
+                    <div id="headerUsername"
+                        class="text-safety font-sans text-xl uppercase tracking-widest italic font-bold">LOADING...
+                    </div>
                 </div>
-                <div class="data-card p-8">
-                    <div class="text-[10px] font-bold text-[#FF4500] uppercase tracking-widest mb-4">Trust Status</div>
-                    <div id="hasPassword" class="text-4xl font-brutal text-white uppercase">Validating</div>
-                    <div class="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Hash Verification</div>
-                </div>
+            </header>
+
+            <!-- Loading State -->
+            <div id="loadingSection" class="py-24 flex flex-col items-center justify-center space-y-5">
+                <div class="w-10 h-10 border-[3px] border-border-dim border-t-safety rounded-full animate-spin"></div>
+                <p class="text-muted text-[10px] font-bold uppercase tracking-widest font-sans animate-pulse">
+                    Synchronizing Data Node...</p>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                <!-- Profile Section -->
-                <section>
-                    <div class="flex items-center gap-4 mb-8">
-                        <h2 class="font-brutal text-2xl text-white uppercase tracking-widest">Subject Profile</h2>
-                        <div class="h-[1px] flex-grow bg-zinc-800"></div>
+            <!-- Main Dashboard Content -->
+            <div id="mainContent" class="hidden space-y-10">
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div
+                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">
+                            Biometric Samples</div>
+                        <div class="h-16 flex items-center">
+                            <span id="enrollmentCount"
+                                class="text-6xl font-sans font-bold text-stark leading-none">0</span>
+                        </div>
+                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                            Enrolled Patterns</div>
                     </div>
-                    <div class="space-y-4">
-                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
-                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">System UID</span>
-                            <span id="username" class="text-sm font-mono text-white">---</span>
+                    <div
+                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">API
+                            Count</div>
+                        <div class="h-16 flex items-center">
+                            <span id="apiKeyCount" class="text-6xl font-sans font-bold text-stark leading-none">0</span>
                         </div>
-                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
-                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Email Node</span>
-                            <span id="email" class="text-sm font-mono text-white">---</span>
+                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                            Active Keys</div>
+                    </div>
+
+                    <!-- KOTAK BARU: EMAIL STATUS -->
+                    <div
+                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">Email
+                            Status</div>
+                        <div class="h-16 flex items-center">
+                            <span id="emailStatusCard"
+                                class="text-4xl font-sans font-bold text-stark uppercase leading-none">Validating</span>
                         </div>
-                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
-                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Registration</span>
-                            <span id="createdAt" class="text-sm font-mono text-white">---</span>
+                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                            Verification</div>
+                    </div>
+                </div>
+
+                <!-- Subject Profile (Full Width Grid) -->
+                <section class="bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl">
+                    <div class="flex items-center gap-4 mb-8">
+                        <h2 class="font-sans text-xl font-bold text-stark uppercase tracking-widest">Subject Profile
+                        </h2>
+                        <div class="h-[1px] flex-grow bg-border-dim"></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-16">
+
+                        <!-- Left Column: Username & Reset Button -->
+                        <div class="flex flex-col gap-6 border-b border-border-dim pb-4 md:border-none md:pb-0">
+                            <div class="flex justify-between items-center">
+                                <span
+                                    class="text-[10px] font-bold text-muted uppercase tracking-widest font-sans">Username</span>
+                                <span id="username" class="text-sm font-sans text-stark">---</span>
+                            </div>
+                            <!-- Tombol Reset Password -->
+                            <button id="resetBtn"
+                                class="self-start bg-surface border border-border-dim text-stark px-8 py-3 uppercase text-[10px] font-bold tracking-widest hover:text-safety hover:border-safety transition-colors font-sans">
+                                Reset Password
+                            </button>
                         </div>
-                        <div class="flex justify-between p-4 bg-zinc-900/30 border border-zinc-900">
-                            <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Verification Status</span>
-                            <span id="emailVerified" class="text-sm font-mono text-[#FF4500] uppercase">---</span>
+
+                        <!-- Right Column: Registration Date -->
+                        <div class="flex flex-col justify-start border-b border-border-dim pb-4 md:border-none md:pb-0">
+                            <div class="flex justify-between items-center">
+                                <span
+                                    class="text-[10px] font-bold text-muted uppercase tracking-widest font-sans">Registration
+                                    Date</span>
+                                <span id="createdAt" class="text-sm font-sans text-stark">---</span>
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- Actions Section -->
-                <section>
+                <!-- API INTEGRATION KEYS: CREATE FORM -->
+                <section class="bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl mt-8">
                     <div class="flex items-center gap-4 mb-8">
-                        <h2 class="font-brutal text-2xl text-white uppercase tracking-widest">Control Protocols</h2>
-                        <div class="h-[1px] flex-grow bg-zinc-800"></div>
+                        <h2 class="font-sans text-xl font-bold text-stark uppercase tracking-widest">API Integration
+                            Keys</h2>
+                        <div class="h-[1px] flex-grow bg-border-dim"></div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <a href="{{ url_for('main.api_key_dashboard') }}" class="p-6 bg-white text-black text-center font-bold text-[11px] uppercase tracking-widest hover:bg-zinc-200 transition-all">Manage API Keys</a>
-                        <button onclick="logout()" class="p-6 bg-[#FF4500] text-black text-center font-bold text-[11px] uppercase tracking-widest hover:bg-opacity-90 transition-all">Terminate Session</button>
+                    <p class="text-[10px] text-gray-300 uppercase tracking-widest font-semibold font-sans mb-8">
+                        Generate API keys for partner website integration. <span
+                            class="text-[10px] text-safety tracking-widest font-bold font-sans mb-8">A
+                            new key
+                            is shown only once.</span>
+                    </p>
+
+                    <form id="apiKeyForm" class="space-y-6" onsubmit="event.preventDefault();">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label
+                                    class="block text-[10px] text-gray-300 uppercase tracking-widest mb-2 font-sans">Partner
+                                    Name *</label>
+                                <input type="text" id="partnerName" required
+                                    class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
+                                    placeholder="Example: Partner A">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Rate
+                                    Limit / Hour</label>
+                                <input type="number" id="apiRateLimit" value="100"
+                                    class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label
+                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Description</label>
+                            <input type="text" id="apiDescription"
+                                class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
+                                placeholder="Optional note for this key">
+                        </div>
+
+                        <div>
+                            <label
+                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Allowed
+                                Origins (Comma Separated)</label>
+                            <input type="text" id="allowedOrigins"
+                                class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
+                                placeholder="partner-a.com, app.partner-a.com">
+                        </div>
+
+                        <div class="w-full md:w-1/2 md:pr-3">
+                            <label
+                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Expires
+                                In (Days)</label>
+                            <input type="number" id="expiresIn"
+                                class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
+                                placeholder="Optional">
+                        </div>
+
+                        <button type="submit" id="generateApiKeyBtn"
+                            class="bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 px-8 hover:bg-opacity-90 transition-colors font-sans w-full md:w-auto">
+                            Generate API Key
+                        </button>
+                    </form>
+
+                    <!-- Alert Box: Ditampilkan via JS saat key baru terbuat -->
+                    <div id="newKeyAlert" class="hidden mt-8 bg-alert-bg border border-alert-border p-6">
+                        <h3 class="text-safety font-bold uppercase tracking-widest mb-2 text-sm font-sans">
+                            ATTENTION: NEW KEY GENERATED
+                        </h3>
+                        <p class="text-muted text-[10px] uppercase tracking-widest mb-4 font-sans">
+                            Please copy this key immediately. It will not be shown again.
+                        </p>
+                        <div class="flex flex-col sm:flex-row items-stretch gap-4">
+                            <code id="newKeyValue"
+                                class="flex-grow bg-void border border-border-dim p-4 text-stark text-sm break-all"></code>
+
+                            <button onclick="copyNewKey()"
+                                class="bg-surface border border-border-dim text-stark px-8 py-4 uppercase text-[10px] font-bold tracking-widest hover:text-safety hover:border-safety transition-colors">
+                                COPY
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="apiKeysList" class="space-y-4">
+                        <!-- Empty State: Ditampilkan kalau belum ada API Key -->
+                        <div class="border border-border-dim bg-surface p-8 text-center">
+                            <p class="text-[10px] text-gray-300 uppercase tracking-widest font-sans">
+                                No API keys generated yet.
+                            </p>
+                        </div>
                     </div>
                 </section>
-            </div>
-
-            <!-- Protocol Status -->
-            <section class="border-t border-zinc-800 pt-12 pb-24">
-                <div class="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.4em] mb-8">Verification Protocol Logs</div>
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-                    <div class="space-y-2">
-                        <div class="text-white text-xs font-bold uppercase">01 // Capture</div>
-                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Behavioral features captured from natural typing patterns.</p>
-                    </div>
-                    <div class="space-y-2">
-                        <div class="text-white text-xs font-bold uppercase">02 // Score</div>
-                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Models score each interaction and generate confidence context.</p>
-                    </div>
-                    <div class="space-y-2">
-                        <div class="text-white text-xs font-bold uppercase">03 // Policy</div>
-                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Policy thresholds evaluate trust and trigger action path.</p>
-                    </div>
-                    <div class="space-y-2">
-                        <div class="text-white text-xs font-bold uppercase">04 // Audit</div>
-                        <p class="text-zinc-600 text-[10px] leading-relaxed uppercase">Logs support reviews, reporting, and governance checks.</p>
-                    </div>
+                <!-- Tombol Logout Paling Bawah -->
+                <div class="pt-4 pb-8 flex justify-center">
+                    <button onclick="logout()"
+                        class="w-full md:w-auto bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 px-16 hover:bg-opacity-90 transition-colors font-sans">
+                        LOGOUT
+                    </button>
                 </div>
-            </section>
+            </div>
         </div>
-    </div>
+    </main>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dashboard_service.js') }}"></script>
-<script nonce="{{ csp_nonce() }}">
+
+<script>
     document.addEventListener('DOMContentLoaded', () => {
-        // The dashboard_service.js uses DashboardService class
-        // We'll initialize it and let it handle the data loading
-        if (typeof DashboardService !== 'undefined') {
-            const service = new DashboardService();
-            service.init().then(() => {
+        // --- 1. Topographical Canvas (Mouse Reaction) ---
+        const topoBgCanvas = document.getElementById('topo-bg-canvas');
+        if (topoBgCanvas) {
+            const topoBgCtx = topoBgCanvas.getContext('2d');
+            let tWidth, tHeight;
+            let tMouse = { x: -1000, y: -1000 };
+
+            function initTopoBg() {
+                tWidth = topoBgCanvas.width = window.innerWidth;
+                tHeight = topoBgCanvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', initTopoBg);
+            window.addEventListener('mousemove', (e) => {
+                tMouse.x = e.clientX;
+                tMouse.y = e.clientY;
+            });
+
+            const gridSpacing = 40;
+            function animateTopoBg() {
+                if (!tWidth || !tHeight) { requestAnimationFrame(animateTopoBg); return; }
+                topoBgCtx.clearRect(0, 0, tWidth, tHeight);
+                const cols = Math.floor(tWidth / gridSpacing) + 2;
+                const rows = Math.floor(tHeight / gridSpacing) + 2;
+                const points = [];
+
+                for (let i = 0; i < cols; i++) {
+                    points[i] = [];
+                    for (let j = 0; j < rows; j++) {
+                        let bx = i * gridSpacing, by = j * gridSpacing;
+                        let dx = tMouse.x - bx, dy = tMouse.y - by;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        let radius = 250, active = dist < radius;
+                        let elevation = active ? Math.exp(-(dist * dist) / (radius * radius * 0.5)) * 50 : 0;
+                        points[i][j] = { x: bx, y: by - elevation, dist: dist, active: active };
+                    }
+                }
+
+                topoBgCtx.lineWidth = 1;
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        if (p.active) {
+                            topoBgCtx.beginPath();
+                            if (i < cols - 1 && points[i + 1][j].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i + 1][j].x, points[i + 1][j].y); }
+                            if (j < rows - 1 && points[i][j + 1].active) { topoBgCtx.moveTo(p.x, p.y); topoBgCtx.lineTo(points[i][j + 1].x, points[i][j + 1].y); }
+                            topoBgCtx.strokeStyle = `rgba(255, 69, 0, ${0.4 * (1 - p.dist / 250)})`;
+                            topoBgCtx.stroke();
+                        }
+                    }
+                }
+
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let p = points[i][j];
+                        topoBgCtx.beginPath();
+                        topoBgCtx.arc(p.x, p.y, p.active ? 2 : 1, 0, Math.PI * 2);
+                        topoBgCtx.fillStyle = p.active ? `rgba(255, 69, 0, ${Math.max(0.2, 1 - p.dist / 250)})` : 'rgba(255, 255, 255, 0.03)';
+                        topoBgCtx.fill();
+                    }
+                }
+                requestAnimationFrame(animateTopoBg);
+            }
+            initTopoBg(); animateTopoBg();
+        }
+
+        window.dashboard = new DashboardService();
+
+        // --- 2. Dashboard Data Loading (Fetch Otomatis) ---
+        fetch('/api/user/info')
+            .then(res => res.json())
+            .then(data => {
+                // Masukin data identitas ke UI
+                document.getElementById('headerUsername').innerText = data.username || 'UNKNOWN';
+                document.getElementById('username').innerText = data.username || '---';
+
+                // Format tanggal kalau ada
+                if (data.created_at) {
+                    const d = new Date(data.created_at);
+                    document.getElementById('createdAt').innerText = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                }
+
+                // Update Kotak Angka
+                document.getElementById('enrollmentCount').innerText = data.enrollment_count || 0;
+                document.getElementById('apiKeyCount').innerText = data.api_key_count || 0;
+
+                // Update KOTAK EMAIL STATUS (Menggantikan kotak password sebelumnya)
+                const emailCard = document.getElementById('emailStatusCard');
+                if (data.email_verified) {
+                    emailCard.innerText = 'VERIFIED';
+                    emailCard.classList.remove('text-stark', 'text-safety');
+                    emailCard.classList.add('text-green-500');
+                } else {
+                    emailCard.innerText = 'PENDING';
+                    emailCard.classList.remove('text-stark', 'text-green-500');
+                    emailCard.classList.add('text-safety');
+                }
+
+                // Matiin loading, tampilin konten utama
                 document.getElementById('loadingSection').classList.add('hidden');
                 document.getElementById('mainContent').classList.remove('hidden');
-            }).catch(err => {
-                console.error('Failed to load dashboard:', err);
-                if (window.showToast) window.showToast('Node sync failed', 'error');
+            })
+            .catch(err => {
+                console.error('Data Sync Error:', err);
+                document.getElementById('loadingSection').innerHTML = '<p class="text-safety font-sans text-xs uppercase tracking-widest">ERROR: NODE SYNC FAILED</p>';
             });
-        }
     });
+
+    function copyNewKey() {
+        // Ambil teks dari kotak key
+        const keyText = document.getElementById('newKeyValue').textContent;
+
+        // Copy ke clipboard bawaan browser
+        navigator.clipboard.writeText(keyText).then(() => {
+            // Efek UI Keren: Ubah tombol COPY jadi COPIED warna hijau selama 2 detik
+            const btn = event.target;
+            const originalText = btn.innerText;
+
+            btn.innerText = 'COPIED!';
+            btn.classList.add('text-green-500', 'border-green-500');
+
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.remove('text-green-500', 'border-green-500');
+            }, 2000);
+
+        }).catch(err => {
+            console.error('Gagal copy: ', err);
+            alert('Gagal menyalin key! Silakan blok teks manual dan CTRL+C.');
+        });
+    }
 
     function logout() {
         window.location.href = "{{ url_for('auth.logout') }}";

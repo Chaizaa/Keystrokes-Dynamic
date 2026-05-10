@@ -20,6 +20,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from sqlalchemy import or_, select
 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import skops.io as sio
+import joblib
+
 from app.models import User, UserMLModel, UsersVector, db
 from app.services.base_model_service import (
     FEATURE_COLUMNS,
@@ -51,9 +56,6 @@ class MLModelService(BaseMLModelService):
     # ------------------------------------------------------------------
     def _deserialize_model(self, blob: bytes):
         """Deserialise and validate the RandomForest model from BLOB."""
-        from sklearn.ensemble import RandomForestClassifier
-        import skops.io as sio
-        import joblib
 
         if not isinstance(blob, bytes) or len(blob) == 0:
             raise ValueError("Model blob is empty or invalid")
@@ -129,9 +131,6 @@ class MLModelService(BaseMLModelService):
                     f"genuine={n_genuine}, impostor={n_impostor}"
                 ),
             )
-
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import train_test_split
 
         try:
             X_train, X_temp, y_train, y_temp = train_test_split(

@@ -135,8 +135,10 @@
             </div>
 
             <!-- Redirect to Register -->
-            <div class="bg-alert-bg border border-alert-border p-4 text-xs text-stark mb-8">
-                New user? <a href="/register" class="text-safety font-bold hover:underline">Create an account</a>
+            <div class="mb-10 text-center">
+                <p class="font-sans text-sm text-muted">
+                    New user? <a href="/register" class="text-safety font-bold hover:underline">Create an account</a>
+                </p>
             </div>
 
             <form id="login-form" class="flex flex-col gap-5" onsubmit="event.preventDefault();">
@@ -152,8 +154,7 @@
                         spellcheck="false" placeholder="Enter Identifier">
 
                     <!-- Checking Status Box (Appears on blur) -->
-                    <div id="username-status-box"
-                        class="hidden bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide">
+                    <div id="username-status-box" class="hidden  p-3 text-xs text-safety mt-2 tracking-wide">
                         Checking...
                     </div>
                 </div>
@@ -299,7 +300,7 @@
 
             statusBox.classList.remove('hidden');
             statusBox.innerText = "Checking...";
-            statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-muted mt-2 tracking-wide";
+            statusBox.className = " p-3 text-xs text-muted mt-2 tracking-wide";
 
             try {
                 const res = await fetch('/api/check_username', {
@@ -311,17 +312,17 @@
 
                 if (data.can_login) {
                     statusBox.innerText = "Operator Verified. Proceed with password.";
-                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-stark mt-2 tracking-wide";
+                    statusBox.className = " p-3 text-xs text-stark mt-2 tracking-wide";
                 } else if (data.exists && !data.can_login) {
                     statusBox.innerText = `Enrollment Incomplete (${data.enrollment_count}/10).`;
-                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+                    statusBox.className = " p-3 text-xs text-safety mt-2 tracking-wide";
                 } else {
                     statusBox.innerText = "Operator Not Found.";
-                    statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+                    statusBox.className = " p-3 text-xs text-safety mt-2 tracking-wide";
                 }
             } catch (err) {
                 statusBox.innerText = "System Error Check";
-                statusBox.className = "bg-alert-bg border border-alert-border p-3 text-xs text-safety mt-2 tracking-wide";
+                statusBox.className = " p-3 text-xs text-safety mt-2 tracking-wide";
             }
         });
 
