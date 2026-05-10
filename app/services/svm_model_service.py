@@ -18,6 +18,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+import skops.io as sio
+import joblib
+
 from sqlalchemy import select
 
 from app.models import User, UserMLModel, UsersVector, db
@@ -68,10 +75,6 @@ class SVMModelService(BaseMLModelService):
     # ------------------------------------------------------------------
     def _deserialize_model(self, blob: bytes):
         """Deserialise and validate the SVM pipeline from BLOB."""
-        from sklearn.pipeline import Pipeline
-        from sklearn.svm import SVC
-        import skops.io as sio
-        import joblib
 
         if not isinstance(blob, bytes) or len(blob) == 0:
             raise ValueError("Model blob is empty or invalid")
@@ -185,11 +188,6 @@ class SVMModelService(BaseMLModelService):
                     f"genuine={n_genuine}, impostor={n_impostor}"
                 ),
             )
-
-        from sklearn.model_selection import train_test_split
-        from sklearn.pipeline import Pipeline
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.svm import SVC
 
         try:
             X_train, X_temp, y_train, y_temp = train_test_split(

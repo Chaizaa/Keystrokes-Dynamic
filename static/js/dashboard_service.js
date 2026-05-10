@@ -32,10 +32,10 @@ class DashboardService {
 
     attachEventListeners() {
         if (this.elements.generateBtn) {
-            this.elements.generateBtn.addEventListener('click', () => this.generateApiKey());
+            this.elements.generateBtn?.addEventListener('click', () => this.generateApiKey());
         }
         if (this.elements.resetBtn) {
-            this.elements.resetBtn.addEventListener('click', () => this.startResetFlow());
+            this.elements.resetBtn?.addEventListener('click', () => this.startResetFlow());
         }
     }
 
@@ -55,22 +55,27 @@ class DashboardService {
             if (!resp.ok) throw new Error('Failed to load profile');
 
             const data = await resp.json();
-            this.elements.username.textContent = data.username;
-            this.elements.email.textContent = data.email || '-';
-            this.elements.createdAt.textContent = this.formatDate(data.created_at);
-            this.elements.emailVerified.textContent = data.email_verified ? 'VERIFIED' : 'PENDING';
-            this.elements.emailVerified.className = data.email_verified ? 'text-green-500' : 'text-neon-orange';
-            this.elements.enrollmentCount.textContent = data.enrollment_count ?? 0;
-            this.elements.hasPassword.textContent = data.has_password ? 'ACTIVE' : 'INACTIVE';
-            this.elements.apiKeyCount.textContent = data.api_key_count ?? 0;
+
+            // Tambahkan tanda ? agar kebal error kalau elemennya nggak ada di HTML
+            if (this.elements.username) this.elements.username.textContent = data.username;
+            if (this.elements.email) this.elements.email.textContent = data.email || '-';
+            if (this.elements.createdAt) this.elements.createdAt.textContent = this.formatDate(data.created_at);
+            if (this.elements.emailVerified) this.elements.emailVerified.textContent = data.email_verified ? 'VERIFIED' : 'PENDING';
+            if (this.elements.enrollmentCount) this.elements.enrollmentCount.textContent = data.enrollment_count ?? 0;
+            if (this.elements.hasPassword) this.elements.hasPassword.textContent = data.has_password ? 'ACTIVE' : 'INACTIVE';
+            if (this.elements.apiKeyCount) this.elements.apiKeyCount.textContent = data.api_key_count ?? 0;
         } catch (e) {
-            console.error(e);
+            console.error('User Info Error:', e);
         }
     }
 
     async loadApiKeys() {
-        this.elements.apiKeyLoading.classList.remove('hidden');
-        this.elements.apiKeyList.innerHTML = '';
+        // Pakai ?. biar nggak error classList kalau animasinya dihapus
+        this.elements.apiKeyLoading?.classList.remove('hidden');
+
+        if (this.elements.apiKeyList) {
+            this.elements.apiKeyList.innerHTML = '';
+        }
 
         try {
             const resp = await fetch('/api/user/api-keys?include_inactive=true');
@@ -79,15 +84,22 @@ class DashboardService {
 
             const keys = body.keys || [];
             if (!keys.length) {
-                this.elements.apiKeyList.innerHTML = '<div class="text-gray-600 text-[10px] uppercase py-8 text-center border border-dashed border-gray-800">No active integrations</div>';
+                if (this.elements.apiKeyList) {
+                    this.elements.apiKeyList.innerHTML = '<div class="text-gray-600 text-[10px] uppercase py-8 text-center border border-dashed border-gray-800">No active integrations</div>';
+                }
                 return;
             }
 
-            this.elements.apiKeyList.innerHTML = keys.map(k => this.renderApiKey(k)).join('');
+            if (this.elements.apiKeyList) {
+                this.elements.apiKeyList.innerHTML = keys.map(k => this.renderApiKey(k)).join('');
+            }
         } catch (e) {
-            this.elements.apiKeyList.innerHTML = `<div class="text-red-500 text-xs">${e.message}</div>`;
+            if (this.elements.apiKeyList) {
+                this.elements.apiKeyList.innerHTML = `<div class="text-red-500 text-xs">${e.message}</div>`;
+            }
         } finally {
-            this.elements.apiKeyLoading.classList.add('hidden');
+            // Pakai ?. lagi di sini
+            this.elements.apiKeyLoading?.classList.add('hidden');
         }
     }
 
@@ -113,10 +125,10 @@ class DashboardService {
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    ${key.is_active ? 
-                        `<button onclick="window.dashboard.deactivateKey(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-white transition-colors">Deactivate</button>` : 
-                        ''
-                    }
+                    ${key.is_active ?
+                `<button onclick="window.dashboard.deactivateKey(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-white transition-colors">Deactivate</button>` :
+                ''
+            }
                     <button onclick="window.dashboard.deleteKey(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-red-500 transition-colors">Purge</button>
                 </div>
             </div>
@@ -142,11 +154,23 @@ class DashboardService {
                 })
             });
             const body = await resp.json();
-            if (!resp.ok) throw new Error(body.message || 'Generation failed');
+            if (!resp.ok) throw new Error(body.error || body.message || 'Generation failed');
 
-            this.elements.newApiKeyValue.value = body.api_key;
-            this.elements.apiKeyResult.classList.remove('hidden');
+            // --- INI BAGIAN UTAMA YANG DIGANTI ---
+            // 1. Masukkan teks key ke dalam <code> (pakai textContent, bukan value)
+            document.getElementById('newKeyValue').textContent = body.api_key || body.key;
+
+            // 2. Munculkan box UI lu dengan menghapus class 'hidden'
+            document.getElementById('newKeyAlert').classList.remove('hidden');
+
+            // 3. Refresh list api key & angka total di atas
             await this.loadApiKeys();
+            await this.loadUserInfo();
+
+            // 4. Kosongkan form input biar rapi lagi
+            document.getElementById('apiKeyForm').reset();
+            // -------------------------------------
+
         } catch (e) {
             alert(e.message);
         } finally {
