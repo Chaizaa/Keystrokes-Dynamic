@@ -3,7 +3,6 @@
 {% block title %}Reset Password & Re-enroll | SecureAuth{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 {% endblock %}
 
 {% block body %}
@@ -16,15 +15,15 @@
         <p id="rcSubtitle" class="subtitle">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
 
         <!-- Username removed from UI; kept hidden element for compatibility with JS -->
-        <div class="form-group" style="display:none;">
-            <label for="rcUsername">Username</label>
-            <input id="rcUsername" type="text" readonly>
+        <div class="form-group hidden">
+            <label for="rcUsername" class="form-label">Username</label>
+            <input id="rcUsername" type="text" readonly class="form-input">
         </div>
 
         <div class="form-group">
-            <label for="rcPassword">New Master Password</label>
+            <label for="rcPassword" class="form-label">New Master Password</label>
             <div class="input-wrapper">
-                <input id="rcPassword" type="password" placeholder="Create a secure password">
+                <input id="rcPassword" type="password" placeholder="Create a secure password" class="form-input">
                 <span class="toggle-password" onclick="togglePass('rcPassword', this)">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -35,10 +34,10 @@
             <p class="hint-text">This password will be used for biometric re-enrollment.</p>
             <!-- Password strength meter -->
             <div id="pwStrength" class="pw-strength hidden" aria-live="polite">
-                <div class="strength-bar" style="height:8px; background:#e5e7eb; border-radius:6px; overflow:hidden; margin:8px 0;">
-                    <div id="strengthBarFill" style="height:100%; width:0%; background:#ef4444; transition: width 150ms ease;"></div>
+                <div class="strength-bar">
+                    <div id="strengthBarFill" class="strength-bar-fill"></div>
                 </div>
-                <div id="pwStrengthLabel" class="hint-text" style="margin-top:4px; font-size:13px;">Strength: Unknown</div>
+                <div id="pwStrengthLabel" class="hint-text pw-strength-label">Strength: Unknown</div>
             </div>
         </div>
 
@@ -48,7 +47,7 @@
             <div class="section-title">Biometric Re-enrollment</div>
             <p class="hint-text">Type your new password naturally 20 times to train the system.</p>
 
-            <div class="progress-card" style="margin-bottom:14px;">
+            <div class="progress-card mb-4">
                 <div class="progress-header">
                     <span class="progress-label">Enrollment Progress</span>
                     <span class="progress-count"><span id="countDisplay">0</span>/20</span>
@@ -59,7 +58,7 @@
                 <p class="progress-message" id="motivationalMsg">Take your time, type naturally</p>
             </div>
 
-            <div class="typing-timer" id="typingTimer" style="display:none; margin-bottom:12px;">
+            <div class="typing-timer hidden mb-3" id="typingTimer">
                 <div class="label">Typing Rhythm</div>
                 <div class="time">
                     <span id="timerDisplay">0.000</span><span class="unit">s</span>
@@ -67,10 +66,10 @@
                 <small>Recording keystroke pattern...</small>
             </div>
 
-            <div class="form-group" style="margin-top:14px;">
-                <label for="typingField">Type Password & Press Enter</label>
+            <div class="form-group mt-4">
+                <label for="typingField" class="form-label">Type Password & Press Enter</label>
                 <div class="input-wrapper">
-                    <input type="password" id="typingField" placeholder="Type your password here">
+                    <input type="password" id="typingField" placeholder="Type your password here" class="form-input">
                     <span class="toggle-password" onclick="togglePass('typingField', this)">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>

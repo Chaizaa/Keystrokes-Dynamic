@@ -3,19 +3,10 @@
 {% block title %}Access Key Console // JANUS{% endblock %}
 
 {% block extra_css %}
-<style>
-    .blueprint-grid {
-        background-size: 40px 40px;
-        background-image: 
-            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    }
-    .cut-tl { clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px); }
-</style>
 {% endblock %}
 
 {% block body %}
-<div class="min-h-[calc(100vh-64px)] bg-black blueprint-grid flex items-center justify-center p-6 relative overflow-hidden">
+<div class="min-h-[calc(100vh-64px)] bg-void blueprint-grid blueprint-grid-soft flex items-center justify-center p-6 relative overflow-hidden">
     <!-- Decor -->
     <div class="absolute top-20 left-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>
     <div class="absolute bottom-20 right-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>

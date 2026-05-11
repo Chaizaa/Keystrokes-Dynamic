@@ -3,7 +3,6 @@
 {% block title %}Verify Reset Code | SecureAuth{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 {% endblock %}
 
 {% block body %}
@@ -13,18 +12,18 @@
         <p class="subtitle">Enter the 6-digit code we sent to your email to continue with the password reset.</p>
 
         <div class="form-group">
-            <label for="rcvUsername">Username</label>
-            <input id="rcvUsername" type="text" readonly>
+            <label for="rcvUsername" class="form-label">Username</label>
+            <input id="rcvUsername" type="text" readonly class="form-input">
         </div>
         <div class="form-group">
-            <label for="rcvCode">Reset Code</label>
-            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code">
+            <label for="rcvCode" class="form-label">Reset Code</label>
+            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code" class="form-input">
             <small class="hint-text">Check your email for the 6-digit reset code</small>
         </div>
         <div id="rcvAlert" class="alert"></div>
         <div class="verify-actions">
             <button id="rcvVerifyBtn" class="btn btn-primary" disabled>
-                <span id="rcvSpinner" class="spinner hidden" aria-hidden="true"></span>
+                <span id="rcvSpinner" class="hidden w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
                 <span id="rcvBtnText">Verify Code</span>
             </button>
             <button id="rcvResendBtn" class="btn btn-secondary">Resend Code</button>

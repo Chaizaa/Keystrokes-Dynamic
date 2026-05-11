@@ -56,10 +56,10 @@ class AuthService:
 
         try:
             user_exists = db.session.execute(select(User.id).where(User.username == username)).first() is not None
-            enroll_count = int(db.session.execute(
+            enroll_count = db.session.execute(
                 select(func.count()).select_from(UsersVector).where(UsersVector.username == username)
                 .where(UsersVector.event_type == "enrollment")
-            ).scalar_one() or 0)
+            ).scalar_one() or 0
         except OperationalError as e:
             print(f"[WARN] DB error in check_username_availability: {e}")
             return {
@@ -99,7 +99,7 @@ class AuthService:
             if user: return user
         return self.get_user_by_username(identifier)
 
-    def create_user(self, username: str, password: str, email: str = None) -> Dict[str, Any]:
+    def create_user(self, username: str, password: str, email: Optional[str] = None) -> Dict[str, Any]:
         """Simplified user creation using ORM."""
         val_u = self.validate_username(username)
         if not val_u["valid"]: return {"success": False, "message": val_u["message"]}
@@ -158,7 +158,7 @@ class AuthService:
 
     def change_password(self, username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
         valid, user = self.verify_password(username, old_password)
-        if not valid: return False, "Current password is incorrect"
+        if not valid or not user: return False, "Current password is incorrect"
         
         val_n = self.validate_password(new_password)
         if not val_n["valid"]: return False, val_n["message"]
