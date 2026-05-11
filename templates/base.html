@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-black">
+<html lang="en" class="h-full bg-void">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,51 +14,14 @@
     <!-- Tailwind CSS (Latest Local Version) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
     
-    <style>
-        body {
-            background-color: #000000;
-            color: #FFFFFF;
-            font-family: 'Figtree', sans-serif;
-            cursor: crosshair;
-        }
-        .font-brutal { font-family: 'Oswald', sans-serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        /* Force dark inputs globally */
-        input:-webkit-autofill,
-        input:-webkit-autofill:hover, 
-        input:-webkit-autofill:focus {
-            -webkit-text-fill-color: #FFFFFF;
-            -webkit-box-shadow: 0 0 0px 1000px #000000 inset;
-            transition: background-color 5000s ease-in-out 0s;
-        }
-
-        input {
-            background-color: #000000 !important;
-            color: #FFFFFF !important;
-        }
-
-        input::placeholder {
-            color: #27272a !important; /* zinc-800 */
-        }
-        
-        .static-noise {
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 9999;
-            opacity: 0.05;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        }
-    </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="h-full flex flex-col selection:bg-[#FF4500] selection:text-black">
+<body class="h-full flex flex-col bg-void text-stark font-sans cursor-crosshair selection:bg-safety selection:text-void antialiased">
     <div class="static-noise"></div>
 
     <!-- Navigation -->
     {% if not hide_nav %}
-    <nav class="sticky top-0 z-50 w-full bg-black/80 backdrop-blur-md border-b border-zinc-800">
+    <nav class="sticky top-0 z-50 w-full bg-void/80 backdrop-blur-md border-b border-border-dim">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
@@ -111,7 +74,7 @@
     </script>
 
     <!-- Confirmation Modal Component -->
-    <div id="confirmModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div id="confirmModal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" onclick="closeConfirmModal(false)"></div>
         <div class="relative bg-[#050505] border border-zinc-800 p-8 max-w-md w-full shadow-2xl">
             <h3 id="confirmTitle" class="font-brutal text-xl text-white uppercase tracking-widest mb-4">Confirm Action</h3>
@@ -137,12 +100,16 @@
             const okBtn = document.getElementById('confirmOkBtn');
             okBtn.innerText = opts.confirmText || 'Confirm';
             okBtn.onclick = () => closeConfirmModal(true);
-            document.getElementById('confirmModal').classList.remove('hidden');
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
             return new Promise((resolve) => { confirmResolve = resolve; });
         };
 
         function closeConfirmModal(result) {
-            document.getElementById('confirmModal').classList.add('hidden');
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
             if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
         }
 

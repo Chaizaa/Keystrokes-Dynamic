@@ -62,6 +62,8 @@ class KeystrokeProcessor:
         dd_vec = features.get("DD_vector", [])
         ud_vec = features.get("UD_vector", [])
 
+
+        ### Seharusnya long hold times tidak perlu dibatasi karena dalam sistem ini justru itu adalah tujuan utama dari keystroke dynamics, dengan membuat password yang bisa bervariasi dalam waktu penekanannya
         if any(h > 1.0 for h in h_vec):
             warnings.append("Very long hold times detected (> 1s)")
             score -= 20

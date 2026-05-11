@@ -212,8 +212,12 @@ class SVMModelService(BaseMLModelService):
                 model = Pipeline([
                     ("scaler", StandardScaler()),
                     ("svc", SVC(
-                        kernel="rbf", C=c_val, gamma=gamma,
-                        class_weight="balanced", probability=True, random_state=42,
+                        kernel="rbf", 
+                        C=c_val, 
+                        gamma=gamma,
+                        class_weight="balanced", 
+                        probability=True, 
+                        random_state=42,
                     )),
                 ])
                 model.fit(X_train, y_train)
@@ -224,9 +228,12 @@ class SVMModelService(BaseMLModelService):
                     best_threshold = float(thr)
                     best_model = model
                     best_params = {
-                        "kernel": "rbf", "C": c_val, "gamma": gamma,
+                        "kernel": "rbf", 
+                        "C": c_val, 
+                        "gamma": gamma,
                         "class_weight": "balanced",
-                        "probability": True, "random_state": 42,
+                        "probability": True, 
+                        "random_state": 42,
                     }
 
         if best_model is None or best_threshold is None:

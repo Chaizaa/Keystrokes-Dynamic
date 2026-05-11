@@ -4,109 +4,6 @@
 {% block title %}JANUS // Create Account{% endblock %}
 
 {% block extra_css %}
-<!-- Google Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link
-    href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Oswald:wght@300..700&display=swap"
-    rel="stylesheet">
-
-<!-- Tailwind CSS Injection -->
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-    tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    'void': '#000000',      /* Pure Black */
-                    'surface': '#020202',   /* Hampir Hitam Murni */
-                    'border-dim': '#18181b',/* Subtle border */
-                    'stark': '#FFFFFF',     /* Pure White */
-                    'safety': '#FF4500',    /* Neon Orange */
-                    'muted': '#71717A',     /* Zinc 500 */
-                    'alert-bg': '#1a120c',  /* Dark Brownish Tint */
-                    'alert-border': '#3a2010'
-                },
-                fontFamily: {
-                    'sans': ['"Figtree"', 'sans-serif'],
-                    'mono': ['"Figtree"', 'sans-serif'],
-                    'brutal': ['"Figtree"', 'sans-serif'],
-                },
-                letterSpacing: {
-                    'widest-xl': '0.3em',
-                }
-            }
-        }
-    }
-</script>
-
-<style>
-    /* SCROLL FIX: Removed height: 100vh and overflow: hidden */
-    body,
-    html {
-        background-color: theme('colors.void');
-        color: theme('colors.stark');
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-    }
-
-    /* Backgrounds fixed to viewport so they don't scroll away */
-    .static-noise {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 1;
-        opacity: 0.015;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
-
-    .blueprint-grid {
-        position: fixed;
-        inset: 0;
-        background-size: 40px 40px;
-        background-image:
-            linear-gradient(to right, rgba(255, 255, 255, 0.008) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.008) 1px, transparent 1px);
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: theme('colors.void');
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: theme('colors.border-dim');
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: theme('colors.safety');
-    }
-
-    /* Custom Input */
-    .tactical-input {
-        background: theme('colors.void');
-        /* Pure Black */
-        border: 1px solid theme('colors.border-dim');
-        color: theme('colors.stark');
-        transition: all 0.2s ease;
-        font-family: 'Figtree', sans-serif;
-    }
-
-    .tactical-input:focus {
-        border-color: theme('colors.safety');
-        outline: none;
-        box-shadow: 0 0 10px rgba(255, 69, 0, 0.1);
-    }
-
-    .cut-tl {
-        clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
-    }
-</style>
 {% endblock %}
 
 {% block body %}
@@ -115,15 +12,14 @@
     class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
 
     <!-- Background Elements -->
-    <div class="static-noise"></div>
-    <div class="blueprint-grid z-0 pointer-events-none"></div>
+    <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
     <!-- FIX: Opacity kanvas diubah dari 60 menjadi 10 agar super gelap seperti di halaman Login -->
     <canvas id="topo-bg-canvas" class="fixed inset-0 w-full h-full z-0 opacity-10 pointer-events-none"></canvas>
 
     <!-- Tactical Header -->
     <header
-        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 relative z-50 sticky top-0">
+        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
         <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
             <a href="/"
                 class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
@@ -152,7 +48,7 @@
                 <!-- Username -->
                 <div>
                     <label
-                        class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2 font-mono flex justify-between">
+                        class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 font-mono flex justify-between">
                         <span>Username</span>
                         <span id="username-status" class="text-safety"></span>
                     </label>
@@ -212,7 +108,7 @@
                     <!-- Training Input -->
                     <div>
                         <label
-                            class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2 font-mono flex justify-between">
+                            class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 font-mono flex justify-between">
                             <span>Type Password & Press Enter</span>
                             <span id="sys-message" class="text-safety"></span>
                         </label>
@@ -226,7 +122,7 @@
 
                 <!-- Final Submit Button -->
                 <a href="/login" id="btn-final-register"
-                    class="block text-center w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-4 hidden font-mono">
+                    class="hidden text-center w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-4 font-mono">
                     Proceed to Login
                 </a>
 
@@ -331,8 +227,8 @@
             setTimeout(() => { if (sysMsg.innerText === msg) sysMsg.innerText = ""; }, 3000);
         }
 
-        // --- API 1: Check Username (Triggered on blur) ---
-        usernameInput.addEventListener('blur', async () => {
+        // --- API 1: Check Username (Triggered on blur or auto-fill) ---
+        const checkUsernameLogic = async () => {
             const username = usernameInput.value.trim();
             if (username.length < 3) return;
 
@@ -370,7 +266,28 @@
                 usernameStatus.innerText = "SYS ERROR";
                 usernameStatus.className = "text-safety";
             }
-        });
+        };
+
+        usernameInput.addEventListener('blur', checkUsernameLogic);
+
+        // --- 1.5 Auto-fill from URL Params (Return from Verification) ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('username')) {
+            usernameInput.value = urlParams.get('username');
+            if (urlParams.has('email')) {
+                emailInput.value = urlParams.get('email');
+            }
+            if (urlParams.get('verified') === '1') {
+                const btnSend = document.getElementById('btn-send-verification');
+                if (btnSend) {
+                    btnSend.innerText = "VERIFIED";
+                    btnSend.disabled = true;
+                    btnSend.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+            // Auto-trigger validation to unlock training section
+            setTimeout(checkUsernameLogic, 500);
+        }
 
         // --- Event Listeners for Keystrokes ---
         trainPwInput.addEventListener('keydown', (e) => {
@@ -519,6 +436,7 @@
                             trainPwInput.classList.add("opacity-50", "cursor-not-allowed");
                             printMsg("MODEL TRAINED");
                             finalBtn.classList.remove('hidden');
+                            finalBtn.classList.add('block');
                             return; // Don't unlock input
                         }
                     }
