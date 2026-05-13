@@ -24,6 +24,7 @@ Flask-Login==0.6.3
 Flask-WTF==1.2.1
 Flask-Limiter==3.5.0
 Flask-Talisman==1.1.0
+uuid6==2025.0.1
 
 # Data Processing
 numpy>=1.24.0

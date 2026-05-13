@@ -6,31 +6,33 @@
 {% endblock %}
 
 {% block body %}
-<div class="admin-login-wrap">
-  <div class="admin-login-card">
-    <h2 class="admin-login-title">Admin Sign In</h2>
-    <p class="subtitle text-center">Restricted access — administrators only</p>
-    <form id="adminLoginForm" class="admin-login-form" onsubmit="return handleAdminLogin(event)">
-      <div class="form-group">
-        <label for="a_username" class="form-label">Username</label>
-        <input id="a_username" type="text" required autocomplete="off" class="form-input">
+<div class="min-h-screen flex items-center justify-center px-4 py-6 bg-[radial-gradient(circle_at_10%_12%,rgba(255,122,42,0.18),transparent_34%),radial-gradient(circle_at_86%_10%,rgba(255,122,42,0.08),transparent_35%),linear-gradient(160deg,#06080d_0%,#090c12_52%,#050608_100%)]">
+  <div class="w-full max-w-[440px] p-7 rounded-sm border border-white/10 bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)]">
+    <h2 class="text-center text-[29px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Admin Sign In</h2>
+    <p class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-6">Restricted access — administrators only</p>
+    <form id="adminLoginForm" class="mt-5" onsubmit="return handleAdminLogin(event)">
+      <div class="mb-5">
+        <label for="a_username" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
+        <input id="a_username" type="text" required autocomplete="off" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
       </div>
-      <div class="form-group">
-        <label for="a_password" class="form-label">Password</label>
-        <input id="a_password" type="password" required autocomplete="off" class="form-input">
+      <div class="mb-6">
+        <label for="a_password" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Password</label>
+        <input id="a_password" type="password" required autocomplete="off" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
       </div>
-      <button type="submit" class="btn btn-primary">Sign In as Admin</button>
+      <button type="submit" class="w-full inline-flex items-center justify-center px-6 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Sign In as Admin</button>
     </form>
 
-    <div id="adminResult" class="status"></div>
+    <div id="adminResult" class="hidden mt-4 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest"></div>
   </div>
 </div>
 
 <script>
 function showAdminResult(msg, cls){
   const el = document.getElementById('adminResult');
-  el.style.display = 'block';
-  el.className = 'status ' + (cls === 'success' ? 'status-success' : 'status-error');
+  const tone = cls === 'success'
+    ? 'bg-safety/15 border-safety/35 text-stark'
+    : 'bg-red-500/15 border-red-500/40 text-stark';
+  el.className = 'mt-4 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest ' + tone;
   el.innerHTML = msg;
 }
 

@@ -21,8 +21,8 @@
         <p class="text-gray-400 text-xs uppercase tracking-wider mt-1">Welcome, administrator — management dashboard</p>
       </div>
       <div class="flex gap-2">
-        <a href="/" class="btn btn-secondary px-4 py-2 text-sm">Site</a>
-        <a href="{{ url_for('admin.admin_create_page') }}" class="btn btn-primary px-4 py-2 text-sm">Create Admin</a>
+        <a href="/" class="inline-flex items-center justify-center px-4 py-2 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Site</a>
+        <a href="{{ url_for('admin.admin_create_page') }}" class="inline-flex items-center justify-center px-4 py-2 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Create Admin</a>
       </div>
     </div>
 
@@ -68,11 +68,11 @@
               <td class="px-4 py-3">
                 {% if current_user.is_authenticated and current_user.is_admin() %}
                 <div class="flex gap-2 items-center">
-                  <button class="btn btn-secondary px-2 py-1 text-xs admin-action-reset" data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset Password</button>
+                  <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-white/20 bg-white/5 text-stark text-[10px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition admin-action-reset" data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset Password</button>
                   {% if current_user.id == u.id %}
-                    <button class="btn btn-danger px-2 py-1 text-xs opacity-50 cursor-not-allowed" title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
+                    <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-red-500/60 bg-red-600 text-white text-[10px] font-bold uppercase tracking-[0.1em] opacity-50 cursor-not-allowed" title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
                   {% else %}
-                    <button class="btn btn-danger px-2 py-1 text-xs admin-action-delete" data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
+                    <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-red-500/60 bg-red-600 text-white text-[10px] font-bold uppercase tracking-[0.1em] hover:bg-red-700 transition admin-action-delete" data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
                   {% endif %}
                 </div>
                 {% else %}

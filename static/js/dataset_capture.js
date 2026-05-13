@@ -41,8 +41,16 @@ function setStatus(msg, type = "info") {
     // Clear any pending auto-dismiss
     if (_statusTimer) { clearTimeout(_statusTimer); _statusTimer = null; }
 
+    const base = "mt-0 rounded-sm border px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em]";
+    const tones = {
+        info: "bg-safety/15 border-safety/40 text-[#ffd7bf]",
+        success: "bg-safety/20 border-safety/50 text-[#ffe7d3]",
+        warning: "bg-amber-500/15 border-amber-400/40 text-[#f2d7a0]",
+        error: "bg-red-500/15 border-red-500/40 text-[#f2b8b8]",
+    };
+    const tone = tones[type] || tones.info;
     el.textContent = msg;
-    el.className = `ds-status ds-status--${type}`;
+    el.className = `${base} ${tone}`;
     el.classList.remove("hidden");
 
     // Auto-dismiss warning and error after 2 s

@@ -10,6 +10,13 @@ import sys
 
 from app import create_app
 from app.models import User, db
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.compiler import compiles
+
+
+@compiles(UUID, "sqlite")
+def _compile_uuid_sqlite(_type, _compiler, **_kw):
+    return "CHAR(32)"
 
 
 def ensure(condition: bool, message: str) -> None:

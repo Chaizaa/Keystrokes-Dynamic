@@ -6,86 +6,85 @@
 {% endblock %}
 
 {% block body %}
-<div class="auth-container bg-gradient">
-    <div class="auth-box">
-        <div class="logo">
-            <div class="logo-text"></div>
-        </div>
-        <h2 id="rcTitle">Set New Master Password</h2>
-        <p id="rcSubtitle" class="subtitle">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
+<div class="min-h-screen flex items-center justify-center px-5 py-6 bg-[radial-gradient(circle_at_12%_14%,rgba(255,122,42,0.17),transparent_33%),radial-gradient(circle_at_84%_9%,rgba(255,122,42,0.09),transparent_36%),linear-gradient(160deg,#06080d_0%,#090c12_55%,#050608_100%)]">
+    <div class="w-full max-w-[520px] p-8 md:p-10 border border-white/10 rounded-sm bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)] relative">
+        <h2 id="rcTitle" class="text-center text-[24px] md:text-[34px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Set New Master Password</h2>
+        <p id="rcSubtitle" class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-8">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
 
         <!-- Username removed from UI; kept hidden element for compatibility with JS -->
-        <div class="form-group hidden">
-            <label for="rcUsername" class="form-label">Username</label>
-            <input id="rcUsername" type="text" readonly class="form-input">
+        <div class="hidden">
+            <label for="rcUsername" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
+            <input id="rcUsername" type="text" readonly class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3">
         </div>
 
-        <div class="form-group">
-            <label for="rcPassword" class="form-label">New Master Password</label>
-            <div class="input-wrapper">
-                <input id="rcPassword" type="password" placeholder="Create a secure password" class="form-input">
-                <span class="toggle-password" onclick="togglePass('rcPassword', this)">
+        <div class="mb-6">
+            <label for="rcPassword" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">New Master Password</label>
+            <div class="relative">
+                <input id="rcPassword" type="password" placeholder="Create a secure password" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 pr-12 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
+                <span class="absolute right-4 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-[#7f8997] hover:text-stark transition" onclick="togglePass('rcPassword', this)">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </span>
             </div>
-            <p class="hint-text">This password will be used for biometric re-enrollment.</p>
+            <p class="mt-2 text-xs text-[#7a8a9a]">This password will be used for biometric re-enrollment.</p>
             <!-- Password strength meter -->
-            <div id="pwStrength" class="pw-strength hidden" aria-live="polite">
-                <div class="strength-bar">
-                    <div id="strengthBarFill" class="strength-bar-fill"></div>
+            <div id="pwStrength" class="mt-2 hidden" aria-live="polite">
+                <div class="h-2 bg-zinc-200 rounded-md overflow-hidden my-2">
+                    <div id="strengthBarFill" class="h-full w-0 bg-red-500 transition-[width] duration-150"></div>
                 </div>
-                <div id="pwStrengthLabel" class="hint-text pw-strength-label">Strength: Unknown</div>
+                <div id="pwStrengthLabel" class="text-xs text-[#7a8a9a]">Strength: Unknown</div>
             </div>
         </div>
 
-        <div class="divider"></div>
+        <div class="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] my-6"></div>
 
-        <div id="enrollmentSection" class="section">
-            <div class="section-title">Biometric Re-enrollment</div>
-            <p class="hint-text">Type your new password naturally 20 times to train the system.</p>
+        <div id="enrollmentSection" class="mb-8">
+            <div class="text-[11px] uppercase tracking-[0.12em] text-[#dbe4f2] mb-3">Biometric Re-enrollment</div>
+            <p class="text-xs text-[#7a8a9a]">Type your new password naturally 20 times to train the system.</p>
 
-            <div class="progress-card mb-4">
-                <div class="progress-header">
-                    <span class="progress-label">Enrollment Progress</span>
-                    <span class="progress-count"><span id="countDisplay">0</span>/20</span>
+            <div class="rounded-sm border border-white/10 bg-[linear-gradient(170deg,rgba(15,18,24,0.95),rgba(9,12,16,0.96))] shadow-[0_14px_24px_rgba(0,0,0,0.38)] p-6 mb-4">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-[11px] uppercase tracking-[0.12em] text-[#9ea6b3]">Enrollment Progress</span>
+                    <span class="text-2xl md:text-3xl font-bold text-stark"><span id="countDisplay">0</span>/20</span>
                 </div>
-                <div class="progress-bar-wrapper">
-                    <div class="progress-bar" id="progressBar"></div>
+                <div class="h-2 rounded-md overflow-hidden border border-white/10 bg-[#0a0d12] mb-3">
+                    <div class="h-full bg-[linear-gradient(90deg,#ff7a2a,#ffb066)] transition-all duration-150" id="progressBar"></div>
                 </div>
-                <p class="progress-message" id="motivationalMsg">Take your time, type naturally</p>
+                <p class="text-xs text-[#9ea6b3]" id="motivationalMsg">Take your time, type naturally</p>
             </div>
 
-            <div class="typing-timer hidden mb-3" id="typingTimer">
+            <div class="hidden rounded-sm border border-white/10 bg-[linear-gradient(170deg,rgba(15,18,24,0.95),rgba(9,12,16,0.96))] shadow-[0_14px_24px_rgba(0,0,0,0.38)] p-4 text-center mb-3" id="typingTimer">
                 <div class="label">Typing Rhythm</div>
                 <div class="time">
                     <span id="timerDisplay">0.000</span><span class="unit">s</span>
                 </div>
-                <small>Recording keystroke pattern...</small>
+                <small class="text-xs text-[#909090]">Recording keystroke pattern...</small>
             </div>
 
-            <div class="form-group mt-4">
-                <label for="typingField" class="form-label">Type Password & Press Enter</label>
-                <div class="input-wrapper">
-                    <input type="password" id="typingField" placeholder="Type your password here" class="form-input">
-                    <span class="toggle-password" onclick="togglePass('typingField', this)">
+            <div class="mt-4">
+                <label for="typingField" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Type Password & Press Enter</label>
+                <div class="relative">
+                    <input type="password" id="typingField" placeholder="Type your password here" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 pr-12 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
+                    <span class="absolute right-4 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-[#7f8997] hover:text-stark transition" onclick="togglePass('typingField', this)">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
                     </span>
                 </div>
-                <p id="status" class="hint-text"></p>
+                <p id="status" class="mt-2 text-xs text-[#7a8a9a]"></p>
             </div>
         </div>
 
-        <div id="finishSection" class="completion-section hidden">
-            <div class="completion-icon" aria-hidden="true"></div>
-            <h3>Reset Complete</h3>
-            <p>Your password was updated and biometrics re-enrolled.</p>
-            <a href="/login" class="btn">Continue to Login</a>
+        <div id="finishSection" class="hidden text-center py-8">
+            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sm border border-safety/50 bg-safety/20 text-[#ffd1a8]" aria-hidden="true">
+                <span class="text-3xl">&#10003;</span>
+            </div>
+            <h3 class="text-xl font-bold text-stark mb-2">Reset Complete</h3>
+            <p class="text-sm text-[#a0a0a0] mb-6">Your password was updated and biometrics re-enrolled.</p>
+            <a href="/login" class="inline-flex items-center justify-center px-8 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] shadow-[0_12px_26px_rgba(0,0,0,0.38)] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Continue to Login</a>
         </div>
     </div>
 </div>
@@ -132,9 +131,7 @@ function updatePasswordStrengthUI() {
             if (!weakHint) {
                 weakHint = document.createElement('p');
                 weakHint.id = weakHintId;
-                weakHint.className = 'hint-text';
-                weakHint.style.color = '#d97706';
-                weakHint.style.marginTop = '6px';
+                weakHint.className = 'mt-1 text-xs text-amber-600';
                 weakHint.textContent = '⚠ Password lemah — disarankan menggunakan minimal 12 karakter dengan kombinasi huruf, angka, dan simbol.';
                 if (mainPassInput && mainPassInput.parentNode && mainPassInput.parentNode.parentNode)
                     mainPassInput.parentNode.parentNode.appendChild(weakHint);
@@ -186,7 +183,7 @@ function startTimer() {
         typingStartTime = performance.now();
         const timerEl = document.getElementById('typingTimer');
         const disp = document.getElementById('timerDisplay');
-        if (timerEl) timerEl.style.display = 'block';
+        if (timerEl) timerEl.classList.remove('hidden');
         if (disp) disp.textContent = '0.000';
         timerInterval = setInterval(() => {
             try {
@@ -201,7 +198,7 @@ function stopTimer() {
     typingStartTime = null;
     const timerEl = document.getElementById('typingTimer');
     const disp = document.getElementById('timerDisplay');
-    if (timerEl) timerEl.style.display = 'none';
+    if (timerEl) timerEl.classList.add('hidden');
     if (disp) disp.textContent = '0.000';
 }
 function resetTimer() { stopTimer(); isFirstKeystroke = true; }

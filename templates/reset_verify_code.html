@@ -6,28 +6,28 @@
 {% endblock %}
 
 {% block body %}
-<div class="auth-container bg-gradient">
-    <div class="auth-box">
-        <h2>Reset Your Password</h2>
-        <p class="subtitle">Enter the 6-digit code we sent to your email to continue with the password reset.</p>
+<div class="min-h-screen flex items-center justify-center px-5 py-6 bg-[radial-gradient(circle_at_12%_14%,rgba(255,122,42,0.17),transparent_33%),radial-gradient(circle_at_84%_9%,rgba(255,122,42,0.09),transparent_36%),linear-gradient(160deg,#06080d_0%,#090c12_55%,#050608_100%)]">
+    <div class="w-full max-w-[520px] p-8 md:p-10 border border-white/10 rounded-sm bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)] relative">
+        <h2 class="text-center text-[24px] md:text-[34px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Reset Your Password</h2>
+        <p class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-8">Enter the 6-digit code we sent to your email to continue with the password reset.</p>
 
-        <div class="form-group">
-            <label for="rcvUsername" class="form-label">Username</label>
-            <input id="rcvUsername" type="text" readonly class="form-input">
+        <div class="mb-6">
+            <label for="rcvUsername" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
+            <input id="rcvUsername" type="text" readonly class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3">
         </div>
-        <div class="form-group">
-            <label for="rcvCode" class="form-label">Reset Code</label>
-            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code" class="form-input">
-            <small class="hint-text">Check your email for the 6-digit reset code</small>
+        <div class="mb-6">
+            <label for="rcvCode" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Reset Code</label>
+            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
+            <small class="mt-2 block text-xs text-[#7a8a9a]">Check your email for the 6-digit reset code</small>
         </div>
-        <div id="rcvAlert" class="alert"></div>
-        <div class="verify-actions">
-            <button id="rcvVerifyBtn" class="btn btn-primary" disabled>
+        <div id="rcvAlert" class="hidden"></div>
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+            <button id="rcvVerifyBtn" class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition disabled:opacity-50" disabled>
                 <span id="rcvSpinner" class="hidden w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
                 <span id="rcvBtnText">Verify Code</span>
             </button>
-            <button id="rcvResendBtn" class="btn btn-secondary">Resend Code</button>
-            <a href="{{ url_for('auth.login_page') }}" class="btn btn-secondary verify-back">Back to Login</a>
+            <button id="rcvResendBtn" class="inline-flex items-center justify-center px-6 py-3 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Resend Code</button>
+            <a href="{{ url_for('auth.login_page') }}" class="inline-flex items-center justify-center px-6 py-3 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Back to Login</a>
         </div>
     </div>
 </div>
@@ -46,9 +46,12 @@
     const resendBtn   = document.getElementById('rcvResendBtn');
 
     function showAlert(msg, cls) {
-        alertEl.className = 'alert';
+        const base = 'mt-3 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest';
+        const tone = cls === 'success'
+            ? 'bg-safety/15 border-safety/35 text-stark'
+            : 'bg-red-500/15 border-red-500/40 text-stark';
         alertEl.textContent = msg;
-        alertEl.classList.add('active', cls);
+        alertEl.className = `${base} ${tone}`;
     }
 
     codeInput.addEventListener('input', () => {
@@ -72,7 +75,7 @@
 
     verifyBtn.addEventListener('click', async function () {
         const code = codeInput.value.trim().replace(/\s+/g, '');
-        alertEl.className = 'alert';
+        alertEl.className = 'hidden';
         if (!code) { showAlert('Please enter the reset code', 'error'); return; }
 
         try {

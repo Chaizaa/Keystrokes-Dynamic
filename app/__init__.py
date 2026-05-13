@@ -3,6 +3,7 @@ Flask Application Factory with SQLAlchemy, Flask-Login, and Security Extensions
 """
 
 import os
+import uuid
 import secrets
 import sys
 
@@ -218,7 +219,11 @@ def create_app(config_name="development"):
     @login_manager.user_loader
     def load_user(user_id):
         from app.models import User
-
+        if isinstance(user_id, str):
+            try:
+                user_id = uuid.UUID(user_id)
+            except ValueError:
+                return None
         return db.session.get(User, user_id)
 
     # CSRF Protection (exempt API routes)

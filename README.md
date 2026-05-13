@@ -27,6 +27,7 @@ If you need the complete internal snapshot, use branch: `archive/full-repo-20260
 - Python 3.12
 - Flask
 - SQLAlchemy + Flask-Migrate
+- uuid6 (UUIDv7 primary keys)
 - scikit-learn (RF/SVM backend support)
 - SQLite (default)
 
@@ -64,6 +65,12 @@ python run.py
 
 ```text
 http://127.0.0.1:5000
+```
+
+Smoke test (quick):
+
+```bash
+python scripts/quick_smoke.py
 ```
 
 ## Run with Docker (recommended for quick trial)
