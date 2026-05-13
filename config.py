@@ -43,6 +43,11 @@ class Config:
     RECOMMENDED_SAMPLES = int(os.environ.get("RECOMMENDED_SAMPLES", str(MIN_ENROLLMENT_SAMPLES)))
     VERIFICATION_THRESHOLD = float(os.environ.get("VERIFICATION_THRESHOLD", "0.7"))
     MAX_LOGIN_ATTEMPTS = int(os.environ.get("MAX_LOGIN_ATTEMPTS", "5"))
+
+    # Partner API: minimum calibrated confidence score for verify to pass.
+    # Default 0.7 (Medium Confidence). Set to 0.9 for strict (only "High
+    # Confidence" passes). Range: 0.0 to 1.0.
+    PARTNER_DECISION_THRESHOLD = float(os.environ.get("PARTNER_DECISION_THRESHOLD", "0.7"))
     _ml_backend_raw = (os.environ.get("ML_BACKEND", "rf") or "rf").strip().lower()
     ML_BACKEND = _ml_backend_raw if _ml_backend_raw in {"rf", "svm"} else "rf"
 
