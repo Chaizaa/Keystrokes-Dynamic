@@ -244,6 +244,38 @@ class BaseMLModelService(ABC):
             .all()
         )
 
+    def _ensure_class_balance(
+        self, X_all: np.ndarray, y_all: np.ndarray, min_impostors: int = 5
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Augment with synthetic impostors when no real impostor users exist.
+
+        Generates samples shifted ±2.5 std from the genuine mean so the binary
+        classifier has something to discriminate against.  Only kicks in when
+        real impostor count is below min_impostors.
+        """
+        n_impostor = int(np.sum(y_all == 0))
+        if n_impostor >= min_impostors:
+            return X_all, y_all
+
+        X_genuine = X_all[y_all == 1]
+        if len(X_genuine) < 2:
+            return X_all, y_all
+
+        mean = X_genuine.mean(axis=0)
+        std = np.clip(X_genuine.std(axis=0), 1e-6, None)
+        n_needed = max(min_impostors, len(X_genuine)) - n_impostor
+
+        rng = np.random.RandomState(42)
+        centers = [mean + std * 2.5, mean - std * 2.5]
+        X_synth = np.array([
+            centers[i % 2] + rng.randn(*mean.shape) * std * 0.3
+            for i in range(n_needed)
+        ], dtype=float)
+        y_synth = np.zeros(len(X_synth), dtype=int)
+
+        print(f"[TRAIN] No real impostors — generated {n_needed} synthetic samples for balance")
+        return np.vstack([X_all, X_synth]), np.concatenate([y_all, y_synth])
+
     def _rows_to_xy(
         self,
         rows: Iterable[UsersVector],

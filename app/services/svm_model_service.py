@@ -43,9 +43,11 @@ class SVMModelService(BaseMLModelService):
 
     MODEL_TYPE = "SVC_RBF_probability"
 
+    # Single-combination grid keeps per-user training fast for small datasets.
+    # Multi-combination grid search was causing partner-side timeouts.
     PARAM_GRID: Dict[str, List[Any]] = {
-        "C": [1.0, 10.0, 50.0],
-        "gamma": ["scale", "auto"],
+        "C": [10.0],
+        "gamma": ["scale"],
     }
 
     # Keep impostor pool quality conservative (complete users only).
@@ -179,15 +181,17 @@ class SVMModelService(BaseMLModelService):
 
         n_genuine = int(np.sum(y_all == 1))
         n_impostor = int(np.sum(y_all == 0))
-        if n_genuine < 2 or n_impostor < 2:
+
+        if n_genuine < 2:
             return TrainResult(
                 success=False, username=username,
                 reason="insufficient_class_balance",
-                message=(
-                    "Not enough data for one-vs-rest model. "
-                    f"genuine={n_genuine}, impostor={n_impostor}"
-                ),
+                message=f"Not enough genuine samples: genuine={n_genuine}",
             )
+
+        X_all, y_all = self._ensure_class_balance(X_all, y_all)
+        n_genuine = int(np.sum(y_all == 1))
+        n_impostor = int(np.sum(y_all == 0))
 
         try:
             X_train, X_temp, y_train, y_temp = train_test_split(
@@ -307,6 +311,15 @@ class SVMModelService(BaseMLModelService):
             X = self._build_feature_vector(features, feature_names)
             prob = float(model.predict_proba(X)[0, 1])
             threshold = float(row.threshold)
+            try:
+                from flask import current_app as _ca
+                _ca.logger.info(
+                    f"[SVM verify DEBUG] {username} "
+                    f"X_first5={[round(float(v),4) for v in X.ravel()[:5].tolist()]} "
+                    f"X_sum={float(X.sum()):.4f} raw_prob={prob:.6f} thr={threshold:.6f}"
+                )
+            except Exception:
+                pass
             return {
                 "success": True,
                 "verified": bool(prob >= threshold),

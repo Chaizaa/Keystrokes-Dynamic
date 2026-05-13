@@ -13,7 +13,7 @@ from sqlalchemy import Index, func, select
 from . import db
 
 import uuid6
-from sqlalchemy.dialects.postgresql import UUID
+from .types import GUID
 
 class LoginAttempt(db.Model):
     """Per-request login attempt log.
@@ -49,7 +49,7 @@ class LoginAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
     # --- Identity ---
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = db.Column(GUID, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     username = db.Column(db.Text, nullable=False, index=True)
 
     # --- Result ---

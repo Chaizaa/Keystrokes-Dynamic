@@ -10,7 +10,7 @@ from sqlalchemy import select, func, event as _sa_event
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import uuid6
-from sqlalchemy.dialects.postgresql import UUID
+from .types import GUID
 
 from . import db
 
@@ -30,7 +30,7 @@ class User(UserMixin, db.Model):
 
     __tablename__ = "users"
 
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=lambda: uuid6.uuid7())
+    id = db.Column(GUID, primary_key=True, default=lambda: uuid6.uuid7())
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)  # Nullable for migration
     # Role: 'user' or 'admin'

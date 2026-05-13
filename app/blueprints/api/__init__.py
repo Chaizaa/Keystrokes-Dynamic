@@ -31,3 +31,4 @@ from . import two_factor  # noqa: F401
 from . import user        # noqa: F401
 from . import verification  # noqa: F401
 from . import dataset       # noqa: F401
+from . import partner       # noqa: F401

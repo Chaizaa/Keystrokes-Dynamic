@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sc query *)",
+      "Bash(cmd.exe /c \"sc query state= all\")",
+      "Bash(cmd.exe /c \"sc query type= service state= all\")",
+      "Bash(/c/Windows/System32/sc.exe query *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(/c/Windows/System32/where.exe winget *)",
+      "Bash(/c/Windows/System32/where.exe docker *)",
+      "Bash(/c/Users/Asus/AppData/Local/Microsoft/WindowsApps/winget.exe install *)",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/16/bin/psql.exe\" -h localhost -p 5432 -U postgres -d postgres -c \"SELECT version\\(\\);\")",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/16/bin/psql.exe\" -h localhost -p 5432 -U postgres -d postgres -c \"ALTER USER postgres WITH PASSWORD 'admin';\")",
+      "Bash(PGPASSWORD=admin \"/c/Program Files/PostgreSQL/16/bin/psql.exe\" -h localhost -p 5432 -U postgres -d postgres -c \"CREATE DATABASE keystrokes_db;\")",
+      "Bash(timeout 25 python run.py)",
+      "Bash(timeout 20 python run.py)",
+      "Bash(echo \"EXIT=$?\")",
+      "Read(//tmp/**)",
+      "Bash(PGPASSWORD=admin '/c/Program Files/PostgreSQL/16/bin/psql.exe' -h localhost -p 5432 -U postgres -d keystrokes_db -c ' *)",
+      "Bash(PGPASSWORD=admin \"/c/Program Files/PostgreSQL/16/bin/psql.exe\" -h localhost -p 5432 -U postgres -d keystrokes_db -c \"\\\\d users_vectors\")",
+      "Bash(python -)",
+      "Bash(PGPASSWORD=admin \"/c/Program Files/PostgreSQL/16/bin/psql.exe\" -h localhost -p 5432 -U postgres -d keystrokes_db -c \"SELECT id, username, model_type, round\\(threshold::numeric,4\\) as threshold, n_genuine, n_impostor, n_samples_total FROM user_ml_models;\")"
+    ]
+  }
+}

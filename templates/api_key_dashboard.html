@@ -86,12 +86,45 @@ function toggleKeyVisibility() {
 
 async function copyApiKey() {
     const input = document.getElementById('apiKeyDisplay');
-    const oldType = input.type;
-    input.type = 'text';
-    input.select();
-    document.execCommand('copy');
-    input.type = oldType;
-    if (window.showToast) window.showToast('Access Key copied to clipboard', 'success');
+    const value = input ? input.value : '';
+    if (!value) {
+        if (window.showToast) window.showToast('Nothing to copy', 'error');
+        return;
+    }
+
+    let copied = false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+            copied = true;
+        }
+    } catch (err) {
+        copied = false;
+    }
+
+    if (!copied) {
+        // Fallback: copy from a temporary textarea (works on password inputs too)
+        const tmp = document.createElement('textarea');
+        tmp.value = value;
+        tmp.setAttribute('readonly', '');
+        tmp.style.position = 'absolute';
+        tmp.style.left = '-9999px';
+        document.body.appendChild(tmp);
+        tmp.select();
+        try {
+            copied = document.execCommand('copy');
+        } catch (err) {
+            copied = false;
+        }
+        document.body.removeChild(tmp);
+    }
+
+    if (window.showToast) {
+        window.showToast(
+            copied ? 'Access Key copied to clipboard' : 'Copy failed — select and copy manually',
+            copied ? 'success' : 'error'
+        );
+    }
 }
 
 async function revokeKey() {
