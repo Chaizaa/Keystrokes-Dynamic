@@ -1,103 +1,262 @@
 """
 Partner-facing API endpoints (API-key authenticated).
 
-These routes are consumed by external sites embedding
-``static/js/partner_keystroke_recorder.js``. Authentication is via the
-``Authorization: Bearer sk_live_...`` header, validated against the
-``api_keys`` table by :class:`APIKeyService`.
-
 Routes
 ------
 POST /api/partner/enroll  — submit one keystroke sample for a partner user
-POST /api/partner/verify  — verify a keystroke sample against the user's model
+POST /api/partner/verify  — verify a keystroke sample against stored templates
+
+Verification uses **template-distance comparison** (euclidean + cosine +
+statistical), not per-user ML training. Rationale: per-user SVM/RF with 5-30
+enrollment samples degenerates into constant outputs (see memory:
+lesson_biometric_architecture). Template distance discriminates cleanly at
+small sample counts, has no training step, and returns sub-second.
 """
 
 from __future__ import annotations
 
+import json
+import statistics as _stats
 import traceback
 from functools import wraps
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 from flask import current_app, g, jsonify, request
 
 from app import limiter as _limiter
 from app.models import User, UsersVector, db
 from app.services.api_key_service import APIKeyService
 
-from ._shared import api_bp, get_biometric_service
-from .helpers import assess_quality, process_events, save_biometric_sample
+from ._shared import api_bp
+from .helpers import save_biometric_sample
 
 
-def _process_events_for_verify(events, username):
-    """Process events with relaxed quality gates (no backspace cap)."""
-    from app.utils.keystroke_processor import KeystrokeProcessor
-    return KeystrokeProcessor(max_allowed_backspace=10_000).process(events, username=username)
+# ---------------------------------------------------------------------------
+# Confidence thresholds (mirror habib_api/biometric.py constants)
+# ---------------------------------------------------------------------------
+EXACT_MATCH_THRESHOLD = 0.95
+HIGH_CONFIDENCE_THRESHOLD = 0.85
+MEDIUM_CONFIDENCE_THRESHOLD = 0.70
+LOW_CONFIDENCE_THRESHOLD = 0.55
+MIN_SAMPLES_FOR_VERIFICATION = 3
 
 
-def _permissive_threshold(strict_threshold, enrollment_count):
-    """Return an effective threshold relaxed for low-sample users.
+# ---------------------------------------------------------------------------
+# Keystroke processing helpers
+# ---------------------------------------------------------------------------
 
-    Combines two relaxations and picks the more permissive (lower) one:
-      - Multiplicative factor: ``threshold * factor``
-      - Absolute tolerance band: ``threshold - tolerance``
+def _process_events(events, username, *, lenient_backspace: bool = False):
+    """Process raw events into feature vectors.
 
-    The absolute tolerance ensures a small numeric gap (e.g. 0.04 below the
-    learned threshold) is never enough to block a legitimate user, regardless
-    of the threshold's magnitude.
-
-    Tunable via Flask config:
-      - PARTNER_PERMISSIVE_ENABLED    (default True)
-      - PARTNER_PERMISSIVE_FACTOR     (default 0.3; 1.0 = no relaxation)
-      - PARTNER_PERMISSIVE_TOLERANCE  (default 0.08; absolute band)
-      - PARTNER_PERMISSIVE_BELOW      (default 15; sample count cutoff)
+    ``lenient_backspace`` lifts the 4-backspace gate that's appropriate for
+    enrollment but too strict for live verify (users fat-finger).
     """
-    cfg = current_app.config
-    if not cfg.get("PARTNER_PERMISSIVE_ENABLED", True):
-        return strict_threshold, False
-    cutoff = int(cfg.get("PARTNER_PERMISSIVE_BELOW", 15))
-    if enrollment_count >= cutoff or strict_threshold is None:
-        return strict_threshold, False
-    factor = float(cfg.get("PARTNER_PERMISSIVE_FACTOR", 0.3))
-    factor = max(0.05, min(1.0, factor))
-    tolerance = float(cfg.get("PARTNER_PERMISSIVE_TOLERANCE", 0.08))
-    tolerance = max(0.0, tolerance)
-
-    by_factor = float(strict_threshold) * factor
-    by_tolerance = float(strict_threshold) - tolerance
-    effective = max(0.0, min(by_factor, by_tolerance))
-    return effective, True
+    from app.utils.keystroke_processor import KeystrokeProcessor
+    proc = KeystrokeProcessor(max_allowed_backspace=10_000 if lenient_backspace else 4)
+    return proc.process(events, username=username)
 
 
-def _get_or_create_partner_user(username, email=None):
-    """Return a User row for *username*, creating a placeholder if missing.
+def _safe_parse_vector(raw_value) -> List[float]:
+    """Parse a stored vector (JSON string or list) into a list of floats."""
+    if raw_value is None:
+        return []
+    if isinstance(raw_value, list):
+        try:
+            return [float(x) for x in raw_value]
+        except (TypeError, ValueError):
+            return []
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+            if isinstance(parsed, list):
+                return [float(x) for x in parsed]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return []
 
-    Per-user ML training requires a row in ``users`` (FK target). Partner-supplied
-    usernames are not part of the regular auth flow, so we materialize a
-    password-less stub User so that training can proceed.
 
-    Also backfills ``user_id`` on any orphan UsersVector rows for this username
-    so previously-enrolled partner samples become attributable.
+# ---------------------------------------------------------------------------
+# Template-distance scoring (ported from habib_api/biometric.py)
+# ---------------------------------------------------------------------------
+
+def _euclidean_distance(a: List[float], b: List[float]) -> float:
+    return float(np.linalg.norm(np.asarray(a, dtype=float) - np.asarray(b, dtype=float)))
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    va = np.asarray(a, dtype=float)
+    vb = np.asarray(b, dtype=float)
+    na = float(np.linalg.norm(va))
+    nb = float(np.linalg.norm(vb))
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return float(np.dot(va, vb) / (na * nb))
+
+
+def _statistical_similarity(sample_h: List[float], templates: List[Dict[str, Any]]) -> float:
+    """Per-position absolute-diff score on H_vector, scaled to [0,1]."""
+    template_rows: List[List[float]] = []
+    for t in templates:
+        hv = t.get("H_vector") or []
+        try:
+            template_rows.append([float(x) for x in hv])
+        except (TypeError, ValueError):
+            continue
+    if not sample_h or not template_rows:
+        return 0.0
+    min_len = min(len(sample_h), min(len(r) for r in template_rows))
+    if min_len == 0:
+        return 0.0
+    sample_trimmed = sample_h[:min_len]
+    template_trimmed = [r[:min_len] for r in template_rows]
+    template_means = [_stats.mean(col) for col in zip(*template_trimmed)]
+    diffs = [abs(a - b) for a, b in zip(sample_trimmed, template_means)]
+    mean_diff = _stats.mean(diffs)
+    return float(1.0 / (1.0 + (mean_diff * 2.0)))
+
+
+def _confidence_label(score: float) -> str:
+    if score >= EXACT_MATCH_THRESHOLD:
+        return "Exact Match"
+    if score >= HIGH_CONFIDENCE_THRESHOLD:
+        return "High Confidence"
+    if score >= MEDIUM_CONFIDENCE_THRESHOLD:
+        return "Medium Confidence"
+    if score >= LOW_CONFIDENCE_THRESHOLD:
+        return "Low Confidence"
+    return "Very Low Confidence"
+
+
+def _score_against_templates(
+    login_features: Dict[str, Any],
+    templates: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Score a login sample against stored enrollment templates.
+
+    Returns dict with: decision, confidence_score, confidence_label, plus
+    component scores. Same shape habib_api used for partner verify.
+    """
+    login_H = login_features.get("H_vector") or []
+    login_DD = login_features.get("DD_vector") or []
+
+    if not login_H or not login_DD:
+        return {
+            "decision": "impostor",
+            "confidence_score": 0.0,
+            "confidence_label": _confidence_label(0.0),
+            "error": "missing required vectors",
+            "templates_compared": 0,
+        }
+
+    eu_scores: List[float] = []
+    cos_scores: List[float] = []
+
+    for t in templates:
+        tH = t.get("H_vector") or []
+        tDD = t.get("DD_vector") or []
+        if len(tH) != len(login_H) or len(tDD) != len(login_DD):
+            continue
+        eu = (
+            1.0 / (1.0 + _euclidean_distance(login_H, tH))
+            + 1.0 / (1.0 + _euclidean_distance(login_DD, tDD))
+        ) / 2.0
+        eu_scores.append(eu)
+
+        cos = (
+            ((_cosine_similarity(login_H, tH) + 1.0) / 2.0)
+            + ((_cosine_similarity(login_DD, tDD) + 1.0) / 2.0)
+        ) / 2.0
+        cos_scores.append(cos)
+
+    if not eu_scores and not cos_scores:
+        return {
+            "decision": "impostor",
+            "confidence_score": 0.0,
+            "confidence_label": _confidence_label(0.0),
+            "error": "no valid template comparisons (length mismatch)",
+            "templates_compared": 0,
+        }
+
+    eu_score = float(np.mean(eu_scores)) if eu_scores else 0.0
+    cos_score = float(np.mean(cos_scores)) if cos_scores else 0.0
+    stat_score = _statistical_similarity(login_H, templates)
+
+    base = 0.5 * eu_score + 0.3 * cos_score + 0.2 * stat_score
+    base = float(max(0.0, min(1.0, base)))
+    # Calibrate by emphasizing statistical alignment (reduces false accepts)
+    calibrated = float(max(0.0, min(1.0, base * stat_score)))
+
+    # Decision threshold is configurable via PARTNER_DECISION_THRESHOLD env var.
+    # Default = MEDIUM_CONFIDENCE_THRESHOLD (0.70). Set to 0.90 for strict mode.
+    decision_threshold = float(
+        current_app.config.get("PARTNER_DECISION_THRESHOLD", MEDIUM_CONFIDENCE_THRESHOLD)
+    )
+    decision_threshold = max(0.0, min(1.0, decision_threshold))
+    decision = "genuine" if calibrated >= decision_threshold else "impostor"
+
+    return {
+        "decision": decision,
+        "confidence_score": round(calibrated, 4),
+        "confidence_label": _confidence_label(calibrated),
+        "euclidean_score": round(eu_score, 4),
+        "cosine_score": round(cos_score, 4),
+        "statistical_score": round(stat_score, 4),
+        "templates_compared": len(eu_scores),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Template loader
+# ---------------------------------------------------------------------------
+
+def _load_partner_enrollment_templates(username: str) -> List[Dict[str, Any]]:
+    """Load enrollment templates (parsed vectors) for *username*."""
+    rows = db.session.execute(
+        db.select(UsersVector)
+        .where(
+            UsersVector.username == username,
+            (UsersVector.event_type == "enrollment")
+            | (UsersVector.data_type == "enrollment"),
+        )
+        .order_by(UsersVector.id.desc())
+    ).scalars().all()
+
+    templates: List[Dict[str, Any]] = []
+    for row in rows:
+        h_vec = _safe_parse_vector(getattr(row, "H_vector", None))
+        dd_vec = _safe_parse_vector(getattr(row, "DD_vector", None))
+        if not h_vec or not dd_vec:
+            continue
+        templates.append({
+            "H_vector": h_vec,
+            "DD_vector": dd_vec,
+            "UD_vector": _safe_parse_vector(getattr(row, "UD_vector", None)),
+        })
+    return templates
+
+
+# ---------------------------------------------------------------------------
+# User helpers
+# ---------------------------------------------------------------------------
+
+def _get_or_create_partner_user(username: str, email: Optional[str] = None):
+    """Return User row, creating a placeholder if missing.
+
+    Keeps FK integrity for the user_id column on UsersVector. Password is
+    NULL — partner users don't authenticate via password here.
     """
     user = db.session.execute(
         db.select(User).where(User.username == username)
     ).scalars().first()
-    created = False
-    if not user:
-        user = User(username=username, email=email, password_hash=None)
-        db.session.add(user)
-        db.session.flush()
-        created = True
-    elif email and not user.email:
-        user.email = email
-        db.session.flush()
-
-    # Heal any orphan vector rows so ML training has a consistent foreign key.
-    db.session.execute(
-        db.update(UsersVector)
-        .where(UsersVector.username == username, UsersVector.user_id.is_(None))
-        .values(user_id=user.id)
-    )
-    if created:
-        current_app.logger.info(f"[partner] created placeholder User for {username}")
+    if user:
+        if email and not user.email:
+            user.email = email
+            db.session.flush()
+        return user
+    user = User(username=username, email=email, password_hash=None)
+    db.session.add(user)
+    db.session.flush()
     return user
 
 
@@ -141,21 +300,10 @@ def require_api_key(view):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Payload helpers
 # ---------------------------------------------------------------------------
 
-def _recommended_samples() -> int:
-    bio = get_biometric_service()
-    getter = getattr(bio, "get_recommended_samples", None)
-    if callable(getter):
-        try:
-            return int(getter())
-        except Exception:
-            pass
-    return int(getattr(bio, "RECOMMENDED_SAMPLES", 30))
-
-
-def _extract_partner_payload():
+def _extract_partner_payload() -> Tuple[Dict[str, Any], str, Any, Optional[str]]:
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     events = data.get("events")
@@ -174,35 +322,16 @@ def _client_ip() -> str:
     return request.remote_addr or ""
 
 
-def _maybe_schedule_training(username: str, sample_count: int) -> None:
-    """Kick off background ML training as soon as we have the minimum samples.
-
-    Triggers on every enroll past the minimum (training is cheap with the
-    pruned grid and idempotent via ``_training_in_progress``). This way, the
-    model is ready by the time the user lands on the verify call and we never
-    have to sync-train inside the verify request.
-    """
-    bio = get_biometric_service()
-    min_samples = int(getattr(bio, "get_minimum_samples_for_verification", lambda: 5)())
-    if sample_count < min_samples:
-        return
-    try:
-        backend_name = str(current_app.config.get("ML_BACKEND", "rf") or "rf").strip().lower()
-        backend_name = "svm" if backend_name == "svm" else "rf"
-        if backend_name == "svm":
-            from app.services.svm_model_service import (
-                schedule_background_training as schedule,
-            )
-        else:
-            from app.services.ml_model_service import (
-                schedule_background_training as schedule,
-            )
-        app = current_app._get_current_object()
-        # force=True so each new enroll sample refreshes the model with the
-        # latest data; quick grid keeps this cheap.
-        schedule(app, username, force=True)
-    except Exception as exc:
-        current_app.logger.warning(f"[partner] auto-train skipped: {exc}")
+def _count_enrollment_samples(username: str) -> int:
+    return int(db.session.execute(
+        db.select(db.func.count())
+        .select_from(UsersVector)
+        .where(
+            UsersVector.username == username,
+            (UsersVector.event_type == "enrollment")
+            | (UsersVector.data_type == "enrollment"),
+        )
+    ).scalar() or 0)
 
 
 # ---------------------------------------------------------------------------
@@ -232,19 +361,15 @@ def partner_enroll():
             status="processing",
         )
 
-        result = process_events(events, username)
+        result = _process_events(events, username, lenient_backspace=False)
         if result.get("status") != "success":
             msg = result.get("msg", "Failed to process keystroke events")
             log_entry.mark_failed(msg)
-            return _json_error(msg, 400, error_code="INVALID_EVENTS")
+            return _json_error(msg, 400, error_code="INVALID_KEYSTROKE_DATA")
 
         features = result["features"]
         features["username"] = username
         features["event_type"] = "enrollment"
-
-        quality = assess_quality(features)
-        features["quality_label"] = quality.get("quality_label")
-        features["quality_score"] = quality.get("quality_score")
 
         partner_user = _get_or_create_partner_user(username, email)
 
@@ -260,29 +385,36 @@ def partner_enroll():
 
         db.session.commit()
 
-        status = get_biometric_service().get_enrollment_status(username)
-        target = _recommended_samples()
-        new_count = int(status.get("count", 0))
+        new_count = _count_enrollment_samples(username)
+        target = 5  # template-distance is reliable from 5 samples; no need for 30
+        enrollment_id = f"enr_{api_key.id}_{log_entry.id}"
 
-        _maybe_schedule_training(username, new_count)
+        log_entry.user_id = partner_user.id
+        log_entry.mark_success(enrollment_id=enrollment_id)
 
-        log_entry.mark_success(enrollment_id=f"enr_{api_key.id}_{log_entry.id}")
+        try:
+            api_key.total_enrollments = int(api_key.total_enrollments or 0) + 1
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
         return jsonify({
             "success": True,
             "message": f"Sample {new_count}/{target} saved",
+            "enrollment_id": enrollment_id,
+            "username": username,
+            "api_key_prefix": api_key.key_prefix,
             "progress": {
                 "current": new_count,
                 "target": target,
-                "complete": bool(status.get("ready_for_login")),
+                "complete": new_count >= target,
             },
-            # Aliases for partner JS clients that read flat field names.
             "templates_count": new_count,
             "enrollment_count": new_count,
             "required_templates": target,
             "min_templates": target,
-            "quality": quality,
-        }), 200
+            "remaining_quota": api_key.get_remaining_quota(),
+        }), 201
 
     except Exception as exc:
         db.session.rollback()
@@ -293,14 +425,14 @@ def partner_enroll():
                 log_entry.mark_failed(str(exc))
             except Exception:
                 db.session.rollback()
-        return _json_error("Internal server error", 500, error_code="INTERNAL_ERROR")
+        return _json_error("Internal server error", 500, error_code="SERVER_ERROR")
 
 
 @api_bp.route("/partner/verify", methods=["POST"])
 @_limiter.limit("120 per minute")
 @require_api_key
 def partner_verify():
-    """Verify a keystroke sample for a partner-supplied username."""
+    """Verify a keystroke sample against stored templates using template distance."""
     api_key = g.api_key
     try:
         _data, username, events, _email = _extract_partner_payload()
@@ -308,206 +440,56 @@ def partner_verify():
             return _json_error("username and events are required", 400,
                                error_code="MISSING_FIELDS")
 
-        bio = get_biometric_service()
-        status = bio.get_enrollment_status(username)
-        min_samples = int(status.get("minimum_samples", 5))
-        current_count = int(status.get("count", 0))
-        if current_count < min_samples:
+        existing_user = db.session.execute(
+            db.select(User).where(User.username == username)
+        ).scalars().first()
+        user_id = existing_user.id if existing_user else None
+
+        templates = _load_partner_enrollment_templates(username)
+        if len(templates) < MIN_SAMPLES_FOR_VERIFICATION:
+            msg = f"Insufficient enrollment samples ({len(templates)}/{MIN_SAMPLES_FOR_VERIFICATION})"
             APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                username=username,
-                verified=False,
-                confidence_score=None,
-                error_message=f"Insufficient enrollment ({current_count}/{min_samples})",
+                api_key_id=api_key.id, user_id=user_id, username=username,
+                verified=False, confidence_score=0.0, error_message=msg,
                 client_ip=_client_ip(),
                 user_agent=request.headers.get("User-Agent"),
             )
             return _json_error(
-                f"User not enrolled or enrollment insufficient ({current_count}/{min_samples})",
-                404,
-                error_code="ENROLLMENT_INSUFFICIENT",
-                progress={"current": current_count, "target": min_samples},
+                msg, 404,
+                error_code="INSUFFICIENT_ENROLLMENT",
+                progress={"current": len(templates), "target": MIN_SAMPLES_FOR_VERIFICATION},
             )
 
-        # Heal partner records: ensure User row exists and orphan vectors are
-        # linked. Required for per-user ML training to succeed.
-        _get_or_create_partner_user(username)
-        db.session.commit()
-
-        # First-time verify: train synchronously so the partner gets a real
-        # answer rather than polling on 202. Training is fast (~2-5s) for
-        # typical sample counts and only happens once per user.
-        backend_service = bio._backend_bundle()["service"]
-        if backend_service.get_model_row(username) is None:
-            # Count *usable* genuine rows (all feature columns populated) before
-            # invoking training, so we can return a precise error instead of
-            # letting sklearn raise a cryptic stratification message.
-            from app.services.base_model_service import FEATURE_COLUMNS as _FC
-            usable_q = db.select(UsersVector).where(
-                UsersVector.username == username,
-                (UsersVector.event_type == "enrollment")
-                | (UsersVector.data_type == "enrollment"),
-            )
-            usable_rows = db.session.execute(usable_q).scalars().all()
-            usable_count = sum(
-                1 for r in usable_rows
-                if all(getattr(r, c, None) is not None for c in _FC)
-            )
-            current_app.logger.info(
-                f"[partner_verify] {username}: enrollment_rows={len(usable_rows)} "
-                f"usable_for_training={usable_count}"
-            )
-            # train_test_split with test_size=0.4 then 0.5 needs >= 5 genuine
-            # rows for stratified splits to succeed without sklearn errors.
-            MIN_USABLE = 5
-            if usable_count < MIN_USABLE:
-                APIKeyService.log_verification(
-                    api_key_id=api_key.id, username=username, verified=False,
-                    confidence_score=None,
-                    error_message=(
-                        f"insufficient_usable_samples ({usable_count}/{MIN_USABLE}) "
-                        f"of {len(usable_rows)} total"
-                    ),
-                    client_ip=_client_ip(),
-                    user_agent=request.headers.get("User-Agent"),
-                )
-                return _json_error(
-                    f"Need at least {MIN_USABLE} complete enrollment samples to "
-                    f"train (have {usable_count} usable out of {len(usable_rows)}). "
-                    "Submit more enrollment samples and try again.",
-                    422,
-                    error_code="INSUFFICIENT_SAMPLES",
-                    reason="insufficient_usable_samples",
-                    diagnostics={
-                        "usable_for_training": usable_count,
-                        "total_enrollment_rows": len(usable_rows),
-                        "minimum_needed": MIN_USABLE,
-                    },
-                )
-
-            train_result = bio.train_user_model(username, force=False)
-            if not train_result.get("success"):
-                reason = train_result.get("reason", "train_failed")
-                message = train_result.get("message", "Model training failed")
-                current_app.logger.error(
-                    f"[partner_verify] sync train failed for {username}: "
-                    f"reason={reason} message={message}"
-                )
-                APIKeyService.log_verification(
-                    api_key_id=api_key.id,
-                    username=username,
-                    verified=False,
-                    confidence_score=None,
-                    error_message=f"train_failed: {reason} — {message}",
-                    client_ip=_client_ip(),
-                    user_agent=request.headers.get("User-Agent"),
-                )
-                return _json_error(message, 503,
-                                   error_code="TRAIN_FAILED", reason=reason)
-
-        # Verify uses relaxed gates: do not block on corrections — the ML model
-        # decides whether the keystroke rhythm matches.
-        result = _process_events_for_verify(events, username)
+        result = _process_events(events, username, lenient_backspace=True)
         if result.get("status") != "success":
             msg = result.get("msg", "Failed to process keystroke events")
             APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                username=username,
-                verified=False,
-                confidence_score=None,
-                error_message=msg,
+                api_key_id=api_key.id, user_id=user_id, username=username,
+                verified=False, confidence_score=0.0, error_message=msg,
                 client_ip=_client_ip(),
                 user_agent=request.headers.get("User-Agent"),
             )
-            return _json_error(msg, 400, error_code="INVALID_EVENTS")
+            return _json_error(msg, 400, error_code="INVALID_KEYSTROKE_DATA")
 
         features = result["features"]
+        scored = _score_against_templates(features, templates)
 
-        # ---- DEBUG: prove features actually vary across requests ----
-        try:
-            import hashlib as _hl
-            from app.services.base_model_service import FEATURE_COLUMNS as _FC
-            feat_vals = [features.get(c) for c in _FC]
-            feat_repr = ",".join(
-                f"{v:.4f}" if isinstance(v, (int, float)) and v is not None else "None"
-                for v in feat_vals
-            )
-            feat_hash = _hl.md5(feat_repr.encode()).hexdigest()[:8]
-            current_app.logger.info(
-                f"[partner_verify DEBUG] {username} "
-                f"events={len(events)} duration={features.get('total_duration')} "
-                f"speed={features.get('typing_speed')} "
-                f"H_mean={features.get('H_mean')} DD_mean={features.get('DD_mean')} "
-                f"UD_mean={features.get('UD_mean')} feat_hash={feat_hash}"
-            )
-        except Exception as _dbg_exc:
-            current_app.logger.warning(f"[partner_verify DEBUG] failed: {_dbg_exc}")
-        # ---- end debug ----
+        decision = scored["decision"]
+        verified = decision == "genuine"
+        confidence_score = scored["confidence_score"]
+        confidence_label = scored["confidence_label"]
 
-        verification = bio.verify_keystroke_sample(username, features)
-
-        if not verification.get("success"):
-            reason = verification.get("reason", "verification_error")
-            message = verification.get("message", "Verification error")
-            APIKeyService.log_verification(
-                api_key_id=api_key.id,
-                username=username,
-                verified=False,
-                confidence_score=None,
-                error_message=message,
-                client_ip=_client_ip(),
-                user_agent=request.headers.get("User-Agent"),
-            )
-            http_status = 202 if reason in ("training_started", "training_in_progress") else 400
-            return jsonify({
-                "success": False,
-                "verified": False,
-                "message": message,
-                "reason": reason,
-            }), http_status
-
-        score = float(verification.get("score", 0.0))
-        strict_threshold = verification.get("threshold")
-        strict_verified = bool(verification.get("verified"))
-
-        # Apply permissive threshold for low-sample users. Re-derives the
-        # verified flag using the relaxed threshold when active.
-        effective_threshold, permissive_active = _permissive_threshold(
-            strict_threshold, current_count,
+        current_app.logger.info(
+            f"[partner_verify] {username} templates={scored.get('templates_compared')} "
+            f"eu={scored.get('euclidean_score')} cos={scored.get('cosine_score')} "
+            f"stat={scored.get('statistical_score')} → confidence={confidence_score} "
+            f"label={confidence_label} decision={decision}"
         )
-        if permissive_active and not strict_verified and strict_threshold is not None:
-            verified = score >= effective_threshold
-            decision_source = "permissive"
-        else:
-            verified = strict_verified
-            decision_source = "strict"
-
-        # Single, consistent partner-facing message/confidence regardless of
-        # which decision path produced the result. Partner integrations
-        # commonly key off these fields, so they must not leak "failed" or
-        # "permissive" wording when the final decision is verified=true.
-        message = "Verified" if verified else "Not verified"
-        if verified:
-            partner_confidence = "high" if decision_source == "strict" else "medium"
-        else:
-            partner_confidence = "low"
-
-        if permissive_active:
-            current_app.logger.info(
-                f"[partner_verify] {username} permissive: "
-                f"score={score:.4f} strict_thr={strict_threshold} "
-                f"effective_thr={effective_threshold:.4f} "
-                f"enrolled={current_count} verified={verified} "
-                f"decision_source={decision_source}"
-            )
 
         # Persist verification sample for audit / drift tracking
-        existing_user = db.session.execute(
-            db.select(User).where(User.username == username)
-        ).scalars().first()
         save_biometric_sample(
             username=username,
-            user_id=existing_user.id if existing_user else None,
+            user_id=user_id,
             features=features,
             event_type="login",
             data_type="verification",
@@ -515,37 +497,39 @@ def partner_verify():
         )
         db.session.commit()
 
-        APIKeyService.log_verification(
-            api_key_id=api_key.id,
-            username=username,
-            verified=verified,
-            confidence_score=score,
-            error_message=None if verified else "Score below threshold",
+        verification_log = APIKeyService.log_verification(
+            api_key_id=api_key.id, user_id=user_id, username=username,
+            verified=verified, confidence_score=confidence_score,
+            error_message=None if verified else scored.get("error", "Score below threshold"),
             client_ip=_client_ip(),
             user_agent=request.headers.get("User-Agent"),
         )
 
-        # Legacy field names kept for partner JS clients that read
-        # ``confidence_score`` / ``confidence_label`` / ``decision``.
-        # ``decision`` is the dominant signal: "genuine" when verified=True so
-        # the partner's ``decision === "genuine"`` check passes regardless of
-        # the raw numeric score (which can be well under 0.5 with small models).
-        response = {
+        try:
+            api_key.total_verifications = int(api_key.total_verifications or 0) + 1
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({
             "success": True,
             "verified": verified,
-            "score": score,
-            "threshold": effective_threshold,
-            "confidence": partner_confidence,
-            "confidence_label": partner_confidence,
-            "confidence_score": 1.0 if verified else score,
-            "decision": "genuine" if verified else "impostor",
-            "method": verification.get("method"),
-            "message": message,
-        }
-        return jsonify(response), 200
+            "decision": decision,
+            "username": username,
+            "confidence_score": confidence_score,
+            "confidence_label": confidence_label,
+            "score": confidence_score,
+            "confidence": confidence_label,
+            "templates_used": scored.get("templates_compared", len(templates)),
+            "verification_id": getattr(verification_log, "id", None),
+            "api_key_prefix": api_key.key_prefix,
+            "remaining_quota": api_key.get_remaining_quota(),
+            "method": "template_distance",
+            "message": "Verified" if verified else "Not verified",
+        }), 200
 
     except Exception as exc:
         db.session.rollback()
         current_app.logger.error(f"[partner_verify] {exc}")
         traceback.print_exc()
-        return _json_error("Internal server error", 500, error_code="INTERNAL_ERROR")
+        return _json_error("Internal server error", 500, error_code="SERVER_ERROR")
