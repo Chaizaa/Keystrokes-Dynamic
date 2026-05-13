@@ -41,11 +41,15 @@ class MLModelService(BaseMLModelService):
 
     MODEL_TYPE = "RandomForestClassifier"
 
+    # Single-combination grid keeps per-user training under ~2s for small
+    # datasets (5-50 enrollment samples). The previous 72-combination grid
+    # took 50+ seconds with 20 samples and caused partner-side timeouts.
+    # The chosen defaults are sensible RF baselines for keystroke biometrics.
     PARAM_GRID: Dict[str, List[Any]] = {
-        "n_estimators": [200, 400, 600],
-        "max_depth": [None, 10, 20, 30],
-        "min_samples_leaf": [1, 2, 4],
-        "max_features": ["sqrt", "log2"],
+        "n_estimators": [200],
+        "max_depth": [None],
+        "min_samples_leaf": [2],
+        "max_features": ["sqrt"],
     }
 
     def __init__(self):
@@ -122,15 +126,17 @@ class MLModelService(BaseMLModelService):
 
         n_genuine = int(np.sum(y_all == 1))
         n_impostor = int(np.sum(y_all == 0))
-        if n_genuine < 2 or n_impostor < 2:
+
+        if n_genuine < 2:
             return TrainResult(
                 success=False, username=username,
                 reason="insufficient_class_balance",
-                message=(
-                    "Not enough data for one-vs-rest model. "
-                    f"genuine={n_genuine}, impostor={n_impostor}"
-                ),
+                message=f"Not enough genuine samples: genuine={n_genuine}",
             )
+
+        X_all, y_all = self._ensure_class_balance(X_all, y_all)
+        n_genuine = int(np.sum(y_all == 1))
+        n_impostor = int(np.sum(y_all == 0))
 
         try:
             X_train, X_temp, y_train, y_temp = train_test_split(

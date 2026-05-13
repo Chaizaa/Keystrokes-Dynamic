@@ -16,6 +16,7 @@ Flask-SQLAlchemy==3.0.5
 Flask-Migrate==4.0.5
 SQLAlchemy==2.0.23
 psycopg2-binary>=2.9.9
+uuid6==2025.0.1
 
 # Security
 Flask-Bcrypt==1.0.1

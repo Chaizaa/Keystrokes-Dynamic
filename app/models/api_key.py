@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from . import db
 
 import uuid6
-from sqlalchemy.dialects.postgresql import UUID
+from .types import GUID
 
 
 class APIKey(db.Model):
@@ -40,7 +40,7 @@ class APIKey(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id"), nullable=False, index=True)
+    user_id = db.Column(GUID, db.ForeignKey("users.id"), nullable=False, index=True)
 
     # Partner information
     partner_name = db.Column(db.String(255), nullable=False)
