@@ -51,15 +51,6 @@ class Config:
     _ml_backend_raw = (os.environ.get("ML_BACKEND", "rf") or "rf").strip().lower()
     ML_BACKEND = _ml_backend_raw if _ml_backend_raw in {"rf", "svm"} else "rf"
 
-    # Partner API verify-mode tuning.
-    # - PARTNER_PERMISSIVE_ENABLED: master switch. Set "False" to enforce strict.
-    # - PARTNER_PERMISSIVE_FACTOR : multiplier on the learned threshold.
-    # - PARTNER_PERMISSIVE_TOLERANCE: absolute band (score within X below threshold passes).
-    # - PARTNER_PERMISSIVE_BELOW : permissive applies only when enrollment count is under this.
-    PARTNER_PERMISSIVE_ENABLED = os.environ.get("PARTNER_PERMISSIVE_ENABLED", "True") == "True"
-    PARTNER_PERMISSIVE_FACTOR = float(os.environ.get("PARTNER_PERMISSIVE_FACTOR", "0.3"))
-    PARTNER_PERMISSIVE_TOLERANCE = float(os.environ.get("PARTNER_PERMISSIVE_TOLERANCE", "0.08"))
-    PARTNER_PERMISSIVE_BELOW = int(os.environ.get("PARTNER_PERMISSIVE_BELOW", "15"))
 
     # Email verification expiry (hours)
     EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get("EMAIL_VERIFICATION_EXPIRY_HOURS", "1"))
