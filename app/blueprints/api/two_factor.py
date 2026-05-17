@@ -88,7 +88,9 @@ def verify_2fa():
         user = _fetch_user(username)
         if not user:
             return jsonify({"success": False, "message": "User tidak ditemukan"}), 404
-        if pending_user_id and int(pending_user_id) != int(user.id):
+        # User.id adalah UUID (GUID), bukan integer — bandingkan sebagai string
+        # untuk menghindari ValueError pada int() conversion.
+        if pending_user_id and str(pending_user_id) != str(user.id):
             return jsonify({"success": False, "message": "Session 2FA tidak valid"}), 403
 
         ok = get_auth_service().verify_two_factor_token(username, token)

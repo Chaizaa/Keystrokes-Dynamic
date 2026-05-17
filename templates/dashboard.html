@@ -214,7 +214,7 @@
                             <code id="newKeyValue"
                                 class="flex-grow bg-void border border-border-dim p-4 text-stark text-sm break-all"></code>
 
-                            <button onclick="copyNewKey()"
+                            <button onclick="copyNewKey(this)"
                                 class="bg-surface border border-border-dim text-stark px-8 py-4 uppercase text-[10px] font-bold tracking-widest hover:text-safety hover:border-safety transition-colors">
                                 COPY
                             </button>
@@ -355,28 +355,58 @@
             });
     });
 
-    function copyNewKey() {
+    function copyNewKey(btn) {
         // Ambil teks dari kotak key
         const keyText = document.getElementById('newKeyValue').textContent;
+        if (!keyText) {
+            alert('Tidak ada key untuk disalin.');
+            return;
+        }
 
-        // Copy ke clipboard bawaan browser
-        navigator.clipboard.writeText(keyText).then(() => {
-            // Efek UI Keren: Ubah tombol COPY jadi COPIED warna hijau selama 2 detik
-            const btn = event.target;
-            const originalText = btn.innerText;
-
+        // Capture button reference DI LUAR async callback (event.target tidak
+        // tersedia di dalam .then() pada konteks asinkron modern browsers).
+        const originalText = btn.innerText;
+        const restoreButton = () => {
+            btn.innerText = originalText;
+            btn.classList.remove('text-green-500', 'border-green-500');
+        };
+        const markCopied = () => {
             btn.innerText = 'COPIED!';
             btn.classList.add('text-green-500', 'border-green-500');
+            setTimeout(restoreButton, 2000);
+        };
 
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.classList.remove('text-green-500', 'border-green-500');
-            }, 2000);
+        // Coba modern Clipboard API (butuh secure context: HTTPS atau localhost)
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(keyText).then(markCopied).catch(() => {
+                fallbackCopy(keyText, markCopied);
+            });
+        } else {
+            // Fallback untuk HTTP atau browser tanpa Clipboard API
+            fallbackCopy(keyText, markCopied);
+        }
+    }
 
-        }).catch(err => {
-            console.error('Gagal copy: ', err);
-            alert('Gagal menyalin key! Silakan blok teks manual dan CTRL+C.');
-        });
+    function fallbackCopy(text, onSuccess) {
+        const tmp = document.createElement('textarea');
+        tmp.value = text;
+        tmp.setAttribute('readonly', '');
+        tmp.style.position = 'absolute';
+        tmp.style.left = '-9999px';
+        document.body.appendChild(tmp);
+        tmp.select();
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (err) {
+            ok = false;
+        }
+        document.body.removeChild(tmp);
+        if (ok) {
+            onSuccess();
+        } else {
+            alert('Gagal menyalin key. Silakan blok teks manual dan CTRL+C.');
+        }
     }
 
     function logout() {

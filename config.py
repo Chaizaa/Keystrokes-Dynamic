@@ -49,7 +49,11 @@ class Config:
     # Confidence" passes). Range: 0.0 to 1.0.
     PARTNER_DECISION_THRESHOLD = float(os.environ.get("PARTNER_DECISION_THRESHOLD", "0.7"))
     _ml_backend_raw = (os.environ.get("ML_BACKEND", "rf") or "rf").strip().lower()
-    ML_BACKEND = _ml_backend_raw if _ml_backend_raw in {"rf", "svm"} else "rf"
+    # Accept 'rf', 'svm', atau 'statistical' (template-distance, no training).
+    # Alias 'stat'/'template' juga di-normalize ke 'statistical' di service.
+    ML_BACKEND = _ml_backend_raw if _ml_backend_raw in {
+        "rf", "svm", "statistical", "stat", "template"
+    } else "rf"
 
 
     # Email verification expiry (hours)

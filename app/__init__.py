@@ -167,8 +167,11 @@ def create_app(config_name="development"):
     _load_app_config(app, config_name)
 
     # Normalize ML backend mode switch so app runtime always sees a valid value.
+    # Accept 'rf', 'svm', 'statistical' (plus aliases 'stat'/'template' yang akan
+    # di-normalize ke 'statistical' di BiometricService._normalize_backend_name).
     _ml_backend_raw = str(app.config.get("ML_BACKEND", os.environ.get("ML_BACKEND", "rf")) or "rf").strip().lower()
-    app.config["ML_BACKEND"] = _ml_backend_raw if _ml_backend_raw in {"rf", "svm"} else "rf"
+    _valid_backends = {"rf", "svm", "statistical", "stat", "template"}
+    app.config["ML_BACKEND"] = _ml_backend_raw if _ml_backend_raw in _valid_backends else "rf"
 
     # Set secret key for session management
     if not app.config.get("SECRET_KEY"):
