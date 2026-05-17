@@ -10,7 +10,9 @@ POST /api/2fa/verify
 
 import traceback
 
-from flask import jsonify, request
+from datetime import datetime, timezone
+
+from flask import jsonify, request, session
 from sqlalchemy import select
 
 from app.models import User, db
@@ -77,13 +79,31 @@ def verify_2fa():
     """Verify a TOTP token for a user (called after login to complete 2FA step)."""
     try:
         data = request.json or {}
-        username = data.get("username")
+        username = (data.get("username") or session.get("2fa_username") or "").strip()
         token = data.get("token")
         if not username or not token:
             return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
 
+        pending_user_id = session.get("2fa_user_id")
+        user = _fetch_user(username)
+        if not user:
+            return jsonify({"success": False, "message": "User tidak ditemukan"}), 404
+        if pending_user_id and int(pending_user_id) != int(user.id):
+            return jsonify({"success": False, "message": "Session 2FA tidak valid"}), 403
+
         ok = get_auth_service().verify_two_factor_token(username, token)
-        return jsonify({"success": ok}), (200 if ok else 400)
+        if not ok:
+            return jsonify({"success": False, "message": "Token tidak valid"}), 400
+
+        if not get_auth_service().login_user_session(user):
+            return jsonify({"success": False, "message": "Session creation failed"}), 500
+
+        user.last_login = datetime.now(timezone.utc)
+        db.session.commit()
+
+        session.pop("2fa_user_id", None)
+        session.pop("2fa_username", None)
+        return jsonify({"success": True, "redirect": "/dashboard"}), 200
 
     except Exception as e:
         print(f"[ERROR] verify_2fa: {e}")

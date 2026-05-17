@@ -44,3 +44,4 @@ Flask-Mail==0.9.1
 
 # 2FA / TOTP
 pyotp>=2.9.0
+uuid6==latest

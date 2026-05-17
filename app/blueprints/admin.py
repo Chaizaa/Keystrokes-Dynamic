@@ -107,7 +107,7 @@ def admin_delete_user(user_id):
         # Prevent deleting the last admin
         admin_count = db.session.execute(
             select(func.count(User.id)).where(User.role == 'admin')
-        ).scalar()
+        ).scalar() or 0
         if user.is_admin() and admin_count <= 1:
             return jsonify({'success': False, 'message': 'Cannot delete the last admin account'}), 400
 
@@ -203,7 +203,8 @@ def diagnostics():
     from sqlalchemy import text
     import os
 
-    info = {"timestamp": datetime.now(timezone.utc).isoformat()}
+    from typing import Any
+    info: dict[str, Any] = {"timestamp": datetime.now(timezone.utc).isoformat()}
     try:
         inspector = db.inspect(db.engine)
     except Exception as e:

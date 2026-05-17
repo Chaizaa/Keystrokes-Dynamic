@@ -42,7 +42,7 @@ def _recommended_samples():
     getter = getattr(get_biometric_service(), "get_recommended_samples", None)
     if callable(getter):
         try:
-            return int(getter())
+            return int(getter())  # type: ignore
         except Exception:
             pass
     return int(getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 30))
@@ -188,6 +188,9 @@ def _send_registration_verification_email(user, email):
         return
 
     user = db.session.get(User, user.id)
+    if not user:
+        return
+        
     try:
         sent_at = datetime.now(timezone.utc)
         
@@ -321,7 +324,7 @@ def _schedule_auto_training_if_ready(username, new_count):
         if new_count >= _recommended_samples():
             from flask import current_app
 
-            app = current_app._get_current_object()
+            app = current_app._get_current_object()  # type: ignore
 
             backend_name = str(current_app.config.get("ML_BACKEND", "rf") or "rf").strip().lower()
             backend_name = "svm" if backend_name == "svm" else "rf"
@@ -412,7 +415,7 @@ def check_username():
 
 
 @api_bp.route("/register_sample", methods=["POST"])
-@_limiter.limit("30 per minute")
+@_limiter.limit("100 per minute")
 def register_sample():
     """Register a single keystroke sample during enrollment."""
     try:
@@ -436,6 +439,9 @@ def register_sample():
         )
         if prep_error_response:
             return prep_error_response, prep_error_code
+            
+        if not result or features is None or not quality:
+            return jsonify({"status": "error", "message": "Failed to prepare features"}), 500
 
         real_pass = result.get("real_password_string")
         password_hash = result.get("password_hash")
@@ -480,9 +486,9 @@ def register_sample():
             },
             "quality": quality,
             "password_strength": {
-                "strength": strength_result["strength"] if real_pass else "unknown",
-                "score": strength_result["score"] if real_pass else 0,
-                "label": get_strength_label(strength_result["score"]) if real_pass else "Unknown",
+                "strength": strength_result["strength"] if real_pass and strength_result else "unknown",
+                "score": strength_result["score"] if real_pass and strength_result else 0,
+                "label": get_strength_label(float(strength_result["score"])) if real_pass and strength_result else "Unknown",
             },
         }
         if ml_training is not None:

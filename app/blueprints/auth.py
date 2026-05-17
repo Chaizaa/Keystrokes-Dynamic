@@ -56,6 +56,15 @@ def reset_complete_page():
     return render_template("reset_complete.html", username=username)
 
 
+@auth_bp.route("/2fa/verify")
+def two_factor_verify_page():
+    """2FA challenge page shown after username/password + biometric login succeeds."""
+    username = request.args.get("username") or session.get("2fa_username", "")
+    if not username and not session.get("2fa_user_id"):
+        return redirect(url_for("auth.login_page"))
+    return render_template("two_factor_verify.html", username=username)
+
+
 @auth_bp.route("/verify")
 def verify_page():
     """Email verification UI for registration only.

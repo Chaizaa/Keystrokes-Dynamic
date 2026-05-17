@@ -239,9 +239,10 @@ def login():
 
         if user.two_factor_enabled:
             session["2fa_user_id"] = user.id
+            session["2fa_username"] = user.username
             return jsonify({"success": True, "requires_2fa": True,
                             "message": "2FA verification required",
-                            "redirect": "/auth/2fa/verify"}), 200
+                            "redirect": url_for("auth.two_factor_verify_page", username=user.username)}), 200
 
         if not user.is_admin() and user.email and not user.email_verified:
             _log_login_attempt(

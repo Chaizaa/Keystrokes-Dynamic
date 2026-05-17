@@ -19,9 +19,12 @@ def clean_cache():
     logger.info("Cleaning Python cache...")
 
     cleaned = 0
+    excluded_dirs = {"venv", ".venv", ".git", "node_modules"}
 
     # Remove any __pycache__ directories recursively
     for cache_path in Path(".").rglob("__pycache__"):
+        if any(ex in cache_path.parts for ex in excluded_dirs):
+            continue
         try:
             shutil.rmtree(cache_path)
             logger.info(f"  Removed: {cache_path}")
@@ -31,6 +34,8 @@ def clean_cache():
 
     # Also remove standalone .pyc files
     for pyc_file in Path(".").rglob("*.pyc"):
+        if any(ex in pyc_file.parts for ex in excluded_dirs):
+            continue
         try:
             pyc_file.unlink()
             cleaned += 1

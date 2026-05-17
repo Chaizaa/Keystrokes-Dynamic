@@ -17,6 +17,7 @@ from app.services.email_service import email_service
 from app.services.verification_service import verification_service
 from app.utils.password_strength import calculate_password_strength
 
+from app import limiter as _limiter
 from ._shared import api_bp, get_biometric_service
 from .helpers import error_response, save_biometric_sample
 
@@ -52,6 +53,7 @@ def _issue_and_send_code(user, purpose: str = None):
 # ---------------------------------------------------------------------------
 
 @api_bp.route("/verify_email", methods=["POST"])
+@_limiter.limit("10 per minute")
 def verify_email():
     """Verify a user's email using the 6-digit code."""
     data = request.json or {}
@@ -83,6 +85,7 @@ def verify_email():
 
 
 @api_bp.route("/send_verification", methods=["POST"])
+@_limiter.limit("5 per minute")
 def send_verification():
     """Send a verification code to user email. Creates user if needed."""
     data = request.json or {}
@@ -109,6 +112,7 @@ def send_verification():
 
 
 @api_bp.route("/send_reset_verification", methods=["POST"])
+@_limiter.limit("5 per minute")
 def send_reset_verification():
     """Send a password-reset code to user email."""
     data = request.json or {}
@@ -128,6 +132,7 @@ def send_reset_verification():
 
 
 @api_bp.route("/verify_reset", methods=["POST"])
+@_limiter.limit("10 per minute")
 def verify_reset():
     """Verify reset code and return a signed token for the public reset flow."""
     data = request.json or {}
@@ -159,6 +164,7 @@ def verify_reset():
 
 
 @api_bp.route("/reset_password", methods=["POST"])
+@_limiter.limit("5 per minute")
 def reset_password_public():
     """Final step of password reset: verify signed token + save biometric sample."""
     data = request.json or {}
@@ -225,6 +231,7 @@ def reset_password_public():
 
 
 @api_bp.route("/resend_verification", methods=["POST"])
+@_limiter.limit("5 per minute")
 def resend_verification():
     """Resend code with rate limiting (limiter applied via app.py or globally)."""
     data = request.json or {}

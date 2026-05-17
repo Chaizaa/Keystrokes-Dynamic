@@ -43,6 +43,11 @@ def assess_quality(features: Dict[str, Any]) -> Dict[str, Any]:
 
 def process_events(events: list, username: str) -> Dict[str, Any]:
     """Helper to process web events using the KeystrokeProcessor."""
+    if not isinstance(events, list):
+        return {"status": "error", "msg": "Invalid payload: events must be a list"}
+    if len(events) > 1000:
+        return {"status": "error", "msg": "Payload too large: maximum 1000 events allowed"}
+
     from app.utils.keystroke_processor import KeystrokeProcessor
     processor = KeystrokeProcessor()
     return processor.process(events, username=username)
