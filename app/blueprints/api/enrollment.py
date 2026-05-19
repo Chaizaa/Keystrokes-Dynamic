@@ -7,17 +7,12 @@ POST /api/check_username
 POST /api/register_sample
 """
 
-import json
 import traceback
-from datetime import datetime, timezone
-from typing import Optional
 
 from flask import jsonify, request
 
 from app import limiter as _limiter
-from app.models import AdminAudit, EnrollmentVector, User, db
-from app.services.email_service import email_service
-from app.services.verification_service import verification_service
+from app.models import db
 from app.utils.password_strength import calculate_password_strength, get_strength_label
 
 # Keep legacy module-level symbols for compatibility with existing imports/tests.
@@ -28,7 +23,7 @@ from ._shared import (
     get_auth_service,
     get_biometric_service,
 )
-from .helpers import assess_quality, error_response, log_audit, process_events, save_biometric_sample
+from .helpers import assess_quality, error_response, process_events, save_biometric_sample
 
 
 # Local stats helper removed in favor of consolidated save_biometric_sample in .helpers
@@ -100,11 +95,31 @@ def _build_check_username_login_response(username, availability, enrollment_coun
 
 
 def _build_check_username_register_response(availability, enrollment_count):
-    """Build check_username response payload for register mode."""
+    """Build check_username response payload for register mode.
+
+    A username is only "resumable" when there is unfinished enrollment for an
+    account that hasn't completed registration (no password set yet, or partial
+    enrollment). A fully-registered user (password_hash present) must always be
+    reported as "taken" — otherwise the UI lets an attacker proceed against an
+    existing account.
+    """
     recommended = _recommended_samples()
+
+    fully_registered = False
     if availability.get("exists"):
-        status_str = "resumable"
-    elif not availability["available"] and availability.get("reason") == "resumable":
+        _data = request.json or {}
+        existing_user = get_auth_service().get_user_by_username(
+            (_data.get("username") or "").strip()
+        )
+        fully_registered = bool(
+            existing_user and getattr(existing_user, "password_hash", None)
+        )
+
+    if fully_registered:
+        status_str = "taken"
+    elif availability.get("exists") or (
+        not availability["available"] and availability.get("reason") == "resumable"
+    ):
         status_str = "resumable"
     elif not availability["available"]:
         status_str = "taken"
@@ -113,9 +128,11 @@ def _build_check_username_register_response(availability, enrollment_count):
 
     response_data = {
         "status": status_str,
-        "available": availability["available"],
+        "available": availability["available"] and not fully_registered,
         "exists": availability["exists"],
-        "message": availability["message"],
+        "message": (
+            "Username sudah terdaftar" if fully_registered else availability["message"]
+        ),
         "enrollment_count": enrollment_count,
         "is_retry": enrollment_count > 0,
         "detail": "",
@@ -182,56 +199,6 @@ def _set_password_on_existing_user(existing_user, real_pass, username):
 # Audit logging moved to .helpers.log_audit
 
 
-def _send_registration_verification_email(user, email):
-    """Send registration verification email when email is provided."""
-    if not (user and user.email and email and "@" in email):
-        return
-
-    user = db.session.get(User, user.id)
-    if not user:
-        return
-        
-    try:
-        sent_at = datetime.now(timezone.utc)
-        
-        # Use VerificationService to generate code and manage timestamps
-        code = verification_service.generate_6_digit_code()
-        user.email_verification_code_hash = verification_service.hash_code(code)
-        user.email_verification_sent_at = sent_at
-        db.session.commit()
-        
-        email_service.send_verification_email(user, code)
-        print(f"[INFO] Verification email sent to {user.email}")
-    except Exception as e:
-        print(f"[WARNING] Failed to send verification email: {e}")
-
-
-def _create_user_for_first_sample(username, real_pass, email, features):
-    """Create account on first sample and apply side-effects (audit/email)."""
-    user_result = get_auth_service().create_user(username, real_pass, email=email)
-    if not user_result["success"]:
-        err_payload = {
-            "status": "error",
-            "message": user_result.get("message", "Unable to create account"),
-        }
-        if user_result.get("error_code"):
-            err_payload["error_code"] = user_result["error_code"]
-        return None, None, (jsonify(err_payload), 400)
-
-    user = user_result.get("user")
-    if user:
-        log_audit(AdminAudit.ACTION_REGISTERED, user.id, user.username, {"email": user.email})
-
-    if user:
-        try:
-            features["user_id"] = int(user.id)
-        except Exception:
-            pass
-
-    _send_registration_verification_email(user, email)
-    return user, None, None
-
-
 def _handle_password_and_user_flow(username, enrollment_count, real_pass, email, features):
     """Handle password validation/user creation logic across first and subsequent samples."""
     strength_result = calculate_password_strength(real_pass)
@@ -283,6 +250,24 @@ def _handle_password_and_user_flow(username, enrollment_count, real_pass, email,
                     )
                 user = existing_user
             else:
+                # Server-side gate: a pending account can only be claimed by
+                # someone who has proved ownership of its email. Trusting
+                # `?verified=1` from the client is unsafe (response manipulation),
+                # so the only thing we trust here is `email_verified=True` in DB.
+                email_match = (
+                    (email or "").strip().lower() == (existing_user.email or "").lower()
+                    if email
+                    else True
+                )
+                if not (existing_user.email_verified and email_match and existing_user.email):
+                    return None, None, strength_result, (
+                        jsonify({
+                            "status": "error",
+                            "message": "Email belum diverifikasi",
+                            "error_code": "EMAIL_NOT_VERIFIED",
+                        }),
+                        403,
+                    )
                 user, password_event, set_pwd_error = _set_password_on_existing_user(
                     existing_user,
                     real_pass,
@@ -291,14 +276,17 @@ def _handle_password_and_user_flow(username, enrollment_count, real_pass, email,
                 if set_pwd_error:
                     return None, None, strength_result, set_pwd_error
         else:
-            user, password_event, create_error = _create_user_for_first_sample(
-                username,
-                real_pass,
-                email,
-                features,
+            # No pending row for this username means /send_verification +
+            # /verify_email was never completed. Block to enforce the
+            # mandatory-verification policy server-side.
+            return None, None, strength_result, (
+                jsonify({
+                    "status": "error",
+                    "message": "Verifikasi email diperlukan sebelum registrasi",
+                    "error_code": "EMAIL_VERIFICATION_REQUIRED",
+                }),
+                403,
             )
-            if create_error:
-                return None, None, strength_result, create_error
 
     return user, password_event, strength_result, None
 

@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app import limiter as _limiter
 from app.models import AdminAudit, LoginAttempt, User, db
+from app.services import replay_guard
 
 from ._shared import (
     api_bp,
@@ -63,6 +64,35 @@ def _log_login_attempt(
         pass
 
 
+@api_bp.route("/login_challenge", methods=["POST"])
+@_limiter.limit("30 per minute")
+def login_challenge():
+    """Issue a single-use nonce that the next /api/login must include.
+
+    The nonce expires after replay_guard.NONCE_TTL_SECONDS and is bound to the
+    submitted username so a nonce issued for User A cannot be used to log in as
+    User B. Even if an attacker captures a full /api/login payload (events +
+    nonce) they cannot replay it — consume_nonce() removes the nonce on first
+    use, and the payload-fingerprint guard inside /api/login catches replays
+    that try with a fresh nonce.
+    """
+    data = request.json or {}
+    identifier = (data.get("username") or "").strip()
+    if not identifier:
+        return error_response("Username required", reason="invalid_input", status_code=400)
+
+    user_obj = get_auth_service().get_user_by_identifier(identifier)
+    bound_username = user_obj.username if user_obj else identifier
+
+    nonce, expires_at = replay_guard.issue_nonce(bound_username)
+    return jsonify({
+        "success": True,
+        "nonce": nonce,
+        "expires_at": int(expires_at),
+        "ttl_seconds": replay_guard.NONCE_TTL_SECONDS,
+    }), 200
+
+
 @api_bp.route("/login", methods=["POST"])
 @_limiter.limit("10 per 30 seconds")
 def login():
@@ -75,11 +105,49 @@ def login():
         username = user_obj.username if user_obj else identifier
         user_id = getattr(user_obj, "id", None)  # Resolved ONCE — passed to all log calls
         events = data.get("events")
+        nonce = data.get("nonce")
         ip_address = request.remote_addr
         user_agent = request.headers.get("User-Agent", "Unknown")
 
         if not username or not events:
             return error_response("Incomplete request data", reason="invalid_input", status_code=400)
+
+        # ── Replay defense layer 1: single-use nonce ───────────────────────
+        if not replay_guard.consume_nonce(username, nonce):
+            _log_login_attempt(
+                username,
+                user_id=user_id,
+                success=False,
+                failure_reason="replay_or_missing_nonce",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return error_response(
+                "Login challenge missing or expired. Refresh the page and try again.",
+                reason="replay_or_missing_nonce",
+                status_code=401,
+            )
+
+        # ── Replay defense layer 2: payload fingerprint ────────────────────
+        # Catches replays that try with a freshly-issued nonce: a bit-for-bit
+        # identical (username, events) tuple seen recently means someone is
+        # replaying a captured payload — legitimate retypes produce
+        # millisecond-level timing variations.
+        fp = replay_guard.fingerprint(username, events)
+        if replay_guard.mark_seen_or_replay(fp):
+            _log_login_attempt(
+                username,
+                user_id=user_id,
+                success=False,
+                failure_reason="replay_detected",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return error_response(
+                "Replay detected. Type the password again.",
+                reason="replay_detected",
+                status_code=401,
+            )
 
         # Application-level rate limiting
         recent_failed = LoginAttempt.get_recent_failed_attempts(username, minutes=0.5)

@@ -32,18 +32,57 @@ def _fetch_user(username: str) -> Optional[User]:
     return db.session.execute(select(User).where(User.username == username)).scalars().first()
 
 
+# Server-side cooldown between consecutive code issues to the same user.
+# This is independent of Flask-Limiter (which is per-IP) — an attacker rotating
+# IPs or behind a NAT pool can bypass per-IP limits, but not this per-user one.
+_CODE_REISSUE_COOLDOWN_SECONDS = 60
+
+
+def _seconds_until_reissue_allowed(user, purpose: str) -> int:
+    """Return remaining cooldown seconds before a new code may be issued.
+
+    Returns 0 when no cooldown is active.
+    """
+    last_sent = (
+        user.password_reset_sent_at if purpose == "user_reset"
+        else user.email_verification_sent_at
+    )
+    if last_sent is None:
+        return 0
+    last_sent_utc = (
+        last_sent.replace(tzinfo=timezone.utc)
+        if last_sent.tzinfo is None else last_sent
+    )
+    elapsed = (datetime.now(timezone.utc) - last_sent_utc).total_seconds()
+    remaining = _CODE_REISSUE_COOLDOWN_SECONDS - int(elapsed)
+    return max(0, remaining)
+
+
+def _cooldown_response(retry_after: int):
+    """Standardized 429 response when a per-user cooldown is active."""
+    resp = jsonify({
+        "success": False,
+        "status": "error",
+        "message": f"Tunggu {retry_after} detik sebelum meminta kode baru",
+        "reason": "cooldown_active",
+        "retry_after": retry_after,
+    })
+    resp.headers["Retry-After"] = str(retry_after)
+    return resp, 429
+
+
 def _issue_and_send_code(user, purpose: str = None):
     """Generate, persist, and send a verification code."""
     code = verification_service.generate_6_digit_code()
     sent_at = datetime.now(timezone.utc)
-    
+
     if purpose == "user_reset":
         user.password_reset_code_hash = verification_service.hash_code(code)
         user.password_reset_sent_at = sent_at
     else:
         user.email_verification_code_hash = verification_service.hash_code(code)
         user.email_verification_sent_at = sent_at
-        
+
     db.session.commit()
     return email_service.send_verification_email(user, code, purpose=purpose)
 
@@ -85,26 +124,62 @@ def verify_email():
 
 
 @api_bp.route("/send_verification", methods=["POST"])
-@_limiter.limit("5 per minute")
+@_limiter.limit("3 per minute;20 per hour")
 def send_verification():
-    """Send a verification code to user email. Creates user if needed."""
+    """Send a verification code for a registration email.
+
+    Only allowed when:
+      - the username is not already a fully-registered account, AND
+      - the email is not already bound to a different fully-registered account.
+    A "pending" passwordless row may exist (re-issued code is OK), but we never
+    create a new pending row owned by someone who can't yet prove ownership of
+    the email — that prevented account-squat in the previous implementation.
+    """
     data = request.json or {}
-    username = data.get("username")
-    email = data.get("email")
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
 
     if not username or not email:
         return error_response("Data tidak lengkap")
 
     user = _fetch_user(username)
+    if user and getattr(user, "password_hash", None):
+        return error_response(
+            "Username sudah terdaftar",
+            reason="username_taken",
+            status_code=409,
+        )
+
+    email_owner = db.session.execute(
+        select(User).where(User.email == email)
+    ).scalars().first()
+    if (
+        email_owner
+        and getattr(email_owner, "password_hash", None)
+        and email_owner.username != username
+    ):
+        return error_response(
+            "Email sudah digunakan akun lain",
+            reason="email_taken",
+            status_code=409,
+        )
+
     created_new = False
     if not user:
         user = User(username=username, email=email, email_verified=False)
         db.session.add(user)
         db.session.commit()
         created_new = True
+    elif user.email != email:
+        # Pending row exists but with a different email — rebind email since
+        # ownership of the username has not been proved yet (no password set).
+        user.email = email
+        user.email_verified = False
+        db.session.commit()
 
-    if user.email != email:
-        return error_response("Email tidak sesuai dengan akun")
+    retry_after = _seconds_until_reissue_allowed(user, purpose="email_verify")
+    if retry_after > 0:
+        return _cooldown_response(retry_after)
 
     if _issue_and_send_code(user):
         return jsonify({"success": True, "message": "Email verifikasi terkirim", "created": created_new}), 200
@@ -112,9 +187,14 @@ def send_verification():
 
 
 @api_bp.route("/send_reset_verification", methods=["POST"])
-@_limiter.limit("5 per minute")
+@_limiter.limit("3 per minute;20 per hour")
 def send_reset_verification():
-    """Send a password-reset code to user email."""
+    """Send a password-reset code to user email.
+
+    Per-user cooldown enforced server-side via `password_reset_sent_at` so the
+    endpoint cannot be spammed even when the per-IP Flask-Limiter is bypassed
+    (rotated IPs, disabled limiter, etc.).
+    """
     data = request.json or {}
     username = data.get("username")
     if not username:
@@ -125,6 +205,10 @@ def send_reset_verification():
         return error_response("User tidak ditemukan", status_code=404)
     if not user.email:
         return error_response("Email tidak terdaftar di akun ini")
+
+    retry_after = _seconds_until_reissue_allowed(user, purpose="user_reset")
+    if retry_after > 0:
+        return _cooldown_response(retry_after)
 
     if _issue_and_send_code(user, purpose="user_reset"):
         return jsonify({"success": True, "message": "Email verifikasi reset terkirim"}), 200
@@ -231,15 +315,19 @@ def reset_password_public():
 
 
 @api_bp.route("/resend_verification", methods=["POST"])
-@_limiter.limit("5 per minute")
+@_limiter.limit("3 per minute;20 per hour")
 def resend_verification():
     """Resend code with rate limiting (limiter applied via app.py or globally)."""
     data = request.json or {}
     username = data.get("username")
-    
+
     user = _fetch_user(username)
     if not user or not user.email:
         return error_response("User atau email tidak ditemukan")
+
+    retry_after = _seconds_until_reissue_allowed(user, purpose="email_verify")
+    if retry_after > 0:
+        return _cooldown_response(retry_after)
 
     if _issue_and_send_code(user):
         return jsonify({"success": True, "message": "Email verifikasi dikirim ulang"}), 200

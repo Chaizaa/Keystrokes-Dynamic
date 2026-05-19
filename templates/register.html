@@ -59,8 +59,10 @@
                 <!-- Email -->
                 <div>
                     <label
-                        class="block text-[10px] text-safety font-bold uppercase tracking-widest mb-2 font-mono">Email
-                        Address (Optional)</label>
+                        class="w-full text-[10px] text-safety font-bold uppercase tracking-widest mb-2 font-mono flex justify-between">
+                        <span>Email Address</span>
+                        <span id="email-status" class="text-muted"></span>
+                    </label>
                     <div class="flex gap-2">
                         <input type="email" id="reg-email"
                             class="w-full tactical-input py-3 px-4 text-xs tracking-wider" autocomplete="off"
@@ -70,6 +72,7 @@
                             Send Verification
                         </button>
                     </div>
+                    <p class="text-[10px] text-muted mt-2 font-mono">Email must be verified before enrollment.</p>
                 </div>
 
                 <!-- Master Password -->
@@ -209,6 +212,7 @@
         const trainPwInput = document.getElementById('training-input');
 
         const usernameStatus = document.getElementById('username-status');
+        const emailStatus = document.getElementById('email-status');
         const trainingSection = document.getElementById('training-section');
         const currentCountUI = document.getElementById('current-count');
         const targetCountUI = document.getElementById('target-count');
@@ -217,6 +221,22 @@
 
         let currentProgress = 0;
         let isUsernameValid = false;
+        let isEmailVerified = false;
+
+        function refreshTrainingGate() {
+            // Training & master-password are only usable once both username is
+            // validated AND email is verified — matches the server-side gate.
+            const ok = isUsernameValid && isEmailVerified;
+            if (ok) {
+                trainingSection.classList.remove('opacity-50', 'pointer-events-none');
+                masterPwInput.disabled = false;
+            } else {
+                trainingSection.classList.add('opacity-50', 'pointer-events-none');
+                masterPwInput.disabled = true;
+            }
+        }
+        // Start with master password locked; mirrors training gate.
+        masterPwInput.disabled = true;
 
         let rawKeyEvents = [];
         let activeKeys = {};
@@ -248,20 +268,17 @@
                     usernameStatus.className = "text-stark";
                     isUsernameValid = true;
 
-                    // Unlock training section
-                    trainingSection.classList.remove('opacity-50', 'pointer-events-none');
-
                     // Set progress if resuming
                     if (data.enrollment_count !== undefined) {
                         currentProgress = data.enrollment_count;
                         currentCountUI.innerText = currentProgress;
                     }
                 } else {
-                    usernameStatus.innerText = "TAKEN / ERROR";
+                    usernameStatus.innerText = data.status === 'taken' ? "TAKEN" : "INVALID";
                     usernameStatus.className = "text-safety";
                     isUsernameValid = false;
-                    trainingSection.classList.add('opacity-50', 'pointer-events-none');
                 }
+                refreshTrainingGate();
             } catch (err) {
                 usernameStatus.innerText = "SYS ERROR";
                 usernameStatus.className = "text-safety";
@@ -271,6 +288,10 @@
         usernameInput.addEventListener('blur', checkUsernameLogic);
 
         // --- 1.5 Auto-fill from URL Params (Return from Verification) ---
+        // NOTE: ?verified=1 only flips the UI hint — the actual gate is server-side
+        // (email_verified flag in DB). The server will reject /api/register_sample
+        // with EMAIL_NOT_VERIFIED / EMAIL_VERIFICATION_REQUIRED if the flag is false,
+        // so this URL param cannot be used to bypass verification.
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('username')) {
             usernameInput.value = urlParams.get('username');
@@ -284,14 +305,24 @@
                     btnSend.disabled = true;
                     btnSend.classList.add('opacity-50', 'cursor-not-allowed');
                 }
+                emailInput.readOnly = true;
+                emailStatus.innerText = "VERIFIED";
+                emailStatus.className = "text-stark";
+                isEmailVerified = true;
             }
-            // Auto-trigger validation to unlock training section
+            // Auto-trigger validation; refreshTrainingGate runs from inside it.
             setTimeout(checkUsernameLogic, 500);
         }
 
         // --- Event Listeners for Keystrokes ---
         trainPwInput.addEventListener('keydown', (e) => {
-            if (e.repeat) return; // Prevent Auto-Repeat keys ruining telemetry
+            // Block OS auto-repeat from producing extra chars in the input —
+            // biometric telemetry must reflect one physical press per char.
+            // Backspace is allowed to repeat for ergonomic correction.
+            if (e.repeat && e.key !== 'Backspace') {
+                e.preventDefault();
+                return;
+            }
 
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -441,7 +472,16 @@
                         }
                     }
                 } else {
-                    printMsg(data.message || "SAMPLE REJECTED", true);
+                    if (data.error_code === 'EMAIL_VERIFICATION_REQUIRED' || data.error_code === 'EMAIL_NOT_VERIFIED') {
+                        printMsg("VERIFY EMAIL FIRST", true);
+                        const u = encodeURIComponent(usernameInput.value.trim());
+                        const e = encodeURIComponent(emailInput.value.trim());
+                        setTimeout(() => {
+                            window.location.href = `/verify?username=${u}${e ? `&email=${e}` : ''}`;
+                        }, 1200);
+                    } else {
+                        printMsg(data.message || "SAMPLE REJECTED", true);
+                    }
                 }
             } catch (err) {
                 printMsg("NETWORK ERROR", true);

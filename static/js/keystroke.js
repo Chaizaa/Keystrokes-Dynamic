@@ -21,13 +21,14 @@ class KeystrokeCapture {
         const code = event.code;
         const now  = performance.now();
 
-        // Skip OS key-repeat bursts (holding a key down).
-        // NOTE: do NOT use `activeKeys[code]` for this check — that guard was too
-        // aggressive and silently dropped genuine second presses of the same physical
-        // key when the first keyup hadn't fired yet (e.g. fast typing "test123"
-        // dropped the second 't' because KeyT was still in activeKeys).
-        // `event.repeat` is true ONLY for OS auto-repeat, never for real re-presses.
-        if (event.repeat) return;
+        // Skip OS key-repeat bursts (holding a key down). preventDefault stops the
+        // browser from inserting extra characters into the input, so the value stays
+        // in sync with telemetry (one physical press = one char). Backspace is left
+        // repeatable so users can erase fluidly.
+        if (event.repeat) {
+            if (event.key !== 'Backspace') event.preventDefault();
+            return;
+        }
 
         // Start timer on first keystroke
         if (this.startTime === null) {
