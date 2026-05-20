@@ -292,12 +292,29 @@
             loginBtn.disabled = true;
 
             try {
+                // Replay defense: fetch a fresh single-use nonce bound to this
+                // username. /api/login consumes it; a captured payload cannot
+                // be replayed because the nonce is already gone.
+                const challengeRes = await fetch('/api/login_challenge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                const challengeData = await challengeRes.json().catch(() => ({}));
+                if (!challengeRes.ok || !challengeData.nonce) {
+                    printMsg("COULD NOT START LOGIN. TRY AGAIN.", true);
+                    loginBtn.innerText = "LOGIN";
+                    loginBtn.disabled = false;
+                    return;
+                }
+
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         username: username,
-                        events: rawKeyEvents
+                        events: rawKeyEvents,
+                        nonce: challengeData.nonce
                     })
                 });
                 const data = await res.json();

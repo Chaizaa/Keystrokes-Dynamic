@@ -150,6 +150,21 @@ class LoginService {
         this.elements.submitBtn.innerHTML = '<span class="animate-pulse">VERIFYING...</span>';
 
         try {
+            // Replay-defense step 1: request a fresh single-use nonce bound to
+            // this username. The server consumes it on /api/login, so a captured
+            // payload cannot be replayed.
+            const challengeResp = await fetch('/api/login_challenge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const challengeBody = await challengeResp.json().catch(() => ({}));
+            if (!challengeResp.ok || !challengeBody.nonce) {
+                this.showResult('Could not start login. Try again.', 'error');
+                this.resetForm();
+                return;
+            }
+
             const debug = this.elements.debugToggle?.checked || this.config.devLenient;
             const resp = await fetch('/api/login', {
                 method: 'POST',
@@ -157,6 +172,7 @@ class LoginService {
                 body: JSON.stringify({
                     username,
                     events: this.state.rawEvents,
+                    nonce: challengeBody.nonce,
                     debug
                 })
             });
@@ -178,6 +194,8 @@ class LoginService {
         let msg = body.message || 'Login failed';
         if (body.reason === 'impostor_detected') msg = 'Biometric mismatch. Try again.';
         if (body.reason === 'PASSWORD_MISMATCH') msg = 'Invalid credentials.';
+        if (body.reason === 'replay_detected') msg = 'Replay detected. Type the password again.';
+        if (body.reason === 'replay_or_missing_nonce') msg = 'Session expired. Refresh and try again.';
         
         this.showResult(msg, 'error');
         if (body.debug && this.elements.debugOutput) {

@@ -231,7 +231,17 @@
                 });
                 const j = await resp.json().catch(() => ({}));
 
-                if (resp.ok) {
+                // Defense in depth: don't trust resp.ok alone (a MITM/proxy can
+                // forge status). Also require the documented success contract
+                // (success === true for verify_email, or a reset_token for
+                // reset). The authoritative gate is still server-side: even if
+                // a client bypasses this check, /api/register_sample will reject
+                // with EMAIL_NOT_VERIFIED because the DB flag won't be set.
+                const verifiedOk = resp.ok && (
+                    purpose === 'reset' ? !!j.reset_token : j.success === true
+                );
+
+                if (verifiedOk) {
                     if (purpose === 'reset') {
                         const resetToken = j.reset_token || '';
                         showAlert('Verification OK — redirecting to reset enrollment...', 'success');

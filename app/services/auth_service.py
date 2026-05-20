@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from flask import session
 from flask_login import login_user, logout_user
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
 from app.models import User, UsersVector, db
@@ -109,6 +109,15 @@ class AuthService:
 
         if self.get_user_by_username(username):
             return {"success": False, "message": "Username already exists", "error_code": "USERNAME_TAKEN"}
+
+        if email:
+            existing_email = self.get_user_by_email(email)
+            if existing_email and existing_email.username != username:
+                return {
+                    "success": False,
+                    "message": "Email already registered to another account",
+                    "error_code": "EMAIL_TAKEN",
+                }
 
         try:
             new_user = User(username=username, email=email)
