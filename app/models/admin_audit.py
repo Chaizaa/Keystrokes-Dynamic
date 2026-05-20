@@ -22,6 +22,7 @@ class AdminAudit(db.Model):
     __tablename__ = "admin_audit"
 
     # --- Valid action constants ---
+    # End-user actions
     ACTION_REGISTERED    = "registered"
     ACTION_ENROLLED      = "enrolled"
     ACTION_LOGIN         = "login"
@@ -32,10 +33,18 @@ class AdminAudit(db.Model):
     ACTION_DELETED       = "deleted"
     ACTION_ROLE_CHANGED  = "role_changed"
 
+    # Admin-initiated actions (emitted by app/blueprints/admin.py and scripts/create_admin_manual.py)
+    ACTION_ADMIN_LOGIN       = "admin_login"
+    ACTION_ADMIN_SEND_RESET  = "admin_send_reset"
+    ACTION_ADMIN_DELETE_USER = "admin_delete_user"
+    ACTION_ADMIN_CREATED     = "admin_created"
+
     VALID_ACTIONS = {
         ACTION_REGISTERED, ACTION_ENROLLED, ACTION_LOGIN, ACTION_LOGOUT,
         ACTION_LOGIN_FAILED, ACTION_PASSWORD_RESET, ACTION_EMAIL_VERIFIED,
         ACTION_DELETED, ACTION_ROLE_CHANGED,
+        ACTION_ADMIN_LOGIN, ACTION_ADMIN_SEND_RESET, ACTION_ADMIN_DELETE_USER,
+        ACTION_ADMIN_CREATED,
     }
 
     id = db.Column(db.Integer, primary_key=True)
@@ -58,19 +67,33 @@ class AdminAudit(db.Model):
         return f"<AdminAudit {self.action!r} by {self.username!r} @ {self.timestamp}>"
 
     @classmethod
-    def log(cls, action: str, user_id: int = None, username: str = None, details=None) -> "AdminAudit":
+    def log(cls, action: str, user_id=None, username: str = None, details=None) -> "AdminAudit":
         """
         Factory helper: create and add an audit entry to the current session.
 
         Args:
-            action: One of AdminAudit.ACTION_* constants
-            user_id: Optional FK to users.id
+            action: One of AdminAudit.ACTION_* constants. Unknown values are still
+                    written (audit trail must not lose entries) but produce a logger
+                    warning so typos surface.
+            user_id: Optional FK to users.id (GUID)
             username: Optional username snapshot
             details: Optional dict or string with additional context
 
         Returns:
             AdminAudit: the unsaved instance (caller must commit)
         """
+        if action not in cls.VALID_ACTIONS:
+            # Warn but don't reject: dropping an audit row is worse than logging
+            # an unrecognized action. Add the constant to VALID_ACTIONS to silence.
+            try:
+                from flask import current_app
+                current_app.logger.warning(
+                    "AdminAudit.log: unknown action %r (add to VALID_ACTIONS)", action
+                )
+            except Exception:
+                # No app context (e.g. standalone scripts) — silent fallback.
+                pass
+
         entry = cls(
             action=action,
             user_id=user_id,

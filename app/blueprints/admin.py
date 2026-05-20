@@ -1,13 +1,11 @@
 from functools import wraps
 from datetime import datetime, timezone
-import json
-import traceback
 
-from flask import Blueprint, render_template, jsonify, url_for, request
+from flask import Blueprint, render_template, jsonify, request, current_app
 from flask_login import current_user, login_required
 from sqlalchemy import select, func, delete
 
-from app.models import db, User, AdminAudit, UsersVector
+from app.models import db, User, AdminAudit, UsersVector, APIKey, EnrollmentLog, VerificationLog, UserMLModel
 from app.services.resolution import resolve_service_from_app
 from app.services.email_service import email_service
 from app.services.verification_service import verification_service
@@ -36,24 +34,29 @@ def admin_required(f):
 @admin_required
 def admin_index():
     """Admin dashboard landing page."""
-    try:
-        users = db.session.execute(
-            select(User).order_by(User.created_at.desc()).limit(500)
-        ).scalars().all()
-    except Exception:
-        users = []
+    users = db.session.execute(
+        select(User).order_by(User.created_at.desc()).limit(500)
+    ).scalars().all()
 
-    try:
-        audits = db.session.execute(
-            select(AdminAudit).order_by(AdminAudit.timestamp.desc()).limit(100)
-        ).scalars().all()
-    except Exception:
-        audits = []
+    audits = db.session.execute(
+        select(AdminAudit).order_by(AdminAudit.timestamp.desc()).limit(100)
+    ).scalars().all()
 
-    return render_template("admin/index.html", users=users, audits=audits)
+    total_users = db.session.execute(select(func.count(User.id))).scalar() or 0
+    total_audits = db.session.execute(select(func.count(AdminAudit.id))).scalar() or 0
+    total_enrollments = db.session.execute(select(func.count(UsersVector.id))).scalar() or 0
+
+    return render_template(
+        "admin/index.html",
+        users=users,
+        audits=audits,
+        total_users=total_users,
+        total_audits=total_audits,
+        total_enrollments=total_enrollments,
+    )
 
 
-@admin_bp.route('/user/<int:user_id>/send_reset', methods=['POST'])
+@admin_bp.route('/user/<uuid:user_id>/send_reset', methods=['POST'])
 @admin_required
 def admin_send_reset(user_id):
     """Admin action to trigger a password reset for a user."""
@@ -78,10 +81,10 @@ def admin_send_reset(user_id):
 
         # Centralized logging
         log_audit(
-            action='admin_send_reset',
+            action=AdminAudit.ACTION_ADMIN_SEND_RESET,
             user_id=current_user.id,
             username=current_user.username,
-            details={'target_user_id': user.id}
+            details={'target_user_id': str(user.id)}
         )
         db.session.commit()
 
@@ -89,13 +92,12 @@ def admin_send_reset(user_id):
             return jsonify({'success': False, 'message': 'Failed to send email'}), 500
         return jsonify({'success': True, 'message': 'Verification email sent'}), 200
 
-    except Exception as e:
-        print(f"[ERROR] admin_send_reset: {e}")
-        traceback.print_exc()
+    except Exception:
+        current_app.logger.exception("admin_send_reset failed")
         return jsonify({'success': False, 'message': 'Server error'}), 500
 
 
-@admin_bp.route('/user/<int:user_id>/delete', methods=['POST'])
+@admin_bp.route('/user/<uuid:user_id>/delete', methods=['POST'])
 @admin_required
 def admin_delete_user(user_id):
     """Admin action to delete a user and all their associated biometric data."""
@@ -104,6 +106,10 @@ def admin_delete_user(user_id):
         if not user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
 
+        # Block self-deletion as a second safety net (UI already disables the button)
+        if current_user.id == user.id:
+            return jsonify({'success': False, 'message': 'Cannot delete your own admin account'}), 400
+
         # Prevent deleting the last admin
         admin_count = db.session.execute(
             select(func.count(User.id)).where(User.role == 'admin')
@@ -111,39 +117,47 @@ def admin_delete_user(user_id):
         if user.is_admin() and admin_count <= 1:
             return jsonify({'success': False, 'message': 'Cannot delete the last admin account'}), 400
 
-        # Atomic deletion of user-related records
+        target_username = user.username
+
+        # Atomic deletion of user-related records.
+        # Order matters because of layered FKs:
+        #   EnrollmentLog / VerificationLog reference BOTH users.id AND api_keys.id,
+        #   so they must be cleared before APIKey, which itself FKs users.id.
         try:
-            # 1. Delete Audit logs referencing this user (to avoid FK issues)
+            # 1. Partner-API logs (FK -> users.id AND FK -> api_keys.id)
+            db.session.execute(delete(EnrollmentLog).where(EnrollmentLog.user_id == user.id))
+            db.session.execute(delete(VerificationLog).where(VerificationLog.user_id == user.id))
+            # 2. Partner-API keys (FK -> users.id, no ondelete)
+            db.session.execute(delete(APIKey).where(APIKey.user_id == user.id))
+            # 3. Biometric samples + per-user ML model
+            db.session.execute(delete(UsersVector).where(UsersVector.username == target_username))
+            db.session.execute(delete(UserMLModel).where(UserMLModel.user_id == user.id))
+            # 4. Audit logs referencing this user
             db.session.execute(
                 delete(AdminAudit).where(
-                    (AdminAudit.user_id == user.id) | (AdminAudit.username == user.username)
+                    (AdminAudit.user_id == user.id) | (AdminAudit.username == target_username)
                 )
             )
-            # 2. Delete Biometric samples
-            db.session.execute(
-                delete(UsersVector).where(UsersVector.username == user.username)
-            )
-            # 3. Delete the user
+            # 5. Finally, the user row
             db.session.execute(delete(User).where(User.id == user.id))
-            
+
             # Centralized logging of the action before commit
             log_audit(
-                action='admin_delete_user',
+                action=AdminAudit.ACTION_ADMIN_DELETE_USER,
                 user_id=current_user.id,
                 username=current_user.username,
-                details={'target_user_id': user_id}
+                details={'target_user_id': str(user_id), 'target_username': target_username}
             )
-            
+
             db.session.commit()
             return jsonify({'success': True, 'message': 'User deleted'}), 200
-        except Exception as e:
+        except Exception:
             db.session.rollback()
-            print(f"[ERROR] Transaction failed for user deletion: {e}")
+            current_app.logger.exception("admin_delete_user transaction failed")
             return jsonify({'success': False, 'message': 'Failed to delete user records'}), 500
 
-    except Exception as e:
-        print(f"[ERROR] admin_delete_user: {e}")
-        traceback.print_exc()
+    except Exception:
+        current_app.logger.exception("admin_delete_user failed")
         return jsonify({'success': False, 'message': 'Server error'}), 500
 
 
@@ -162,14 +176,15 @@ def admin_login_page():
 def admin_login():
     try:
         data = request.get_json() or {}
-        username = (data.get("username") or "").strip()
+        identifier = (data.get("username") or data.get("identifier") or "").strip()
         password = data.get("password")
 
-        if not username or not password:
+        if not identifier or not password:
             return jsonify({"success": False, "message": "Username and password required"}), 400
 
+        # Accept either username or email so admins don't have to remember which they enrolled with.
         user = db.session.execute(
-            select(User).where(User.username == username)
+            select(User).where((User.username == identifier) | (User.email == identifier))
         ).scalars().first()
 
         if not user or not user.is_admin():
@@ -184,15 +199,15 @@ def admin_login():
         user.last_login = datetime.now(timezone.utc)
         
         log_audit(
-            action="admin_login",
+            action=AdminAudit.ACTION_ADMIN_LOGIN,
             user_id=user.id,
             username=user.username
         )
         db.session.commit()
 
         return jsonify({"success": True, "redirect": "/admin"}), 200
-    except Exception as e:
-        print(f"[ERROR] admin_login: {e}")
+    except Exception:
+        current_app.logger.exception("admin_login failed")
         return jsonify({"success": False, "message": "Server error"}), 500
 
 

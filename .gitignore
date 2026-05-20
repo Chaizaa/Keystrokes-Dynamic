@@ -172,3 +172,6 @@ fix_extras.py
 fix_style.py
 
 ENDPOINT_analysis.md
+
+.claude/
+

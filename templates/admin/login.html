@@ -1,53 +1,136 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Admin Sign In{% endblock %}
-
-{% block extra_css %}
-{% endblock %}
+{% block title %}JANUS // Admin Sign In{% endblock %}
 
 {% block body %}
-<div class="min-h-screen flex items-center justify-center px-4 py-6 bg-[radial-gradient(circle_at_10%_12%,rgba(255,122,42,0.18),transparent_34%),radial-gradient(circle_at_86%_10%,rgba(255,122,42,0.08),transparent_35%),linear-gradient(160deg,#06080d_0%,#090c12_52%,#050608_100%)]">
-  <div class="w-full max-w-[440px] p-7 rounded-sm border border-white/10 bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)]">
-    <h2 class="text-center text-[29px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Admin Sign In</h2>
-    <p class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-6">Restricted access — administrators only</p>
-    <form id="adminLoginForm" class="mt-5" onsubmit="return handleAdminLogin(event)">
-      <div class="mb-5">
-        <label for="a_username" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
-        <input id="a_username" type="text" required autocomplete="off" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
-      </div>
-      <div class="mb-6">
-        <label for="a_password" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Password</label>
-        <input id="a_password" type="password" required autocomplete="off" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
-      </div>
-      <button type="submit" class="w-full inline-flex items-center justify-center px-6 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Sign In as Admin</button>
-    </form>
+<div class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
 
-    <div id="adminResult" class="hidden mt-4 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest"></div>
-  </div>
+  <!-- Background Elements -->
+  <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
+
+  <!-- Tactical Header -->
+  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+    <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+      <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
+    </div>
+    <div class="flex items-center px-6 lg:px-8 border-l border-border-dim h-full">
+      <a href="/login" class="text-[10px] text-muted uppercase tracking-widest hover:text-safety transition-colors">User Login &rarr;</a>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
+
+    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+      <span class="reticle reticle-tl"></span>
+
+      <div class="mb-8 text-center">
+        <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">Admin</h1>
+        <p class="font-sans text-[10px] text-muted uppercase tracking-[0.3em]">Restricted Access &mdash; Administrators Only</p>
+      </div>
+
+      <form id="adminLoginForm" class="flex flex-col gap-5" onsubmit="event.preventDefault(); handleAdminLogin();">
+
+        <div>
+          <label for="a_username" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex">
+            <span>Username or Email</span>
+          </label>
+          <input id="a_username" type="text" required autocomplete="off" spellcheck="false"
+                 class="w-full tactical-input py-3 px-4 text-xs tracking-wider" placeholder="Enter Identifier">
+        </div>
+
+        <div>
+          <label for="a_password" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+            <span>Password</span>
+            <span id="sys-message" class="text-safety"></span>
+          </label>
+          <div class="relative w-full">
+            <input id="a_password" type="password" required autocomplete="off"
+                   class="w-full tactical-input py-3 pl-4 pr-12 text-xs tracking-wider text-stark"
+                   placeholder="••••••••" onpaste="return false;" oncopy="return false;" oncut="return false;" ondrop="return false;">
+            <button type="button" id="toggle-pwd" class="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-safety transition-colors" aria-label="Toggle password visibility">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-admin-login"
+                class="w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          Sign In as Admin
+        </button>
+
+        <div id="adminResult" class="hidden border px-4 py-3 text-[11px] font-bold uppercase tracking-widest"></div>
+      </form>
+    </div>
+  </main>
 </div>
+{% endblock %}
 
-<script>
-function showAdminResult(msg, cls){
-  const el = document.getElementById('adminResult');
-  const tone = cls === 'success'
-    ? 'bg-safety/15 border-safety/35 text-stark'
-    : 'bg-red-500/15 border-red-500/40 text-stark';
-  el.className = 'mt-4 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest ' + tone;
-  el.innerHTML = msg;
-}
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('adminLoginForm');
+    const sysMsg = document.getElementById('sys-message');
+    const togglePwd = document.getElementById('toggle-pwd');
+    const pwdInput = document.getElementById('a_password');
 
-function handleAdminLogin(e){
-  e.preventDefault();
-  const u = document.getElementById('a_username').value.trim();
-  const p = document.getElementById('a_password').value;
-  if(!u||!p){ showAdminResult('Enter username and password','error'); return false; }
-  fetch('/admin/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p}) })
-    .then(async (r)=>{ const b = await r.json().catch(()=>({})); return {s:r.status,b}; })
-    .then(({s,b})=>{
-      if(s===200 && b.success){ showAdminResult('Authenticated — redirecting...','success'); setTimeout(()=>window.location.href='/admin',900); }
-      else showAdminResult(b.message||'Login failed','error');
-    }).catch(err=>{ showAdminResult('Server error','error'); console.error(err); });
-  return false;
-}
+    togglePwd.addEventListener('click', () => {
+      pwdInput.setAttribute('type', pwdInput.getAttribute('type') === 'password' ? 'text' : 'password');
+    });
+
+    function showAdminResult(msg, tone) {
+      const el = document.getElementById('adminResult');
+      el.classList.remove('hidden');
+      const cls = tone === 'success'
+        ? 'bg-safety/10 border-safety/40 text-stark'
+        : 'bg-void/60 border-safety/40 text-safety';
+      el.className = 'border px-4 py-3 text-[11px] font-bold uppercase tracking-widest ' + cls;
+      el.textContent = msg;
+    }
+
+    function flashSys(msg) {
+      sysMsg.textContent = msg;
+      setTimeout(() => { if (sysMsg.textContent === msg) sysMsg.textContent = ''; }, 4000);
+    }
+
+    window.handleAdminLogin = async function () {
+      const u = document.getElementById('a_username').value.trim();
+      const p = pwdInput.value;
+      const btn = document.getElementById('btn-admin-login');
+
+      if (!u || !p) { flashSys('Enter identifier and password'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'AUTHENTICATING...';
+
+      try {
+        const resp = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const body = await resp.json().catch(() => ({}));
+
+        if (resp.status === 200 && body.success) {
+          showAdminResult('Access Granted — redirecting...', 'success');
+          btn.textContent = 'ACCESS GRANTED';
+          setTimeout(() => { window.location.href = body.redirect || '/admin'; }, 700);
+        } else {
+          showAdminResult(body.message || 'Login failed', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Sign In as Admin';
+        }
+      } catch (err) {
+        console.error(err);
+        showAdminResult('Network error', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In as Admin';
+      }
+    };
+  });
 </script>
 {% endblock %}

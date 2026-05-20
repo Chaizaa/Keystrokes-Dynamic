@@ -1,162 +1,232 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}JANUS // Admin Dashboard{% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-dark-obsidian p-7">
-  <!-- Decorative elements -->
-  <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    <div class="absolute top-20 left-1/4 w-96 h-96 bg-dark-obsidian border border-gray-800 rounded-full mix-blend-screen filter blur-3xl opacity-10"></div>
-    <div class="absolute bottom-1/4 right-1/3 w-96 h-96 bg-neon-orange rounded-full mix-blend-screen filter blur-3xl opacity-5"></div>
-  </div>
+<div class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative">
 
-  <div class="relative z-10 max-w-6xl mx-auto bg-obsidian-lighter rounded-sm border border-neon-orange border-opacity-20 shadow-[0_0_30px_rgba(255,69,0,0.25)] p-6">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row items-start md:items-center gap-4 mb-6 pb-6 border-b border-neon-orange border-opacity-20">
-      <div class="w-16 h-16 rounded-sm flex items-center justify-center font-bold text-2xl text-white bg-gradient-to-br from-neon-orange to-neon-orange-light border border-neon-orange shadow-[0_0_20px_rgba(255,69,0,0.2)]">
-        <span id="adminInitial">A</span>
-      </div>
-      <div class="flex-grow">
-        <h1 class="text-3xl font-bold text-white uppercase tracking-widest font-brutal">Admin Dashboard</h1>
-        <p class="text-gray-400 text-xs uppercase tracking-wider mt-1">Welcome, administrator — management dashboard</p>
-      </div>
-      <div class="flex gap-2">
-        <a href="/" class="inline-flex items-center justify-center px-4 py-2 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Site</a>
-        <a href="{{ url_for('admin.admin_create_page') }}" class="inline-flex items-center justify-center px-4 py-2 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Create Admin</a>
-      </div>
+  <!-- Background -->
+  <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
+
+  <!-- Tactical Header -->
+  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+    <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+      <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
+    </div>
+    <div class="flex items-center px-4 lg:px-6 h-full">
+      <span class="text-[10px] text-muted uppercase tracking-widest hidden sm:inline">{{ current_user.username if current_user.is_authenticated else '' }}</span>
+    </div>
+  </header>
+
+  <main class="flex-grow relative z-10 px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto w-full">
+
+    <!-- Page Title -->
+    <div class="mb-8">
+      <h1 class="font-sans text-3xl md:text-4xl font-bold text-stark tracking-wide uppercase">Admin Dashboard</h1>
+      <p class="text-[10px] text-muted uppercase tracking-[0.25em] mt-2">Operator: {{ current_user.username if current_user.is_authenticated else '—' }}</p>
     </div>
 
     <!-- Stats Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-obsidian-lighter border border-neon-orange border-opacity-20 rounded-sm p-4">
-        <div class="text-3xl font-bold text-white font-brutal">{{ users|length }}</div>
-        <div class="text-gray-400 text-xs uppercase tracking-wider mt-2">Total Users</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+      <div class="data-card relative bg-void/80 border border-border-dim p-5">
+        <span class="reticle reticle-tl"></span>
+        <div id="stat-total-users" class="font-brutal text-4xl font-bold text-stark">{{ total_users if total_users is defined else users|length }}</div>
+        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Total Users</div>
       </div>
-      <div class="bg-obsidian-lighter border border-neon-orange border-opacity-20 rounded-sm p-4">
-        <div class="text-3xl font-bold text-white font-brutal">{{ audits|length }}</div>
-        <div class="text-gray-400 text-xs uppercase tracking-wider mt-2">Audit Entries</div>
+      <div class="data-card relative bg-void/80 border border-border-dim p-5">
+        <span class="reticle reticle-tl"></span>
+        <div class="font-brutal text-4xl font-bold text-stark">{{ total_audits if total_audits is defined else audits|length }}</div>
+        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Audit Entries</div>
       </div>
-      <div class="bg-obsidian-lighter border border-neon-orange border-opacity-20 rounded-sm p-4">
-        <div class="text-3xl font-bold text-white font-brutal">{{ total_enrollments or 0 }}</div>
-        <div class="text-gray-400 text-xs uppercase tracking-wider mt-2">Enrolled Samples</div>
+      <div class="data-card relative bg-void/80 border border-border-dim p-5">
+        <span class="reticle reticle-tl"></span>
+        <div class="font-brutal text-4xl font-bold text-stark">{{ total_enrollments or 0 }}</div>
+        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Enrolled Samples</div>
       </div>
     </div>
 
-    <!-- Tables -->
-    <div class="mt-8">
-      <h3 class="text-white font-brutal text-xl tracking-widest uppercase mb-4">Recent Users</h3>
-      <div class="overflow-x-auto border border-gray-700 border-opacity-50 rounded-sm bg-dark-obsidian">
-        <table class="w-full text-left border-collapse min-w-[760px]">
+    <!-- Users Table -->
+    <section class="mb-10">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Users</h2>
+        <span class="text-[10px] text-muted uppercase tracking-widest">Showing {{ users|length }}</span>
+      </div>
+      <div class="overflow-x-auto border border-border-dim bg-void/60">
+        <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="users">
           <thead>
-            <tr class="border-b border-gray-700 border-opacity-50">
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Username</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Email</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Role</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Enrolled</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Created</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Actions</th>
+            <tr class="border-b border-border-dim">
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Username<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Email<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Role<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="number" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Enrolled<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Created<span class="sort-icon"> ▼</span></th>
+              <th class="px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for u in users %}
-            <tr class="border-b border-gray-800 hover:bg-gray-900 transition-colors">
-              <td class="px-4 py-3 text-gray-200">{{ u.username }}</td>
-              <td class="px-4 py-3 text-gray-400 text-sm">{{ u.email or '-' }}</td>
-              <td class="px-4 py-3 text-gray-200">{{ u.role }}</td>
-              <td class="px-4 py-3 text-gray-200">{{ u.get_enrollment_count() }}</td>
-              <td class="px-4 py-3 text-gray-400 text-sm">{{ u.created_at.isoformat() if u.created_at else '-' }}</td>
+            <tr class="border-b border-border-dim hover:bg-void/40 transition-colors">
+              <td class="px-4 py-3 text-stark text-sm">{{ u.username }}</td>
+              <td class="px-4 py-3 text-muted text-sm">{{ u.email or '—' }}</td>
+              <td class="px-4 py-3" data-sort-value="{{ u.role }}">
+                {% if u.role|lower == 'admin' %}
+                <span class="inline-flex items-center px-2 py-0.5 border border-safety/60 text-safety text-[9px] font-bold uppercase tracking-widest">Admin</span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 border border-border-dim text-muted text-[9px] font-bold uppercase tracking-widest">{{ u.role }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-stark text-sm">{{ u.get_enrollment_count() }}</td>
+              <td class="px-4 py-3 text-muted text-xs font-mono" data-sort-value="{{ u.created_at.isoformat() if u.created_at else '' }}">{{ u.created_at.strftime('%Y-%m-%d %H:%M:%S') if u.created_at else '—' }}</td>
               <td class="px-4 py-3">
                 {% if current_user.is_authenticated and current_user.is_admin() %}
                 <div class="flex gap-2 items-center">
-                  <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-white/20 bg-white/5 text-stark text-[10px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition admin-action-reset" data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset Password</button>
+                  <button class="admin-action-reset inline-flex items-center px-2 py-1 border border-border-dim bg-void/60 text-stark text-[9px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors"
+                          data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset</button>
                   {% if current_user.id == u.id %}
-                    <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-red-500/60 bg-red-600 text-white text-[10px] font-bold uppercase tracking-[0.1em] opacity-50 cursor-not-allowed" title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
+                  <button class="inline-flex items-center px-2 py-1 border border-border-dim text-muted text-[9px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed"
+                          title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
                   {% else %}
-                    <button class="inline-flex items-center justify-center px-2 py-1 rounded-sm border border-red-500/60 bg-red-600 text-white text-[10px] font-bold uppercase tracking-[0.1em] hover:bg-red-700 transition admin-action-delete" data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
+                  <button class="admin-action-delete inline-flex items-center px-2 py-1 border border-safety/60 bg-safety/10 text-safety text-[9px] font-bold uppercase tracking-widest hover:bg-safety hover:text-void transition-colors"
+                          data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
                   {% endif %}
                 </div>
-                {% else %}
-                -
-                {% endif %}
+                {% else %}—{% endif %}
               </td>
             </tr>
             {% endfor %}
+            {% if not users %}
+            <tr data-empty="true"><td colspan="6" class="px-4 py-8 text-center text-muted text-xs uppercase tracking-widest">No users on record</td></tr>
+            {% endif %}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
 
-    <div class="mt-8">
-      <h3 class="text-white font-brutal text-xl tracking-widest uppercase mb-4">Recent Audit Entries</h3>
-      <div class="overflow-x-auto border border-gray-700 border-opacity-50 rounded-sm bg-dark-obsidian">
-        <table class="w-full text-left border-collapse min-w-[760px]">
+    <!-- Audit Table -->
+    <section>
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Audit Entries</h2>
+        <span class="text-[10px] text-muted uppercase tracking-widest">Showing {{ audits|length }}</span>
+      </div>
+      <div class="overflow-x-auto border border-border-dim bg-void/60">
+        <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="audits">
           <thead>
-            <tr class="border-b border-gray-700 border-opacity-50">
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">When (UTC)</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">User</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Action</th>
-              <th class="px-4 py-3 text-[#b7bfcd] text-[11px] uppercase tracking-widest">Details</th>
+            <tr class="border-b border-border-dim">
+              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">When<span class="sort-icon"> ▼</span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">User<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Action<span class="sort-icon"></span></th>
+              <th class="px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold">Details</th>
             </tr>
           </thead>
           <tbody>
             {% for a in audits %}
-            <tr class="border-b border-gray-800 hover:bg-gray-900 transition-colors">
-              <td class="px-4 py-3 text-gray-400 text-sm">{{ a.timestamp.isoformat() if a.timestamp else '-' }}</td>
-              <td class="px-4 py-3 text-gray-200">{{ a.username or a.user_id or '-' }}</td>
-              <td class="px-4 py-3 text-gray-200">{{ a.action }}</td>
-              <td class="px-4 py-3 text-gray-400 text-sm max-w-[40ch] truncate">{{ a.details or '-' }}</td>
+            <tr class="border-b border-border-dim hover:bg-void/40 transition-colors">
+              <td class="px-4 py-3 text-muted text-xs font-mono" data-sort-value="{{ a.timestamp.isoformat() if a.timestamp else '' }}">{{ a.timestamp.strftime('%Y-%m-%d %H:%M:%S') if a.timestamp else '—' }}</td>
+              <td class="px-4 py-3 text-stark text-sm">{{ a.username or a.user_id or '—' }}</td>
+              <td class="px-4 py-3 text-safety text-xs font-bold uppercase tracking-widest">{{ a.action }}</td>
+              <td class="px-4 py-3 text-muted text-xs max-w-[40ch] truncate font-mono">{{ a.details or '—' }}</td>
             </tr>
             {% endfor %}
+            {% if not audits %}
+            <tr data-empty="true"><td colspan="4" class="px-4 py-8 text-center text-muted text-xs uppercase tracking-widest">No audit entries yet</td></tr>
+            {% endif %}
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
+    </section>
+
+  </main>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-// Admin action handlers: Reset Password (send reset email) and Delete User
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', function(){
-  function showToast(msg, tone='info'){
-    try{
-      const toastContainer = document.getElementById('toast-container') || (function() {
-        const div = document.createElement('div');
-        div.id = 'toast-container';
-        div.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
-        document.body.appendChild(div);
-        return div;
-      })();
-      
-      const t = document.createElement('div');
-      t.textContent = msg;
-      
-      let bgClass = 'bg-blue-600';
-      if (tone === 'error') bgClass = 'bg-red-600';
-      else if (tone === 'warn') bgClass = 'bg-amber-500';
-      else if (tone === 'success') bgClass = 'bg-green-600';
-      
-      t.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm transition-opacity duration-300 ${bgClass}`;
-      toastContainer.appendChild(t);
-      setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
-    }catch(e){console.log(msg)}
+
+  // ---- Sortable tables --------------------------------------------------
+  function attachSorting(table) {
+    const headers = table.querySelectorAll('thead th[data-sortable]');
+    headers.forEach((th, idx) => {
+      th.addEventListener('click', () => {
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => !r.dataset.empty);
+        if (!rows.length) return;
+        const nextDir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+
+        // Reset sibling indicators
+        headers.forEach(h => {
+          if (h !== th) {
+            h.removeAttribute('data-sort-dir');
+            const i = h.querySelector('.sort-icon'); if (i) i.textContent = '';
+          }
+        });
+
+        th.dataset.sortDir = nextDir;
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.textContent = nextDir === 'asc' ? ' ▲' : ' ▼';
+
+        const type = th.dataset.sortType || 'string';
+        const getValue = (row) => {
+          const cell = row.children[idx];
+          if (!cell) return '';
+          return cell.dataset.sortValue !== undefined ? cell.dataset.sortValue : cell.textContent.trim();
+        };
+
+        rows.sort((a, b) => {
+          let av = getValue(a), bv = getValue(b);
+          if (type === 'number') {
+            av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+            return nextDir === 'asc' ? av - bv : bv - av;
+          }
+          if (type === 'date') {
+            av = Date.parse(av) || 0; bv = Date.parse(bv) || 0;
+            return nextDir === 'asc' ? av - bv : bv - av;
+          }
+          return nextDir === 'asc'
+            ? String(av).localeCompare(String(bv))
+            : String(bv).localeCompare(String(av));
+        });
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+  }
+  document.querySelectorAll('table.sortable-table').forEach(attachSorting);
+
+  function showToast(msg, tone){
+    const container = document.getElementById('toast-container') || (function() {
+      const div = document.createElement('div');
+      div.id = 'toast-container';
+      div.className = 'fixed top-4 right-4 z-[60] flex flex-col gap-2';
+      document.body.appendChild(div);
+      return div;
+    })();
+    const t = document.createElement('div');
+    t.textContent = msg;
+    const toneCls = tone === 'error'
+      ? 'border-safety/60 bg-void/90 text-safety'
+      : tone === 'success'
+        ? 'border-safety/60 bg-safety/15 text-stark'
+        : 'border-border-dim bg-void/90 text-stark';
+    t.className = 'font-sans border px-4 py-3 text-[13px] font-semibold tracking-normal transition-opacity duration-300 ' + toneCls;
+    container.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
   }
 
   document.querySelectorAll('.admin-action-reset').forEach(btn => {
     btn.addEventListener('click', async function(){
       const userId = this.dataset.userId;
       const btnEl = this;
-      const ok = await showConfirmModal('Reset Password', 'Send a password reset email to this user? The user will receive a secure reset link (no email confirmation required by admin).', {confirmText:'Yes, send', cancelText:'No', destructive:false});
+      const ok = await showConfirmModal('Reset Password', 'Send a password reset email to this user? The user will receive a secure reset link.', {confirmText:'Yes, send', cancelText:'No', destructive:false});
       if (!ok) return;
-      try{
+      try {
         btnEl.disabled = true; btnEl.classList.add('opacity-50', 'cursor-not-allowed');
         const resp = await fetch(`/admin/user/${userId}/send_reset`, {method:'POST'});
         const data = await resp.json();
-        if (!resp.ok){ showToast(data.message||'Failed to send', 'error'); return; }
+        if (!resp.ok) { showToast(data.message || 'Failed to send', 'error'); return; }
         showToast('Reset email sent', 'success');
-      }catch(e){ console.error(e); showToast('Network error', 'error'); }
-      finally{ btnEl.disabled = false; btnEl.classList.remove('opacity-50', 'cursor-not-allowed'); }
+      } catch(e) { console.error(e); showToast('Network error', 'error'); }
+      finally { btnEl.disabled = false; btnEl.classList.remove('opacity-50', 'cursor-not-allowed'); }
     });
   });
 
@@ -166,24 +236,20 @@ document.addEventListener('DOMContentLoaded', function(){
       const btnEl = this;
       const ok = await showConfirmModal('Delete User', 'Permanently delete this user and all related personal data? This action cannot be undone.', {confirmText:'Yes, delete', cancelText:'Cancel', destructive:true});
       if (!ok) return;
-      try{
+      try {
         btnEl.disabled = true; btnEl.classList.add('opacity-50', 'cursor-not-allowed');
         const resp = await fetch(`/admin/user/${userId}/delete`, {method:'POST'});
         const data = await resp.json();
-        if (!resp.ok){ showToast(data.message||'Failed to delete', 'error'); return; }
+        if (!resp.ok) { showToast(data.message || 'Failed to delete', 'error'); return; }
         showToast('User deleted', 'success');
         const row = btnEl.closest('tr'); if (row) row.remove();
-        // Decrease total users counter
-        try {
-            const totals = document.querySelectorAll('.grid > div > div.text-3xl');
-            if (totals.length > 0) {
-                const totalEl = totals[0];
-                const current = parseInt(totalEl.textContent.trim()) || 0;
-                totalEl.textContent = Math.max(0, current - 1);
-            }
-        } catch(e) {}
-      }catch(e){ console.error(e); showToast('Network error', 'error'); }
-      finally{ if (btnEl){ btnEl.disabled=false; btnEl.classList.remove('opacity-50', 'cursor-not-allowed'); } }
+        const totalEl = document.getElementById('stat-total-users');
+        if (totalEl) {
+          const current = parseInt(totalEl.textContent.trim(), 10) || 0;
+          totalEl.textContent = Math.max(0, current - 1);
+        }
+      } catch(e) { console.error(e); showToast('Network error', 'error'); }
+      finally { if (btnEl) { btnEl.disabled = false; btnEl.classList.remove('opacity-50', 'cursor-not-allowed'); } }
     });
   });
 });
