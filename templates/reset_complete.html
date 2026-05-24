@@ -1,381 +1,270 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Reset Password & Re-enroll | SecureAuth{% endblock %}
-
-{% block extra_css %}
-{% endblock %}
+{% block title %}JANUS // Reset Master Password{% endblock %}
 
 {% block body %}
-<div class="min-h-screen flex items-center justify-center px-5 py-6 bg-[radial-gradient(circle_at_12%_14%,rgba(255,122,42,0.17),transparent_33%),radial-gradient(circle_at_84%_9%,rgba(255,122,42,0.09),transparent_36%),linear-gradient(160deg,#06080d_0%,#090c12_55%,#050608_100%)]">
-    <div class="w-full max-w-[520px] p-8 md:p-10 border border-white/10 rounded-sm bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)] relative">
-        <h2 id="rcTitle" class="text-center text-[24px] md:text-[34px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Set New Master Password</h2>
-        <p id="rcSubtitle" class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-8">Create a new master password and type it 20 times to re-enroll your biometrics.</p>
+<div class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
 
-        <!-- Username removed from UI; kept hidden element for compatibility with JS -->
-        <div class="hidden">
-            <label for="rcUsername" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
-            <input id="rcUsername" type="text" readonly class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3">
-        </div>
+  <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
-        <div class="mb-6">
-            <label for="rcPassword" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">New Master Password</label>
-            <div class="relative">
-                <input id="rcPassword" type="password" placeholder="Create a secure password" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 pr-12 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
-                <span class="absolute right-4 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-white hover:text-safety transition cursor-pointer" onclick="togglePass('rcPassword', this)">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                </span>
-            </div>
-            <p class="mt-2 text-xs text-[#7a8a9a]">This password will be used for biometric re-enrollment.</p>
-            <!-- Password strength meter -->
-            <div id="pwStrength" class="mt-2 hidden" aria-live="polite">
-                <div class="h-2 bg-zinc-200 rounded-md overflow-hidden my-2">
-                    <div id="strengthBarFill" class="h-full w-0 bg-red-500 transition-[width] duration-150"></div>
-                </div>
-                <div id="pwStrengthLabel" class="text-xs text-[#7a8a9a]">Strength: Unknown</div>
-            </div>
-        </div>
-
-        <div class="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] my-6"></div>
-
-        <div id="enrollmentSection" class="mb-8">
-            <div class="text-[11px] uppercase tracking-[0.12em] text-[#dbe4f2] mb-3">Biometric Re-enrollment</div>
-            <p class="text-xs text-[#7a8a9a]">Type your new password naturally 20 times to train the system.</p>
-
-            <div class="rounded-sm border border-white/10 bg-[linear-gradient(170deg,rgba(15,18,24,0.95),rgba(9,12,16,0.96))] shadow-[0_14px_24px_rgba(0,0,0,0.38)] p-6 mb-4">
-                <div class="flex items-center justify-between mb-4">
-                    <span class="text-[11px] uppercase tracking-[0.12em] text-[#9ea6b3]">Enrollment Progress</span>
-                    <span class="text-2xl md:text-3xl font-bold text-stark"><span id="countDisplay">0</span>/20</span>
-                </div>
-                <div class="h-2 rounded-md overflow-hidden border border-white/10 bg-[#0a0d12] mb-3">
-                    <div class="h-full bg-[linear-gradient(90deg,#ff7a2a,#ffb066)] transition-all duration-150" id="progressBar"></div>
-                </div>
-                <p class="text-xs text-[#9ea6b3]" id="motivationalMsg">Take your time, type naturally</p>
-            </div>
-
-            <div class="hidden rounded-sm border border-white/10 bg-[linear-gradient(170deg,rgba(15,18,24,0.95),rgba(9,12,16,0.96))] shadow-[0_14px_24px_rgba(0,0,0,0.38)] p-4 text-center mb-3" id="typingTimer">
-                <div class="label">Typing Rhythm</div>
-                <div class="time">
-                    <span id="timerDisplay">0.000</span><span class="unit">s</span>
-                </div>
-                <small class="text-xs text-[#909090]">Recording keystroke pattern...</small>
-            </div>
-
-            <div class="mt-4">
-                <label for="typingField" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Type Password & Press Enter</label>
-                <div class="relative">
-                    <input type="password" id="typingField" placeholder="Type your password here" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 pr-12 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
-                    <span class="absolute right-4 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-white hover:text-safety transition cursor-pointer" onclick="togglePass('typingField', this)">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </span>
-                </div>
-                <p id="status" class="mt-2 text-xs text-[#7a8a9a]"></p>
-            </div>
-        </div>
-
-        <div id="finishSection" class="hidden text-center py-8">
-            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sm border border-safety/50 bg-safety/20 text-[#ffd1a8]" aria-hidden="true">
-                <span class="text-3xl">&#10003;</span>
-            </div>
-            <h3 class="text-xl font-bold text-stark mb-2">Reset Complete</h3>
-            <p class="text-sm text-[#a0a0a0] mb-6">Your password was updated and biometrics re-enrolled.</p>
-            <a href="/login" class="inline-flex items-center justify-center px-8 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] shadow-[0_12px_26px_rgba(0,0,0,0.38)] hover:bg-[#ff9248] hover:border-[#ff9248] transition">Continue to Login</a>
-        </div>
+  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+    <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+      <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
+  </header>
+
+  <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
+
+    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+
+      <div class="mb-8 text-center">
+        <h1 id="rcTitle" class="font-sans text-3xl md:text-4xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Master Password</h1>
+        <p id="rcSubtitle" class="font-sans text-sm text-muted">Set a new master password and re-enroll your biometrics.</p>
+      </div>
+
+      <div class="hidden">
+        <input id="rcUsername" type="text" readonly>
+      </div>
+
+      <form class="flex flex-col gap-5" onsubmit="event.preventDefault();">
+
+        <!-- New master password -->
+        <div>
+          <label for="rcPassword" class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2">New Master Password</label>
+          <div class="relative">
+            <input id="rcPassword" type="password" placeholder="Create a secure password"
+                   class="w-full tactical-input py-3 pl-4 pr-12 text-xs tracking-wider text-safety">
+            <button type="button" id="togglePwBtn" aria-label="Toggle password visibility"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-safety transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+          <p class="text-[10px] text-muted mt-2">This password will be used for biometric re-enrollment.</p>
+        </div>
+
+        <!-- Enrollment section -->
+        <div id="enrollmentSection" class="mt-4 pt-6 border-t border-border-dim">
+          <h3 class="text-[10px] font-bold text-muted tracking-widest uppercase mb-2">Biometric Re-enrollment</h3>
+          <p class="text-[10px] text-muted mb-4">Type your new password naturally to train the system.</p>
+
+          <div class="bg-surface border border-border-dim p-5 mb-5 flex justify-between items-center cut-tl">
+            <div>
+              <div class="text-[10px] text-muted font-bold tracking-widest uppercase">Enrollment Progress</div>
+              <div id="motivationalMsg" class="text-[10px] text-muted mt-1">Take your time, type naturally</div>
+            </div>
+            <div class="text-4xl font-brutal text-stark">
+              <span id="countDisplay">0</span><span class="text-muted text-2xl" id="targetCount">/10</span>
+            </div>
+          </div>
+
+          <div>
+            <label for="typingField" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+              <span>Type Password &amp; Press Enter</span>
+              <span id="status" class="text-safety"></span>
+            </label>
+            <div class="relative">
+              <input id="typingField" type="password" placeholder="Type your password here" autocomplete="off"
+                     onpaste="return false;" oncopy="return false;" oncut="return false;" ondrop="return false;"
+                     class="w-full tactical-input py-3 pl-4 pr-12 text-xs tracking-wider text-stark placeholder-muted/30">
+              <button type="button" id="toggleTypeBtn" aria-label="Toggle visibility"
+                      class="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-safety transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <!-- Success state -->
+      <div id="finishSection" class="hidden text-center py-8">
+        <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center border border-safety/50 bg-safety/10 text-safety" aria-hidden="true">
+          <span class="text-3xl">&#10003;</span>
+        </div>
+        <h3 class="font-sans text-xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Complete</h3>
+        <p class="text-sm text-muted mb-6">Your password was updated and biometrics re-enrolled.</p>
+        <a href="/login" class="inline-flex items-center justify-center px-8 py-3 bg-safety text-void text-[11px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors">Continue to Login</a>
+      </div>
+    </div>
+  </main>
 </div>
+{% endblock %}
 
-<script>
-// Simple helpers
-function togglePass(inputId, iconSpan) {
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('DOMContentLoaded', () => {
+  const TARGET_SAMPLES = 10;
+
+  document.getElementById('targetCount').textContent = '/' + TARGET_SAMPLES;
+
+  // Elements
+  const params = new URLSearchParams(window.location.search);
+  const countDisplay = document.getElementById('countDisplay');
+  const progressMsg  = document.getElementById('motivationalMsg');
+  const typingInput  = document.getElementById('typingField');
+  const mainPassInput = document.getElementById('rcPassword');
+  const usernameEl   = document.getElementById('rcUsername');
+  const statusEl     = document.getElementById('status');
+
+  // Prefill username
+  const prefillUsername = params.get('username') || "{{ username|default('') }}";
+  if (prefillUsername) usernameEl.value = prefillUsername;
+
+  // Password visibility toggles
+  function bindToggle(btnId, inputId) {
+    const btn = document.getElementById(btnId);
     const input = document.getElementById(inputId);
-    if (!input) return;
-    if (input.type === 'password') input.type = 'text'; else input.type = 'password';
-}
+    if (btn && input) btn.addEventListener('click', () => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+  }
+  bindToggle('togglePwBtn', 'rcPassword');
+  bindToggle('toggleTypeBtn', 'typingField');
 
-// Password strength meter
-function calculateClientPasswordScore(password) {
-    if (!password) return { score: 0.0, strength: 'very weak' };
-    const score = Math.min(1.0, Math.max(0.0, password.length / 12.0));
-    let strength = 'very weak';
-    if (score >= 0.8) strength = 'strong';
-    else if (score >= 0.5) strength = 'medium';
-    else if (score >= 0.2) strength = 'weak';
-    return { score, strength };
-}
-function updatePasswordStrengthUI() {
-    try {
-        const pw = mainPassInput ? mainPassInput.value : '';
-        const result = calculateClientPasswordScore(pw);
-        const bar = document.getElementById('strengthBarFill');
-        const label = document.getElementById('pwStrengthLabel');
-        const container = document.getElementById('pwStrength');
-        if (!container || !bar || !label) return;
-        if (!pw) { container.classList.add('hidden'); return; }
-        container.classList.remove('hidden');
-        const pct = Math.round(result.score * 100);
-        bar.style.width = pct + '%';
-        if (result.score < 0.5) bar.style.background = '#f59e0b';
-        else if (result.score < 0.8) bar.style.background = '#f59e0b';
-        else bar.style.background = '#ff8a44';
-        label.style.color = result.score < 0.5 ? '#d97706' : (result.score < 0.8 ? '#d97706' : '#ffb066');
-        label.textContent = `Strength: ${result.strength} (${pct}%)`;
-        // Advisory hint — warning only, not a blocker
-        const weakHintId = 'rcPwWeakHint';
-        let weakHint = document.getElementById(weakHintId);
-        if (result.score < 0.5) {
-            if (!weakHint) {
-                weakHint = document.createElement('p');
-                weakHint.id = weakHintId;
-                weakHint.className = 'mt-1 text-xs text-amber-600';
-                weakHint.textContent = '⚠ Password lemah — disarankan menggunakan minimal 12 karakter dengan kombinasi huruf, angka, dan simbol.';
-                if (mainPassInput && mainPassInput.parentNode && mainPassInput.parentNode.parentNode)
-                    mainPassInput.parentNode.parentNode.appendChild(weakHint);
-            }
-        } else {
-            if (weakHint) weakHint.remove();
-        }
-    } catch (e) { console.warn('Failed to update password strength UI', e); }
-}
+  // Keystroke capture
+  let sampleCount = 0;
+  let rawEvents = [];
+  let activeKeys = {};
+  let isFirstKeystroke = true;
+  let passwordMismatchCount = 0;
+  let backspaceCount = 0;
+  let typingStartTime = null;
+  let inFlight = false;     // prevent double-submit
+  const NOISE_KEYS = new Set([
+    'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
+    'Tab', 'Escape', 'Insert', 'Delete',
+    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    'Home', 'End', 'PageUp', 'PageDown',
+    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
+  ]);
 
-// Basic enrollment variables
-let sampleCount = 0;
-const targetSamples = 20;
-let rawEvents = [];
-let activeKeys = {};
-let typingStartTime = null;
-let timerInterval = null;
-let isFirstKeystroke = true;
-let passwordMismatchCount = 0; // Track consecutive password mismatches (mirrors register.html)
-let backspaceCount = 0; // Track backspace presses per attempt (max 3)
-
-const countDisplay = document.getElementById('countDisplay');
-const progressBar = document.getElementById('progressBar');
-const typingInput = document.getElementById('typingField');
-const mainPassInput = document.getElementById('rcPassword');
-mainPassInput.addEventListener('input', () => updatePasswordStrengthUI());
-const usernameEl = document.getElementById('rcUsername');
-const statusEl = document.getElementById('status');
-
-// Prefill username from query or server context
-const params = new URLSearchParams(window.location.search);
-const prefillUsername = params.get('username') || "{{ username|default('') }}";
-if (prefillUsername) usernameEl.value = prefillUsername;
-
-// Adjust UI copy based on reset source
-if (params.get('reset_token')) {
-    const title = document.getElementById('rcTitle');
-    const subtitle = document.getElementById('rcSubtitle');
-    if (title) title.textContent = 'Reset Master Password';
-    if (params.get('source') === 'self') {
-        if (subtitle) subtitle.textContent = 'Set a new master password and re-enroll your biometrics by typing it 20 times.';
-    } else {
-        if (subtitle) subtitle.textContent = 'An administrator initiated a password reset for this account. Create a new master password and re-enroll your biometrics by typing it 20 times.';
-    }
-}
-
-function startTimer() {
-    if (!typingStartTime) {
-        typingStartTime = performance.now();
-        const timerEl = document.getElementById('typingTimer');
-        const disp = document.getElementById('timerDisplay');
-        if (timerEl) timerEl.classList.remove('hidden');
-        if (disp) disp.textContent = '0.000';
-        timerInterval = setInterval(() => {
-            try {
-                const elapsed = (performance.now() - typingStartTime) / 1000;
-                if (disp) disp.textContent = elapsed.toFixed(3);
-            } catch (e) { /* ignore */ }
-        }, 50);
-    }
-}
-function stopTimer() {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  function resetRhythm() {
     typingStartTime = null;
-    const timerEl = document.getElementById('typingTimer');
-    const disp = document.getElementById('timerDisplay');
-    if (timerEl) timerEl.classList.add('hidden');
-    if (disp) disp.textContent = '0.000';
-}
-function resetTimer() { stopTimer(); isFirstKeystroke = true; }
+    isFirstKeystroke = true;
+  }
 
-// Keystroke capture
-typingInput.addEventListener('keydown', (event) => {
-    // Expanded modifier/noise-key list: navigation & function keys excluded from recording
-    const isModifier = [
-        'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
-        'Tab', 'Escape', 'Insert', 'Delete',
-        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-        'Home', 'End', 'PageUp', 'PageDown',
-        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
-    ].includes(event.key);
+  function flashStatus(msg, color) {
+    statusEl.textContent = msg;
+    statusEl.style.color = color || '';
+    setTimeout(() => {
+      if (statusEl.textContent === msg) { statusEl.textContent = ''; statusEl.style.color = ''; }
+    }, 3000);
+  }
 
-    if (event.key === 'Enter') return;
+  typingInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); return; }
 
-    // Backspace: track count, clear field + reset rhythm after 3rd press exceeded
-    if (event.key === 'Backspace') {
-        backspaceCount++;
-        if (backspaceCount > 3) {
-            event.preventDefault(); // prevent further deletion
-            typingInput.value = '';
-            rawEvents = [];
-            backspaceCount = 0; // reset so next attempt starts fresh
-            resetTimer();
-            statusEl.textContent = 'Backspace terlalu banyak, ulangi kembali';
-            statusEl.style.color = '#ef4444';
-            setTimeout(() => {
-                if (statusEl.textContent.includes('terlalu') || statusEl.textContent.includes('Backspace')) {
-                    statusEl.textContent = '';
-                    statusEl.style.color = '';
-                }
-            }, 3000);
-        }
-        return; // backspace not recorded in rawEvents
-    }
-
-    // Hold key (Option B): silently block — only first keydown counts for biometric timing
-    if (event.repeat && !isModifier) {
-        statusEl.textContent = 'Key held down (timing recorded)';
-        event.preventDefault();
-        // NOT pushed to rawEvents — repeat events are noise for timing rhythm
-        return;
-    } else {
-        if (statusEl.textContent.includes('held')) statusEl.textContent = '';
-    }
-
-    if (!isModifier) {
-        activeKeys[event.code] = performance.now();
-        if (isFirstKeystroke) { startTimer(); isFirstKeystroke = false; }
-        rawEvents.push({ key: event.key, code: event.code, evt: 'd', t: performance.now(), isRepeat: false });
-    }
-});
-
-typingInput.addEventListener('keyup', (event) => {
-    const isModifier = [
-        'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
-        'Tab', 'Escape', 'Insert', 'Delete',
-        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-        'Home', 'End', 'PageUp', 'PageDown',
-        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
-    ].includes(event.key);
-    if (activeKeys[event.code]) delete activeKeys[event.code]; // clean up pressed-key tracker
-    if (event.key === 'Enter') { handleEnterPress(); return; }
-    if (event.key === 'Backspace') return; // backspace keyup not recorded
-    if (!isModifier) rawEvents.push({ key: event.key, code: event.code, evt: 'u', t: performance.now() });
-});
-
-// Reset the timer display when focus leaves the typing field — do NOT wipe
-// rawEvents or the input value (user may have clicked the eye icon to preview).
-typingInput.addEventListener('blur', () => {
-    resetTimer();
-});
-
-async function handleEnterPress() {
-    backspaceCount = 0; // reset on each Enter attempt — fresh limit for next attempt
-    const newPass = mainPassInput.value || '';
-    const typedPass = typingInput.value || '';
-    if (!newPass) { statusEl.textContent = 'Please enter the new master password.'; return; }
-    // Guard: rawEvents empty means user never typed here (e.g. clicked eye icon causing blur).
-    if (!rawEvents || rawEvents.length === 0) {
-        statusEl.textContent = 'Ketik password di field ini terlebih dahulu lalu tekan Enter.';
-        statusEl.style.color = '#f59e0b';
-        setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 3000);
-        typingInput.focus();
-        return;
-    }
-    if (typedPass !== newPass) {
-        stopTimer();
-        passwordMismatchCount++;
-
-        // Progressive error messages with caps-lock and eye-icon hints (mirrors register.html)
-        let errorMsg = `Password incorrect (Attempt ${passwordMismatchCount})`;
-        if (passwordMismatchCount >= 3) {
-            errorMsg += ' - Check caps lock';
-        }
-        if (passwordMismatchCount >= 5) {
-            errorMsg = 'Too many failed attempts. Use the eye icon to verify password';
-        }
-
-        statusEl.textContent = errorMsg;
-        statusEl.style.color = '#ef4444'; // red
-
+    if (e.key === 'Backspace') {
+      backspaceCount++;
+      if (backspaceCount > 3) {
+        e.preventDefault();
         typingInput.value = '';
         rawEvents = [];
-        resetTimer();
-
-        // Auto-clear error after 3 seconds
-        setTimeout(() => {
-            if (statusEl.textContent.includes('incorrect') ||
-                statusEl.textContent.includes('caps') ||
-                statusEl.textContent.includes('attempts')) {
-                statusEl.textContent = '';
-                statusEl.style.color = '';
-            }
-        }, 3000);
-        return;
+        backspaceCount = 0;
+        resetRhythm();
+        flashStatus('Too many backspaces — start again', '#FF4500');
+      }
+      return;
     }
 
-    // Successful password match — reset mismatch counter
+    if (e.repeat && !NOISE_KEYS.has(e.key)) { e.preventDefault(); return; }
+    if (NOISE_KEYS.has(e.key)) return;
+
+    activeKeys[e.code] = performance.now();
+    if (isFirstKeystroke) { typingStartTime = performance.now(); isFirstKeystroke = false; }
+    rawEvents.push({ key: e.key, code: e.code, evt: 'd', t: performance.now(), isRepeat: false });
+  });
+
+  typingInput.addEventListener('keyup', (e) => {
+    if (e.code in activeKeys) delete activeKeys[e.code];
+    if (e.key === 'Enter') { handleEnter(); return; }
+    if (e.key === 'Backspace') return;
+    if (NOISE_KEYS.has(e.key)) return;
+    rawEvents.push({ key: e.key, code: e.code, evt: 'u', t: performance.now() });
+  });
+
+  typingInput.addEventListener('blur', resetRhythm);
+
+  async function handleEnter() {
+    if (inFlight) return;  // guard against double-fire
+    const newPass = mainPassInput.value || '';
+    const typedPass = typingInput.value || '';
+
+    if (!newPass) { flashStatus('Enter the new master password first', '#FFFFFF'); return; }
+    if (!rawEvents.length) { flashStatus('Type the password in this field, then press Enter', '#FFFFFF'); typingInput.focus(); return; }
+
+    if (typedPass !== newPass) {
+      passwordMismatchCount++;
+      let msg = `Password incorrect (attempt ${passwordMismatchCount})`;
+      if (passwordMismatchCount >= 3) msg += ' — check caps lock';
+      if (passwordMismatchCount >= 5) msg = 'Too many failed attempts — use the eye icon to verify';
+      typingInput.value = '';
+      rawEvents = [];
+      resetRhythm();
+      flashStatus(msg, '#ef4444');
+      return;
+    }
+
     passwordMismatchCount = 0;
-
-    // submit sample to reset endpoint
+    inFlight = true;
     typingInput.disabled = true;
-    statusEl.style.color = '';
-    statusEl.classList.remove('success');
-    statusEl.textContent = 'Saving sample...';
+    flashStatus('Saving sample...', '#FF4500');
+
     try {
-        const resetToken = params.get('reset_token') || '';
-        const response = await fetch('/api/reset_password', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: usernameEl.value.trim(), reset_token: resetToken, events: rawEvents, sample_count: sampleCount+1 })
-        });
-        const result = await response.json().catch(() => ({}));
-        const ok = result.status === 'success' || result.success === true;
-        if (ok) {
-            sampleCount++;
-            countDisplay.textContent = sampleCount;
-            updateProgress();
-            typingInput.value = '';
-            rawEvents = [];
-            resetTimer();
-            statusEl.textContent = 'Sample saved';
-            statusEl.style.color = '#ffb066';
-            statusEl.classList.add('success');
-            passwordMismatchCount = 0;
-            backspaceCount = 0; // reset for next sample
-            // Re-enable typing field for the next sample and focus it
-            typingInput.disabled = false;
-            try { typingInput.focus(); } catch (e) {}
+      const resetToken = params.get('reset_token') || '';
+      const resp = await fetch('/api/reset_password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: usernameEl.value.trim(),
+          reset_token: resetToken,
+          events: rawEvents,
+          sample_count: sampleCount + 1,
+        }),
+      });
+      const result = await resp.json().catch(() => ({}));
+      const ok = result.status === 'success' || result.success === true;
 
-            if (sampleCount >= targetSamples) {
-                document.getElementById('finishSection').classList.remove('hidden');
-                // redirect to login after a short delay. include reset=1 so login UI will render
-                setTimeout(() => { window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&reset=1`; }, 1500);
-                return;
-            }
-        } else {
-            statusEl.textContent = result.message || 'Failed to save sample';
-            typingInput.disabled = false;
+      if (ok) {
+        sampleCount++;
+        countDisplay.textContent = sampleCount;
+        const pct = Math.min(100, (sampleCount / TARGET_SAMPLES) * 100);
+        progressMsg.textContent = sampleCount < TARGET_SAMPLES
+          ? `${sampleCount}/${TARGET_SAMPLES} samples — ${TARGET_SAMPLES - sampleCount} remaining`
+          : 'Complete!';
+        typingInput.value = '';
+        rawEvents = [];
+        backspaceCount = 0;
+        resetRhythm();
+        flashStatus('Sample saved', '#FF4500');
+
+        if (sampleCount >= TARGET_SAMPLES) {
+          document.getElementById('enrollmentSection').classList.add('hidden');
+          document.getElementById('finishSection').classList.remove('hidden');
+          setTimeout(() => {
+            window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&reset=1`;
+          }, 1500);
+          return;
         }
+      } else if (resp.status === 429) {
+        flashStatus('Rate limit hit — slow down a bit', '#ef4444');
+      } else {
+        flashStatus(result.message || 'Failed to save sample', '#ef4444');
+      }
     } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Network error';
-        typingInput.disabled = false;
+      console.error(e);
+      flashStatus('Network error', '#ef4444');
+    } finally {
+      inFlight = false;
+      typingInput.disabled = false;
+      try { typingInput.focus(); } catch (e) {}
     }
-}
-
-function updateProgress() {
-    const pct = (sampleCount / targetSamples) * 100;
-    progressBar.style.width = pct + '%';
-    const msgEl = document.getElementById('motivationalMsg');
-    if (sampleCount <= 10) msgEl.textContent = `Progress: ${sampleCount}/20 samples recorded`;
-    else if (sampleCount < 20) msgEl.textContent = `${sampleCount}/20 samples - ${20-sampleCount} remaining`;
-}
-
+  }
+});
 </script>
-<script src="{{ url_for('static', filename='js/reset_complete.js') }}"></script>
 {% endblock %}

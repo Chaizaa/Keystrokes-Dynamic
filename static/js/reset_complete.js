@@ -9,7 +9,7 @@ function togglePass(inputId, iconSpan) {
 
 // Basic enrollment variables
 let sampleCount = 0;
-const targetSamples = 20;
+const targetSamples = 10;
 let rawEvents = [];
 let activeKeys = {};
 let typingStartTime = null;
@@ -134,7 +134,7 @@ function updateProgress() {
     if (progressBar) progressBar.style.width = pct + '%';
     const msgEl = document.getElementById('motivationalMsg');
     if (msgEl) {
-        if (sampleCount <= 10) msgEl.textContent = `Progress: ${sampleCount}/20 samples recorded`;
-        else if (sampleCount < 20) msgEl.textContent = `${sampleCount}/20 samples - ${20-sampleCount} remaining`;
+        if (sampleCount <= 10) msgEl.textContent = `Progress: ${sampleCount}/10 samples recorded`;
+        else if (sampleCount < 20) msgEl.textContent = `${sampleCount}/10 samples - ${20-sampleCount} remaining`;
     }
 }

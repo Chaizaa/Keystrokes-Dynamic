@@ -1,137 +1,154 @@
 {% extends "base.html" %}
+{% set hide_nav = True %}
 
-{% block title %}Verify Reset Code | SecureAuth{% endblock %}
-
-{% block extra_css %}
-{% endblock %}
+{% block title %}JANUS // Verify Reset Code{% endblock %}
 
 {% block body %}
-<div class="min-h-screen flex items-center justify-center px-5 py-6 bg-[radial-gradient(circle_at_12%_14%,rgba(255,122,42,0.17),transparent_33%),radial-gradient(circle_at_84%_9%,rgba(255,122,42,0.09),transparent_36%),linear-gradient(160deg,#06080d_0%,#090c12_55%,#050608_100%)]">
-    <div class="w-full max-w-[520px] p-8 md:p-10 border border-white/10 rounded-sm bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] shadow-[0_22px_42px_rgba(0,0,0,0.46),inset_0_0_0_1px_rgba(255,122,42,0.08)] relative">
-        <h2 class="text-center text-[24px] md:text-[34px] font-brutal uppercase tracking-[0.08em] text-stark mb-2">Reset Your Password</h2>
-        <p class="text-center text-xs text-[#9ea6b3] uppercase tracking-[0.08em] mb-8">Enter the 6-digit code we sent to your email to continue with the password reset.</p>
+<div class="font-sans antialiased selection:bg-safety selection:text-void flex flex-col min-h-screen bg-void w-full relative select-none">
 
-        <div class="mb-6">
-            <label for="rcvUsername" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Username</label>
-            <input id="rcvUsername" type="text" readonly class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3">
-        </div>
-        <div class="mb-6">
-            <label for="rcvCode" class="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#ccd5e4] mb-2">Reset Code</label>
-            <input id="rcvCode" type="text" placeholder="Enter 6-digit code" required autocomplete="one-time-code" class="w-full bg-[linear-gradient(160deg,#090b10,#0c0f14)] border border-white/15 rounded-sm text-stark px-4 py-3 focus:border-safety/80 focus:ring-2 focus:ring-safety/20 focus:outline-none">
-            <small class="mt-2 block text-xs text-[#7a8a9a]">Check your email for the 6-digit reset code</small>
-        </div>
-        <div id="rcvAlert" class="hidden"></div>
-        <div class="mt-5 flex flex-wrap items-center gap-3">
-            <button id="rcvVerifyBtn" class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-sm border border-safety/60 bg-safety text-void text-[11px] font-bold uppercase tracking-[0.11em] hover:bg-[#ff9248] hover:border-[#ff9248] transition disabled:opacity-50" disabled>
-                <span id="rcvSpinner" class="hidden w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
-                <span id="rcvBtnText">Verify Code</span>
-            </button>
-            <button id="rcvResendBtn" class="inline-flex items-center justify-center px-6 py-3 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Resend Code</button>
-            <a href="{{ url_for('auth.login_page') }}" class="inline-flex items-center justify-center px-6 py-3 rounded-sm border border-white/20 bg-white/5 text-stark text-[11px] font-bold uppercase tracking-[0.1em] hover:bg-white/10 transition">Back to Login</a>
-        </div>
+  <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
+
+  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+    <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
+      <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
+  </header>
+
+  <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
+
+    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+
+      <div class="mb-8 text-center">
+        <h1 class="font-sans text-3xl md:text-4xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Password</h1>
+        <p class="font-sans text-sm text-muted">Enter the 6-digit code sent to your email to continue.</p>
+      </div>
+
+      <form class="flex flex-col gap-5" onsubmit="event.preventDefault();">
+
+        <div>
+          <label for="rcvUsername" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Username</span></label>
+          <input id="rcvUsername" type="text" readonly class="w-full tactical-input py-3 px-4 text-xs tracking-wider opacity-70 cursor-not-allowed">
+        </div>
+
+        <div>
+          <label for="rcvCode" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Reset Code</span></label>
+          <input id="rcvCode" type="text" placeholder="Enter 6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+                 class="w-full tactical-input py-3 px-4 text-lg tracking-[0.4em] text-center font-mono">
+          <p class="text-[10px] text-muted mt-2 font-sans">Check your email for the 6-digit reset code.</p>
+        </div>
+
+        <div id="rcvAlert" class="hidden"></div>
+
+        <div class="flex flex-col sm:flex-row gap-3 mt-2">
+          <button id="rcvVerifyBtn" type="button" disabled
+                  class="inline-flex items-center justify-center gap-2 flex-1 bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-3 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <span id="rcvSpinner" class="hidden w-4 h-4 border-2 border-void/40 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
+            <span id="rcvBtnText">Verify Code</span>
+          </button>
+          <button id="rcvResendBtn" type="button"
+                  class="inline-flex items-center justify-center px-4 py-3 border border-border-dim bg-void text-stark text-[11px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Resend</button>
+        </div>
+
+        <a href="{{ url_for('auth.login_page') }}"
+           class="text-center text-[10px] text-muted uppercase tracking-widest hover:text-safety transition-colors mt-2">&larr; Back to Login</a>
+      </form>
+    </div>
+  </main>
 </div>
+{% endblock %}
 
-<script>
-    const params = new URLSearchParams(window.location.search);
-    const serverUsername = "{{ username|default('') }}".trim();
-    const username = serverUsername || params.get('username') || '';
-    document.getElementById('rcvUsername').value = username;
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const serverUsername = "{{ username|default('') }}".trim();
+  const username = serverUsername || params.get('username') || '';
+  document.getElementById('rcvUsername').value = username;
 
-    const codeInput   = document.getElementById('rcvCode');
-    const verifyBtn   = document.getElementById('rcvVerifyBtn');
-    const spinner     = document.getElementById('rcvSpinner');
-    const btnText     = document.getElementById('rcvBtnText');
-    const alertEl     = document.getElementById('rcvAlert');
-    const resendBtn   = document.getElementById('rcvResendBtn');
+  const codeInput   = document.getElementById('rcvCode');
+  const verifyBtn   = document.getElementById('rcvVerifyBtn');
+  const spinner     = document.getElementById('rcvSpinner');
+  const btnText     = document.getElementById('rcvBtnText');
+  const alertEl     = document.getElementById('rcvAlert');
+  const resendBtn   = document.getElementById('rcvResendBtn');
 
-    function showAlert(msg, cls) {
-        const base = 'mt-3 rounded-sm border px-3 py-3 text-[11px] font-bold uppercase tracking-widest';
-        const tone = cls === 'success'
-            ? 'bg-safety/15 border-safety/35 text-stark'
-            : 'bg-red-500/15 border-red-500/40 text-stark';
-        alertEl.textContent = msg;
-        alertEl.className = `${base} ${tone}`;
+  function showAlert(msg, tone) {
+    const base = 'border px-4 py-3 text-[11px] font-bold uppercase tracking-widest';
+    const cls  = tone === 'success'
+      ? 'bg-safety/10 border-safety/40 text-stark'
+      : 'bg-void/60 border-safety/40 text-safety';
+    alertEl.textContent = msg;
+    alertEl.className = `${base} ${cls}`;
+  }
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/\D/g, '');
+    verifyBtn.disabled = codeInput.value.trim().length === 0;
+  });
+
+  function setResendCooldown(seconds) {
+    resendBtn.disabled = true;
+    let t = seconds;
+    const orig = 'Resend';
+    const iv = setInterval(() => {
+      resendBtn.textContent = `Resend (${t}s)`;
+      t -= 1;
+      if (t < 0) { clearInterval(iv); resendBtn.textContent = orig; resendBtn.disabled = false; }
+    }, 1000);
+  }
+
+  verifyBtn.addEventListener('click', async () => {
+    const code = codeInput.value.trim().replace(/\s+/g, '');
+    alertEl.className = 'hidden';
+    if (!code) { showAlert('Please enter the reset code', 'error'); return; }
+    try {
+      verifyBtn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.textContent = 'Verifying...';
+      const resp = await fetch('/api/verify_reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, token: code })
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (resp.ok && j.reset_token) {
+        showAlert('Code verified', 'success');
+        const target = `/reset/complete?username=${encodeURIComponent(username)}&reset_token=${encodeURIComponent(j.reset_token)}&source=self`;
+        setTimeout(() => { window.location.href = target; }, 800);
+      } else {
+        const m = j.error_code === 'expired_token' ? 'Code has expired. Request a new one.'
+                : j.error_code === 'invalid_token' ? 'Invalid code. Check and try again.'
+                : (j.message || 'Verification failed');
+        showAlert(m, 'error');
+      }
+    } catch (e) {
+      showAlert('Network error. Please try again.', 'error');
+    } finally {
+      verifyBtn.disabled = false;
+      spinner.classList.add('hidden');
+      btnText.textContent = 'Verify Code';
     }
+  });
 
-    codeInput.addEventListener('input', () => {
-        verifyBtn.disabled = !codeInput.value.trim();
-    });
-
-    function setResendCooldown(seconds) {
-        resendBtn.disabled = true;
-        let t = seconds;
-        const orig = 'Resend Code';
-        const iv = setInterval(() => {
-            resendBtn.textContent = `Resend (${t}s)`;
-            t -= 1;
-            if (t < 0) {
-                clearInterval(iv);
-                resendBtn.textContent = orig;
-                resendBtn.disabled = false;
-            }
-        }, 1000);
+  resendBtn.addEventListener('click', async () => {
+    try {
+      resendBtn.disabled = true;
+      const resp = await fetch('/api/send_reset_verification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username })
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        showAlert('A new code has been sent to your email.', 'success');
+        setResendCooldown(60);
+      } else {
+        showAlert(j.message || 'Failed to resend code.', 'error');
+        resendBtn.disabled = false;
+      }
+    } catch (e) {
+      showAlert('Network error. Please try again.', 'error');
+      resendBtn.disabled = false;
     }
-
-    verifyBtn.addEventListener('click', async function () {
-        const code = codeInput.value.trim().replace(/\s+/g, '');
-        alertEl.className = 'hidden';
-        if (!code) { showAlert('Please enter the reset code', 'error'); return; }
-
-        try {
-            verifyBtn.disabled = true;
-            spinner.classList.remove('hidden');
-            btnText.textContent = 'Verifying...';
-
-            const resp = await fetch('/api/verify_reset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, token: code })
-            });
-            const j = await resp.json().catch(() => ({}));
-
-            if (resp.ok && j.reset_token) {
-                showAlert('Code verified — redirecting to password reset...', 'success');
-                const target = `/reset/complete?username=${encodeURIComponent(username)}&reset_token=${encodeURIComponent(j.reset_token)}&source=self`;
-                setTimeout(() => { window.location.href = target; }, 900);
-            } else {
-                if (j.error_code === 'expired_token') {
-                    showAlert('Code has expired. Please request a new one.', 'error');
-                } else if (j.error_code === 'invalid_token') {
-                    showAlert('Invalid code. Please check and try again.', 'error');
-                } else {
-                    showAlert(j.message || 'Verification failed', 'error');
-                }
-            }
-        } catch (e) {
-            showAlert('Network error. Please try again.', 'error');
-        } finally {
-            verifyBtn.disabled = false;
-            spinner.classList.add('hidden');
-            btnText.textContent = 'Verify Code';
-        }
-    });
-
-    resendBtn.addEventListener('click', async function () {
-        try {
-            resendBtn.disabled = true;
-            const resp = await fetch('/api/send_reset_verification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username })
-            });
-            const j = await resp.json().catch(() => ({}));
-            if (resp.ok) {
-                showAlert('A new code has been sent to your email.', 'success');
-                setResendCooldown(60);
-            } else {
-                showAlert(j.message || 'Failed to resend code.', 'error');
-                resendBtn.disabled = false;
-            }
-        } catch (e) {
-            showAlert('Network error. Please try again.', 'error');
-            resendBtn.disabled = false;
-        }
-    });
+  });
+});
 </script>
 {% endblock %}

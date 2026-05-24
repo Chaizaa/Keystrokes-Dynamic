@@ -27,7 +27,7 @@
 
       <div class="mb-8 text-center">
         <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">Admin</h1>
-        <p class="font-sans text-[10px] text-muted uppercase tracking-[0.3em]">Restricted Access &mdash; Administrators Only</p>
+        <p class="font-sans text-[10px] text-muted uppercase tracking-[0.3em]">Administrators Only</p>
       </div>
 
       <form id="adminLoginForm" class="flex flex-col gap-5" onsubmit="event.preventDefault(); handleAdminLogin();">
@@ -116,7 +116,7 @@
         const body = await resp.json().catch(() => ({}));
 
         if (resp.status === 200 && body.success) {
-          showAdminResult('Access Granted — redirecting...', 'success');
+          showAdminResult('Access Granted. Redirecting...', 'success');
           btn.textContent = 'ACCESS GRANTED';
           setTimeout(() => { window.location.href = body.redirect || '/admin'; }, 700);
         } else {

@@ -14,8 +14,13 @@
     <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
       <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
-    <div class="flex items-center px-4 lg:px-6 h-full">
+    <div class="flex items-center gap-4 px-4 lg:px-6 h-full">
       <span class="text-[10px] text-muted uppercase tracking-widest hidden sm:inline">{{ current_user.username if current_user.is_authenticated else '' }}</span>
+      <button id="adminLogoutBtn"
+              data-logout-url="{{ url_for('auth.logout') }}"
+              class="inline-flex items-center px-4 py-2 bg-safety text-void text-[10px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors font-sans">
+        Logout
+      </button>
     </div>
   </header>
 
@@ -47,10 +52,14 @@
     </div>
 
     <!-- Users Table -->
-    <section class="mb-10">
+    <section id="recent-users" class="mb-10">
       <div class="flex items-baseline justify-between mb-4">
         <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Users</h2>
-        <span class="text-[10px] text-muted uppercase tracking-widest">Showing {{ users|length }}</span>
+        {% set users_start = ((users_page - 1) * users_page_size) + (1 if users|length else 0) %}
+        {% set users_end = users_start + users|length - (1 if users|length else 0) %}
+        <span class="text-[10px] text-muted uppercase tracking-widest">
+          {% if total_users %}{{ users_start }}–{{ users_end }} of {{ total_users }}{% else %}0 of 0{% endif %}
+        </span>
       </div>
       <div class="overflow-x-auto border border-border-dim bg-void/60">
         <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="users">
@@ -82,13 +91,13 @@
                 {% if current_user.is_authenticated and current_user.is_admin() %}
                 <div class="flex gap-2 items-center">
                   <button class="admin-action-reset inline-flex items-center px-2 py-1 border border-border-dim bg-void/60 text-stark text-[9px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors"
-                          data-user-id="{{ u.id }}" aria-label="Reset password for {{ u.username }}">Reset</button>
+                          data-user-id="{{ u.id }}" data-username="{{ u.username }}" aria-label="Reset password for {{ u.username }}">Reset</button>
                   {% if current_user.id == u.id %}
                   <button class="inline-flex items-center px-2 py-1 border border-border-dim text-muted text-[9px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed"
                           title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
                   {% else %}
                   <button class="admin-action-delete inline-flex items-center px-2 py-1 border border-safety/60 bg-safety/10 text-safety text-[9px] font-bold uppercase tracking-widest hover:bg-safety hover:text-void transition-colors"
-                          data-user-id="{{ u.id }}" aria-label="Delete user {{ u.username }}">Delete</button>
+                          data-user-id="{{ u.id }}" data-username="{{ u.username }}" aria-label="Delete user {{ u.username }}">Delete</button>
                   {% endif %}
                 </div>
                 {% else %}—{% endif %}
@@ -101,13 +110,38 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Users pagination -->
+      {% if users_pages > 1 %}
+      <nav class="flex items-center justify-between mt-4" aria-label="Users pagination">
+        <span class="text-[10px] text-muted uppercase tracking-widest">Page {{ users_page }} of {{ users_pages }}</span>
+        <div class="flex gap-2">
+          {% if users_page > 1 %}
+          <a href="?users_page={{ users_page - 1 }}&audits_page={{ audits_page }}#recent-users"
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
+          {% else %}
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
+          {% endif %}
+          {% if users_page < users_pages %}
+          <a href="?users_page={{ users_page + 1 }}&audits_page={{ audits_page }}#recent-users"
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
+          {% else %}
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+      {% endif %}
     </section>
 
     <!-- Audit Table -->
-    <section>
+    <section id="recent-audits">
       <div class="flex items-baseline justify-between mb-4">
         <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Audit Entries</h2>
-        <span class="text-[10px] text-muted uppercase tracking-widest">Showing {{ audits|length }}</span>
+        {% set audits_start = ((audits_page - 1) * audits_page_size) + (1 if audits|length else 0) %}
+        {% set audits_end = audits_start + audits|length - (1 if audits|length else 0) %}
+        <span class="text-[10px] text-muted uppercase tracking-widest">
+          {% if total_audits %}{{ audits_start }}–{{ audits_end }} of {{ total_audits }}{% else %}0 of 0{% endif %}
+        </span>
       </div>
       <div class="overflow-x-auto border border-border-dim bg-void/60">
         <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="audits">
@@ -134,6 +168,27 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Audits pagination -->
+      {% if audits_pages > 1 %}
+      <nav class="flex items-center justify-between mt-4" aria-label="Audits pagination">
+        <span class="text-[10px] text-muted uppercase tracking-widest">Page {{ audits_page }} of {{ audits_pages }}</span>
+        <div class="flex gap-2">
+          {% if audits_page > 1 %}
+          <a href="?users_page={{ users_page }}&audits_page={{ audits_page - 1 }}#recent-audits"
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
+          {% else %}
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
+          {% endif %}
+          {% if audits_page < audits_pages %}
+          <a href="?users_page={{ users_page }}&audits_page={{ audits_page + 1 }}#recent-audits"
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
+          {% else %}
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+      {% endif %}
     </section>
 
   </main>
@@ -193,6 +248,16 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   document.querySelectorAll('table.sortable-table').forEach(attachSorting);
 
+  // ---- Logout confirmation ----------------------------------------------
+  const logoutBtn = document.getElementById('adminLogoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async function(){
+      const ok = await showConfirmModal('Logout', 'Are you sure you want to log out of the admin console?', {confirmText:'Yes, logout', cancelText:'Cancel'});
+      if (!ok) return;
+      window.location.href = this.dataset.logoutUrl;
+    });
+  }
+
   function showToast(msg, tone){
     const container = document.getElementById('toast-container') || (function() {
       const div = document.createElement('div');
@@ -216,8 +281,9 @@ document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('.admin-action-reset').forEach(btn => {
     btn.addEventListener('click', async function(){
       const userId = this.dataset.userId;
+      const username = this.dataset.username || 'this user';
       const btnEl = this;
-      const ok = await showConfirmModal('Reset Password', 'Send a password reset email to this user? The user will receive a secure reset link.', {confirmText:'Yes, send', cancelText:'No', destructive:false});
+      const ok = await showConfirmModal('Reset Password', `Send a password reset email to "${username}"? The user will receive a secure reset link.`, {confirmText:'Yes, send', cancelText:'No', destructive:false});
       if (!ok) return;
       try {
         btnEl.disabled = true; btnEl.classList.add('opacity-50', 'cursor-not-allowed');
@@ -233,8 +299,9 @@ document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('.admin-action-delete').forEach(btn => {
     btn.addEventListener('click', async function(){
       const userId = this.dataset.userId;
+      const username = this.dataset.username || 'this user';
       const btnEl = this;
-      const ok = await showConfirmModal('Delete User', 'Permanently delete this user and all related personal data? This action cannot be undone.', {confirmText:'Yes, delete', cancelText:'Cancel', destructive:true});
+      const ok = await showConfirmModal('Delete User', `Permanently delete "${username}" and all related personal data? This action cannot be undone.`, {confirmText:'Yes, delete', cancelText:'Cancel', destructive:true});
       if (!ok) return;
       try {
         btnEl.disabled = true; btnEl.classList.add('opacity-50', 'cursor-not-allowed');

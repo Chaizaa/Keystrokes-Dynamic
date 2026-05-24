@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-from flask import jsonify, request
+from flask import current_app, jsonify, request
 from sqlalchemy import select
 
 from app.models import AdminAudit, User, db
@@ -41,7 +41,12 @@ _CODE_REISSUE_COOLDOWN_SECONDS = 60
 def _seconds_until_reissue_allowed(user, purpose: str) -> int:
     """Return remaining cooldown seconds before a new code may be issued.
 
-    Returns 0 when no cooldown is active.
+    Returns 0 when no cooldown is active. The result is clamped to
+    [0, _CODE_REISSUE_COOLDOWN_SECONDS] so that a stale or future
+    timestamp (e.g. due to historical psycopg2 timezone-stripping into a
+    naive column on a non-UTC PostgreSQL session) can never produce a
+    multi-hour wait — the user is at worst delayed by the configured
+    cooldown.
     """
     last_sent = (
         user.password_reset_sent_at if purpose == "user_reset"
@@ -55,7 +60,9 @@ def _seconds_until_reissue_allowed(user, purpose: str) -> int:
     )
     elapsed = (datetime.now(timezone.utc) - last_sent_utc).total_seconds()
     remaining = _CODE_REISSUE_COOLDOWN_SECONDS - int(elapsed)
-    return max(0, remaining)
+    if remaining <= 0:
+        return 0
+    return min(_CODE_REISSUE_COOLDOWN_SECONDS, remaining)
 
 
 def _cooldown_response(retry_after: int):
@@ -71,10 +78,23 @@ def _cooldown_response(retry_after: int):
     return resp, 429
 
 
+def _utc_naive_now():
+    """Return naive UTC datetime.
+
+    The user/sent_at columns are declared as ``db.DateTime`` (no tz).
+    Passing an aware datetime in causes psycopg2 to convert into the
+    session timezone and then strip the tz info — on a non-UTC session
+    this leaves a wall-clock value that the read path (which assumes
+    naive == UTC) interprets as a future timestamp, producing absurd
+    cooldown waits. Write naive UTC explicitly to avoid this.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _issue_and_send_code(user, purpose: str = None):
     """Generate, persist, and send a verification code."""
     code = verification_service.generate_6_digit_code()
-    sent_at = datetime.now(timezone.utc)
+    sent_at = _utc_naive_now()
 
     if purpose == "user_reset":
         user.password_reset_code_hash = verification_service.hash_code(code)
@@ -255,6 +275,7 @@ def reset_password_public():
     username = data.get("username")
     reset_token = data.get("reset_token")
     events = data.get("events")
+    sample_count = int(data.get("sample_count") or 0)
 
     if not username or not reset_token or not events:
         return error_response("Data tidak lengkap")
@@ -282,11 +303,15 @@ def reset_password_public():
     if not real_pass:
         return error_response("Password master tidak ditemukan dalam sampel")
 
-    # 3. Clear old enrollment on FIRST sample of reset
-    if get_biometric_service().get_enrollment_status(username)["count"] == 0:
-        from app.models import EnrollmentVector
+    # 3. Clear old enrollment + trained model on the FIRST sample of the reset
+    # flow so the dashboard count restarts from 0 and the next login retrains
+    # against the new keystroke rhythm (the old model fingerprinted the
+    # previous password — keeping it would lock the user out).
+    if sample_count == 1:
+        from app.models import UsersVector, UserMLModel
         from sqlalchemy import delete
-        db.session.execute(delete(EnrollmentVector).where(EnrollmentVector.username == username))
+        db.session.execute(delete(UsersVector).where(UsersVector.username == username))
+        db.session.execute(delete(UserMLModel).where(UserMLModel.user_id == user.id))
         db.session.commit()
 
     # 4. Update password & save sample (consolidated helper)
@@ -303,12 +328,14 @@ def reset_password_public():
     db.session.commit()
 
     new_status = get_biometric_service().get_enrollment_status(username)
+    # Mirror the register flow: the UI re-enrolls 10 samples (matches MIN_ENROLLMENT_SAMPLES)
+    target = int(current_app.config.get("RECOMMENDED_SAMPLES", 10))
     return jsonify({
         "status": "success",
         "message": "Sample reset tersimpan",
         "progress": {
             "current": new_status["count"],
-            "target": 20,
+            "target": target,
             "complete": new_status["ready_for_login"],
         },
     }), 200

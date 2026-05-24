@@ -30,21 +30,50 @@ def admin_required(f):
     return decorated
 
 
+_USERS_PAGE_SIZE = 25
+_AUDITS_PAGE_SIZE = 25
+
+
+def _clamp_page(raw, total_pages):
+    """Parse a ?page param to a 1-based int within [1, total_pages]."""
+    try:
+        n = int(raw or 1)
+    except (TypeError, ValueError):
+        n = 1
+    if n < 1:
+        n = 1
+    if total_pages and n > total_pages:
+        n = total_pages
+    return n
+
+
 @admin_bp.route("/")
 @admin_required
 def admin_index():
-    """Admin dashboard landing page."""
-    users = db.session.execute(
-        select(User).order_by(User.created_at.desc()).limit(500)
-    ).scalars().all()
-
-    audits = db.session.execute(
-        select(AdminAudit).order_by(AdminAudit.timestamp.desc()).limit(100)
-    ).scalars().all()
-
+    """Admin dashboard landing page (paginated users + audits)."""
     total_users = db.session.execute(select(func.count(User.id))).scalar() or 0
     total_audits = db.session.execute(select(func.count(AdminAudit.id))).scalar() or 0
     total_enrollments = db.session.execute(select(func.count(UsersVector.id))).scalar() or 0
+
+    users_pages = max(1, -(-total_users // _USERS_PAGE_SIZE))   # ceil division
+    audits_pages = max(1, -(-total_audits // _AUDITS_PAGE_SIZE))
+
+    users_page = _clamp_page(request.args.get("users_page"), users_pages)
+    audits_page = _clamp_page(request.args.get("audits_page"), audits_pages)
+
+    users = db.session.execute(
+        select(User)
+        .order_by(User.created_at.desc())
+        .limit(_USERS_PAGE_SIZE)
+        .offset((users_page - 1) * _USERS_PAGE_SIZE)
+    ).scalars().all()
+
+    audits = db.session.execute(
+        select(AdminAudit)
+        .order_by(AdminAudit.timestamp.desc())
+        .limit(_AUDITS_PAGE_SIZE)
+        .offset((audits_page - 1) * _AUDITS_PAGE_SIZE)
+    ).scalars().all()
 
     return render_template(
         "admin/index.html",
@@ -53,6 +82,12 @@ def admin_index():
         total_users=total_users,
         total_audits=total_audits,
         total_enrollments=total_enrollments,
+        users_page=users_page,
+        users_pages=users_pages,
+        users_page_size=_USERS_PAGE_SIZE,
+        audits_page=audits_page,
+        audits_pages=audits_pages,
+        audits_page_size=_AUDITS_PAGE_SIZE,
     )
 
 
@@ -67,9 +102,12 @@ def admin_send_reset(user_id):
         if not user.email:
             return jsonify({'success': False, 'message': 'User has no email'}), 400
 
+        # Aware UTC for the signed token; naive UTC for the DB columns
+        # (db.DateTime without tz — see verification._utc_naive_now docstring).
         sent_at = datetime.now(timezone.utc)
-        user.password_reset_sent_at = sent_at
-        user.email_verification_sent_at = sent_at
+        sent_at_naive = sent_at.replace(tzinfo=None)
+        user.password_reset_sent_at = sent_at_naive
+        user.email_verification_sent_at = sent_at_naive
         user.password_reset_code_hash = None
         db.session.commit()
 

@@ -137,7 +137,7 @@ class DashboardService {
 
     async generateApiKey() {
         const partner_name = document.getElementById('partnerName').value.trim();
-        if (!partner_name) return alert('Partner name required');
+        if (!partner_name) { window.showToast && window.showToast('Partner name required', 'error'); return; }
 
         this.elements.generateBtn.disabled = true;
         this.elements.generateBtn.textContent = 'SECURING...';
@@ -172,7 +172,7 @@ class DashboardService {
             // -------------------------------------
 
         } catch (e) {
-            alert(e.message);
+            window.showToast && window.showToast(e.message || 'Generation failed', 'error');
         } finally {
             this.elements.generateBtn.disabled = false;
             this.elements.generateBtn.textContent = 'GENERATE API KEY';
@@ -207,14 +207,15 @@ class DashboardService {
             if (resp.ok) {
                 window.location.href = `/reset/verify-code?username=${encodeURIComponent(this.elements.username.textContent)}`;
             } else {
-                const b = await resp.json();
-                alert(b.message || 'Failed');
+                const b = await resp.json().catch(() => ({}));
+                window.showToast && window.showToast(b.message || 'Failed to send reset code', 'error');
                 this.elements.resetBtn.disabled = false;
                 this.elements.resetBtn.textContent = 'RESET PASSWORD';
             }
         } catch (e) {
-            alert('Error');
+            window.showToast && window.showToast('Network error — try again', 'error');
             this.elements.resetBtn.disabled = false;
+            this.elements.resetBtn.textContent = 'RESET PASSWORD';
         }
     }
 
