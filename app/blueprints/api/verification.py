@@ -16,6 +16,7 @@ from app.models import AdminAudit, User, db
 from app.services.email_service import email_service
 from app.services.verification_service import verification_service
 from app.utils.password_strength import calculate_password_strength
+from app.utils.validators import is_valid_email
 
 from app import limiter as _limiter
 from ._shared import api_bp, get_biometric_service
@@ -161,6 +162,9 @@ def send_verification():
 
     if not username or not email:
         return error_response("Data tidak lengkap")
+
+    if not is_valid_email(email):
+        return error_response("Format email tidak valid", reason="invalid_email")
 
     user = _fetch_user(username)
     if user and getattr(user, "password_hash", None):

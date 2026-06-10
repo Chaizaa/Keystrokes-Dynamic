@@ -104,32 +104,80 @@ class DashboardService {
     }
 
     renderApiKey(key) {
-        const statusClass = key.is_active ? 'text-neon-orange' : 'text-gray-600';
+        const statusClass = key.is_active ? 'text-safety' : 'text-gray-600';
+        const stats = key.stats || {};
+        const inputCls = 'w-full bg-surface border border-border-dim py-2 px-3 text-xs text-stark focus:border-safety focus:ring-0 outline-none transition-all';
+        const lblCls = 'block text-[9px] text-gray-500 uppercase font-bold tracking-widest mb-1';
+
+        // Read-only detail rows; only render optional fields when present.
+        const detailRow = (label, value) => `
+            <div>
+                <p class="text-[9px] text-gray-600 uppercase font-bold">${label}</p>
+                <p class="text-[10px] text-gray-400 font-mono break-all">${value}</p>
+            </div>`;
+
         return `
             <div class="bg-dark-obsidian border border-gray-800 p-5 group hover:border-gray-700 transition-colors">
                 <div class="flex justify-between items-start mb-4">
                     <div>
                         <h4 class="text-white font-bold text-xs uppercase tracking-widest mb-1">${this.escape(key.partner_name)}</h4>
-                        <p class="text-[9px] text-gray-600 font-mono uppercase">${key.key_prefix}...</p>
+                        <p class="text-[9px] text-gray-600 font-mono uppercase">${this.escape(key.key_prefix)}...</p>
                     </div>
                     <span class="text-[9px] font-bold uppercase tracking-tighter ${statusClass}">${key.is_active ? 'ACTIVE' : 'INACTIVE'}</span>
                 </div>
-                <div class="grid grid-cols-2 gap-y-2 mb-6">
-                    <div>
-                        <p class="text-[9px] text-gray-600 uppercase font-bold">Rate Limit</p>
-                        <p class="text-[10px] text-gray-400 font-mono">${key.rate_limit}/HR</p>
-                    </div>
-                    <div>
-                        <p class="text-[9px] text-gray-600 uppercase font-bold">Expires</p>
-                        <p class="text-[10px] text-gray-400 font-mono">${this.formatDate(key.expires_at)}</p>
-                    </div>
+
+                <div class="grid grid-cols-2 gap-y-3 gap-x-4 mb-4">
+                    ${detailRow('Rate Limit', `${key.rate_limit}/HR`)}
+                    ${detailRow('Expires', this.formatDate(key.expires_at))}
+                    ${detailRow('Created', this.formatDate(key.created_at))}
+                    ${detailRow('Last Used', this.formatDate(key.last_used_at))}
+                    ${key.description ? detailRow('Description', this.escape(key.description)) : ''}
+                    ${key.allowed_origins ? detailRow('Allowed Origins', this.escape(key.allowed_origins)) : ''}
                 </div>
-                <div class="flex gap-2">
+
+                <div class="grid grid-cols-2 gap-x-4 mb-6 pt-3 border-t border-gray-800">
+                    ${detailRow('Enrollments', `${stats.total_enrollments ?? 0} (${stats.successful_enrollments ?? 0} ok)`)}
+                    ${detailRow('Verifications', `${stats.total_verifications ?? 0} (${stats.successful_verifications ?? 0} ok)`)}
+                </div>
+
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="window.dashboard.toggleEdit(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-white transition-colors">Edit</button>
                     ${key.is_active ?
                 `<button onclick="window.dashboard.deactivateKey(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-white transition-colors">Deactivate</button>` :
-                ''
+                `<button onclick="window.dashboard.activateKey(${key.id})" class="text-[9px] font-bold uppercase text-green-500 hover:text-green-400 transition-colors">Activate</button>`
             }
                     <button onclick="window.dashboard.deleteKey(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-red-500 transition-colors">Purge</button>
+                </div>
+
+                <!-- Inline edit form (hidden until Edit is clicked) -->
+                <div id="edit-form-${key.id}" class="hidden mt-5 pt-5 border-t border-gray-800 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="${lblCls}">Partner Name</label>
+                            <input type="text" id="edit-partner-${key.id}" value="${this.escapeAttr(key.partner_name)}" class="${inputCls}">
+                        </div>
+                        <div>
+                            <label class="${lblCls}">Rate Limit / Hour</label>
+                            <input type="number" id="edit-rate-${key.id}" value="${this.escapeAttr(key.rate_limit)}" class="${inputCls}">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="${lblCls}">Description</label>
+                        <input type="text" id="edit-desc-${key.id}" value="${this.escapeAttr(key.description || '')}" class="${inputCls}" placeholder="Optional note">
+                    </div>
+                    <div>
+                        <label class="${lblCls}">Allowed Origins (Comma Separated)</label>
+                        <input type="text" id="edit-origins-${key.id}" value="${this.escapeAttr(key.allowed_origins || '')}" class="${inputCls}" placeholder="partner-a.com, app.partner-a.com">
+                    </div>
+                    <div>
+                        <label class="${lblCls}">Expires In (Days)</label>
+                        <input type="number" id="edit-expires-${key.id}" value="" class="${inputCls}" placeholder="Blank = keep, 0 = never">
+                        <p class="text-[9px] text-gray-600 mt-1 font-mono">Currently: ${this.formatDate(key.expires_at)}. Leave blank to keep, enter 0 to never expire.</p>
+                    </div>
+                    <div class="flex gap-3 pt-1">
+                        <button onclick="window.dashboard.submitEditKey(${key.id})" class="bg-safety text-void font-bold text-[9px] uppercase tracking-widest py-2 px-5 hover:bg-opacity-90 transition-colors">Save</button>
+                        <button onclick="window.dashboard.toggleEdit(${key.id})" class="text-[9px] font-bold uppercase text-gray-500 hover:text-white transition-colors">Cancel</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -142,16 +190,23 @@ class DashboardService {
         this.elements.generateBtn.disabled = true;
         this.elements.generateBtn.textContent = 'SECURING...';
 
+        // Build payload; only include expires_days when the user actually typed
+        // one so the backend keeps "no expiry" as the default (was the bug: the
+        // #expiresIn field existed in the form but was never sent).
+        const payload = {
+            partner_name,
+            rate_limit: Number(document.getElementById('apiRateLimit').value) || 100,
+            description: document.getElementById('apiDescription').value,
+            allowed_origins: document.getElementById('allowedOrigins').value
+        };
+        const expiresVal = (document.getElementById('expiresIn').value || '').trim();
+        if (expiresVal !== '') payload.expires_days = Number(expiresVal);
+
         try {
             const resp = await fetch('/api/user/api-keys/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    partner_name,
-                    rate_limit: Number(document.getElementById('apiRateLimit').value) || 100,
-                    description: document.getElementById('apiDescription').value,
-                    allowed_origins: document.getElementById('allowedOrigins').value
-                })
+                body: JSON.stringify(payload)
             });
             const body = await resp.json();
             if (!resp.ok) throw new Error(body.error || body.message || 'Generation failed');
@@ -185,6 +240,57 @@ class DashboardService {
             await fetch(`/api/user/api-keys/${id}/deactivate`, { method: 'POST' });
             await this.loadApiKeys();
         } catch (e) { console.error(e); }
+    }
+
+    async activateKey(id) {
+        try {
+            const resp = await fetch(`/api/user/api-keys/${id}/activate`, { method: 'POST' });
+            if (!resp.ok) {
+                const b = await resp.json().catch(() => ({}));
+                throw new Error(b.message || 'Activation failed');
+            }
+            window.showToast && window.showToast('API key activated', 'success');
+            await this.loadApiKeys();
+        } catch (e) {
+            window.showToast && window.showToast(e.message || 'Activation failed', 'error');
+        }
+    }
+
+    toggleEdit(id) {
+        const form = document.getElementById(`edit-form-${id}`);
+        if (form) form.classList.toggle('hidden');
+    }
+
+    async submitEditKey(id) {
+        // Always send the editable text/number fields. expires_days is only sent
+        // when the user typed something, so a blank box keeps the current expiry
+        // (0 explicitly clears it -> never expires).
+        const payload = {
+            partner_name: (document.getElementById(`edit-partner-${id}`).value || '').trim(),
+            description: document.getElementById(`edit-desc-${id}`).value,
+            allowed_origins: document.getElementById(`edit-origins-${id}`).value,
+            rate_limit: Number(document.getElementById(`edit-rate-${id}`).value) || 100,
+        };
+        if (!payload.partner_name) {
+            window.showToast && window.showToast('Partner name required', 'error');
+            return;
+        }
+        const expVal = (document.getElementById(`edit-expires-${id}`).value || '').trim();
+        if (expVal !== '') payload.expires_days = Number(expVal);
+
+        try {
+            const resp = await fetch(`/api/user/api-keys/${id}/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const body = await resp.json();
+            if (!resp.ok) throw new Error(body.message || 'Update failed');
+            window.showToast && window.showToast('API key updated', 'success');
+            await this.loadApiKeys();
+        } catch (e) {
+            window.showToast && window.showToast(e.message || 'Update failed', 'error');
+        }
     }
 
     async deleteKey(id) {
@@ -228,6 +334,17 @@ class DashboardService {
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // Attribute-safe escaping for values placed inside value="..." of edit inputs.
+    escapeAttr(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 }
 

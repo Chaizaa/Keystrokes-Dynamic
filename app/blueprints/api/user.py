@@ -296,6 +296,109 @@ def deactivate_user_api_key(api_key_id: int):
         traceback.print_exc()
         return jsonify({"success": False, "message": "Failed to deactivate API key"}), 500
 
+@api_bp.route("/user/api-keys/<int:api_key_id>/activate", methods=["POST"])
+@login_required
+@_limiter.limit("30 per hour")
+def activate_user_api_key(api_key_id: int):
+    """Re-activate one API key that belongs to the authenticated user."""
+    try:
+        success = APIKeyService.activate_key(api_key_id, user_id=current_user.id)
+        if not success:
+            return jsonify({"success": False, "message": "API key not found"}), 404
+
+        return jsonify({"success": True, "message": "API key activated"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] activate_user_api_key: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Failed to activate API key"}), 500
+
+
+def _validate_api_key_update_payload(data: dict):
+    """Validate an API-key edit payload.
+
+    Only keys present in ``data`` are returned in ``fields`` so the service
+    layer updates exactly what the user touched and leaves the rest intact.
+
+    Returns:
+        tuple: (fields: dict | None, error_response | None)
+    """
+    fields: dict = {}
+
+    if "partner_name" in data:
+        partner_name = (data.get("partner_name") or "").strip()
+        if not partner_name:
+            return None, (jsonify({"success": False, "message": "partner_name cannot be empty"}), 400)
+        fields["partner_name"] = partner_name
+
+    if "description" in data:
+        fields["description"] = (data.get("description") or "").strip() or None
+
+    if "allowed_origins" in data:
+        fields["allowed_origins"] = (data.get("allowed_origins") or "").strip() or None
+
+    if "rate_limit" in data:
+        try:
+            rate_limit = int(data.get("rate_limit"))
+        except (TypeError, ValueError):
+            return None, (jsonify({"success": False, "message": "rate_limit must be a number"}), 400)
+        if rate_limit <= 0 or rate_limit > 100000:
+            return None, (jsonify({"success": False, "message": "rate_limit must be between 1 and 100000"}), 400)
+        fields["rate_limit"] = rate_limit
+
+    if "expires_days" in data:
+        expires_raw = data.get("expires_days")
+        if expires_raw in (None, ""):
+            # Explicitly clear expiry (never expires).
+            fields["expires_days"] = None
+        else:
+            try:
+                expires_days = int(expires_raw)
+            except (TypeError, ValueError):
+                return None, (jsonify({"success": False, "message": "expires_days must be a number"}), 400)
+            # 0 is allowed here and means "never expires"; positive sets a window.
+            if expires_days < 0 or expires_days > 3650:
+                return None, (jsonify({"success": False, "message": "expires_days must be between 0 and 3650"}), 400)
+            fields["expires_days"] = expires_days
+
+    if not fields:
+        return None, (jsonify({"success": False, "message": "No editable fields provided"}), 400)
+
+    return fields, None
+
+
+@api_bp.route("/user/api-keys/<int:api_key_id>/update", methods=["POST", "PATCH"])
+@login_required
+@_limiter.limit("30 per hour")
+def update_user_api_key(api_key_id: int):
+    """Edit metadata (name, description, origins, rate limit, expiry) of one key."""
+    try:
+        data = request.json or {}
+
+        fields, validation_error = _validate_api_key_update_payload(data)
+        if validation_error:
+            return validation_error
+
+        success, api_key = APIKeyService.update_key(
+            api_key_id, user_id=current_user.id, **fields
+        )
+        if not success:
+            return jsonify({"success": False, "message": "API key not found"}), 404
+
+        return jsonify({
+            "success": True,
+            "message": "API key updated",
+            "key": _serialize_api_key(api_key),
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] update_user_api_key: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Failed to update API key"}), 500
+
+
 @api_bp.route("/user/api-keys/<int:api_key_id>/delete", methods=["POST", "DELETE"])
 @login_required
 @_limiter.limit("30 per hour")

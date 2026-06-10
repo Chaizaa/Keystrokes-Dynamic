@@ -381,6 +381,14 @@
                     emailInput.focus();
                     return;
                 }
+                // Basic format check so "AAAAAAA" is caught before hitting the
+                // server. The /send_verification endpoint re-validates server-side.
+                const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+                if (!emailRe.test(email)) {
+                    printMsg("INVALID EMAIL FORMAT", true);
+                    emailInput.focus();
+                    return;
+                }
 
                 // Ubah state tombol biar keliatan loading
                 const originalText = btnSendVerification.innerText;

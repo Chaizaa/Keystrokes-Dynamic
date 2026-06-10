@@ -2,6 +2,8 @@
 API Key Service - Manage API key generation and validation
 """
 
+from datetime import datetime, timedelta, timezone
+
 from flask import current_app
 from sqlalchemy import select
 
@@ -189,9 +191,87 @@ class APIKeyService:
         
         api_key.is_active = False
         db.session.commit()
-        
+
         current_app.logger.info(f"Deactivated API key: {api_key.key_prefix}")
         return True
+
+    @staticmethod
+    def activate_key(api_key_id, user_id=None):
+        """
+        Re-activate a previously deactivated API key.
+
+        Note: an expired key (expires_at in the past) stays unusable even after
+        activation — is_valid() still rejects it. Re-activation only flips the
+        is_active flag; extend the expiry via update_key() if needed.
+
+        Args:
+            api_key_id: ID of API key to activate
+            user_id: Optional owner check. If provided, key must belong to this user.
+
+        Returns:
+            bool: True if successful
+        """
+        api_key = db.session.get(APIKey, api_key_id)
+        if not api_key:
+            return False
+
+        if user_id is not None and api_key.user_id != user_id:
+            return False
+
+        api_key.is_active = True
+        db.session.commit()
+
+        current_app.logger.info(f"Activated API key: {api_key.key_prefix}")
+        return True
+
+    @staticmethod
+    def update_key(api_key_id, user_id=None, **fields):
+        """
+        Update editable metadata of an API key.
+
+        Only the fields explicitly provided in ``fields`` are changed; any field
+        left out is untouched. Values are assumed pre-validated by the caller
+        (route layer). The secret key material (prefix/hash) is never editable.
+
+        Supported keys in ``fields``:
+            partner_name (str)      -- non-empty display name
+            description (str|None)  -- free text, None/"" clears it
+            allowed_origins (str|None) -- CSV of origins, None/"" clears it
+            rate_limit (int)        -- requests per hour
+            expires_days (int|None) -- days from now; 0 or None clears expiry (never)
+
+        Args:
+            api_key_id: ID of API key to update
+            user_id: Optional owner check. If provided, key must belong to this user.
+
+        Returns:
+            tuple: (success: bool, api_key: APIKey | None)
+        """
+        api_key = db.session.get(APIKey, api_key_id)
+        if not api_key:
+            return False, None
+
+        if user_id is not None and api_key.user_id != user_id:
+            return False, None
+
+        if "partner_name" in fields:
+            api_key.partner_name = fields["partner_name"]
+        if "description" in fields:
+            api_key.description = fields["description"] or None
+        if "allowed_origins" in fields:
+            api_key.allowed_origins = fields["allowed_origins"] or None
+        if "rate_limit" in fields:
+            api_key.rate_limit = fields["rate_limit"]
+        if "expires_days" in fields:
+            expires_days = fields["expires_days"]
+            if expires_days:  # positive int -> set future expiry
+                api_key.expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+            else:  # 0 or None -> never expires
+                api_key.expires_at = None
+
+        db.session.commit()
+        current_app.logger.info(f"Updated API key: {api_key.key_prefix}")
+        return True, api_key
 
     @staticmethod
     def log_enrollment(
