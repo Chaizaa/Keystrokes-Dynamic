@@ -13,6 +13,7 @@ import traceback
 from datetime import datetime, timezone
 
 from flask import jsonify, request, session
+from flask_login import current_user, login_required
 from sqlalchemy import select
 
 from app.models import User, db
@@ -25,15 +26,18 @@ def _fetch_user(username: str):
 
 
 @api_bp.route("/2fa/enroll", methods=["POST"])
+@login_required
 def enroll_2fa():
-    """Create a TOTP secret for the user and return it for provisioning."""
-    try:
-        data = request.json or {}
-        username = data.get("username")
-        if not username:
-            return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
+    """Create a TOTP secret for the CURRENT user and return it for provisioning.
 
-        user = _fetch_user(username)
+    SECURITY: 2FA enrollment is an authenticated account-management action and
+    operates strictly on the logged-in user. It must never accept a target
+    username from the request body — doing so previously let an unauthenticated
+    caller overwrite any user's 2FA secret (and, chained with /confirm +
+    /verify, take over the account).
+    """
+    try:
+        user = _fetch_user(current_user.username)
         if not user:
             return jsonify({"success": False, "message": "User tidak ditemukan"}), 404
 
@@ -51,15 +55,19 @@ def enroll_2fa():
 
 
 @api_bp.route("/2fa/confirm", methods=["POST"])
+@login_required
 def confirm_2fa():
-    """Confirm a TOTP token and enable 2FA for the user."""
+    """Confirm a TOTP token and enable 2FA for the CURRENT user.
+
+    SECURITY: operates only on the logged-in user; never trusts a body username.
+    """
     try:
         data = request.json or {}
-        username = data.get("username")
         token = data.get("token")
-        if not username or not token:
+        if not token:
             return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
 
+        username = current_user.username
         if not get_auth_service().verify_two_factor_token(username, token):
             return jsonify({"success": False, "message": "Token tidak valid"}), 400
 
@@ -76,24 +84,37 @@ def confirm_2fa():
 
 @api_bp.route("/2fa/verify", methods=["POST"])
 def verify_2fa():
-    """Verify a TOTP token for a user (called after login to complete 2FA step)."""
+    """Complete the second login factor.
+
+    SECURITY: this is the *second step* of login. The identity being verified is
+    taken EXCLUSIVELY from the pending-2FA session that /api/login establishes
+    only after password + biometric succeed. A request without that pending
+    session is rejected — otherwise a valid TOTP alone (e.g. one an attacker set
+    via the old unauthenticated /enroll) would be a complete login bypass.
+    """
     try:
         data = request.json or {}
-        username = (data.get("username") or session.get("2fa_username") or "").strip()
         token = data.get("token")
-        if not username or not token:
-            return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
 
         pending_user_id = session.get("2fa_user_id")
-        user = _fetch_user(username)
-        if not user:
-            return jsonify({"success": False, "message": "User tidak ditemukan"}), 404
-        # User.id adalah UUID (GUID), bukan integer — bandingkan sebagai string
-        # untuk menghindari ValueError pada int() conversion.
-        if pending_user_id and str(pending_user_id) != str(user.id):
+        pending_username = session.get("2fa_username")
+        if not pending_user_id or not pending_username:
+            return jsonify({
+                "success": False,
+                "message": "No pending 2FA session. Start login first.",
+                "reason": "no_2fa_session",
+            }), 401
+        if not token:
+            return jsonify({"success": False, "message": "Data tidak lengkap"}), 400
+
+        # Identity comes from the session only — body username is ignored.
+        user = _fetch_user(pending_username)
+        if not user or str(user.id) != str(pending_user_id):
+            session.pop("2fa_user_id", None)
+            session.pop("2fa_username", None)
             return jsonify({"success": False, "message": "Session 2FA tidak valid"}), 403
 
-        ok = get_auth_service().verify_two_factor_token(username, token)
+        ok = get_auth_service().verify_two_factor_token(user.username, token)
         if not ok:
             return jsonify({"success": False, "message": "Token tidak valid"}), 400
 

@@ -77,6 +77,23 @@ def _get_or_create_partner_user(username: str, email: Optional[str] = None):
     return user
 
 
+def _scoped_username(api_key, username: str) -> str:
+    """Namespace a partner-supplied username to its API key.
+
+    SECURITY: biometric templates are keyed by ``username`` in a GLOBAL table
+    shared with internal app users. Without scoping, two partners (or a partner
+    and an internal user) that happen to share a username would read, overwrite,
+    or poison each other's templates — and a partner could target an internal
+    account (e.g. an admin) by simply sending that username. Prefixing with the
+    immutable API-key id isolates each partner into its own namespace and makes
+    collision with an internal (plain) username impossible.
+
+    The external API contract is unchanged: requests/responses still use the
+    partner's own username; scoping is purely an internal storage detail.
+    """
+    return f"pk{api_key.id}::{username}"
+
+
 def _count_enrollment_samples(username: str) -> int:
     """Hitung jumlah sampel enrollment yang tersimpan untuk username."""
     return int(db.session.execute(
@@ -211,6 +228,12 @@ def partner_enroll():
         if not username or not events:
             return _json_error("username and events are required", 400,
                                error_code="MISSING_FIELDS")
+        if len(username) > 64:
+            return _json_error("username too long (max 64)", 400,
+                               error_code="INVALID_USERNAME")
+
+        # Scope all biometric storage to this API key (tenant isolation).
+        scoped = _scoped_username(api_key, username)
 
         log_entry = APIKeyService.log_enrollment(
             api_key_id=api_key.id,
@@ -222,20 +245,20 @@ def partner_enroll():
             status="processing",
         )
 
-        result = process_events(events, username)
+        result = process_events(events, scoped)
         if result.get("status") != "success":
             msg = result.get("msg", "Failed to process keystroke events")
             log_entry.mark_failed(msg)
             return _json_error(msg, 400, error_code="INVALID_KEYSTROKE_DATA")
 
         features = result["features"]
-        features["username"] = username
+        features["username"] = scoped
         features["event_type"] = "enrollment"
 
-        partner_user = _get_or_create_partner_user(username, email)
+        partner_user = _get_or_create_partner_user(scoped, email)
 
         _, save_error = save_biometric_sample(
-            username=username,
+            username=scoped,
             user_id=partner_user.id,
             features=features,
             event_type="enrollment",
@@ -246,7 +269,7 @@ def partner_enroll():
 
         db.session.commit()
 
-        new_count = _count_enrollment_samples(username)
+        new_count = _count_enrollment_samples(scoped)
         enrollment_id = f"enr_{api_key.id}_{log_entry.id}"
 
         log_entry.user_id = partner_user.id
@@ -254,7 +277,7 @@ def partner_enroll():
 
         # Trigger background training otomatis pada setiap enroll setelah
         # minimum tercapai, supaya model siap saat user verify.
-        _maybe_schedule_training(username, new_count)
+        _maybe_schedule_training(scoped, new_count)
 
         try:
             api_key.total_enrollments = int(api_key.total_enrollments or 0) + 1
@@ -303,16 +326,22 @@ def partner_verify():
         if not username or not events:
             return _json_error("username and events are required", 400,
                                error_code="MISSING_FIELDS")
+        if len(username) > 64:
+            return _json_error("username too long (max 64)", 400,
+                               error_code="INVALID_USERNAME")
+
+        # Scope all biometric lookups to this API key (tenant isolation).
+        scoped = _scoped_username(api_key, username)
 
         existing_user = db.session.execute(
-            db.select(User).where(User.username == username)
+            db.select(User).where(User.username == scoped)
         ).scalars().first()
         user_id = existing_user.id if existing_user else None
 
         # Cek apakah enrollment sudah mencapai minimum sebelum melanjutkan
         # ke ML inference. Memberikan error message yang lebih jelas dibanding
         # mengandalkan training_started loop.
-        current_count = _count_enrollment_samples(username)
+        current_count = _count_enrollment_samples(scoped)
         if current_count < PARTNER_MIN_ENROLLMENT:
             msg = f"Insufficient enrollment samples ({current_count}/{PARTNER_MIN_ENROLLMENT})"
             APIKeyService.log_verification(
@@ -329,10 +358,10 @@ def partner_verify():
 
         # Ensure User row exists supaya training berhasil (FK target).
         if not existing_user:
-            _get_or_create_partner_user(username)
+            _get_or_create_partner_user(scoped)
             db.session.commit()
 
-        result = _process_events_for_verify(events, username)
+        result = _process_events_for_verify(events, scoped)
         if result.get("status") != "success":
             msg = result.get("msg", "Failed to process keystroke events")
             APIKeyService.log_verification(
@@ -347,7 +376,7 @@ def partner_verify():
 
         # ML verification via BiometricService — sama dengan internal login.
         bio = get_biometric_service()
-        verification = bio.verify_keystroke_sample(username, features)
+        verification = bio.verify_keystroke_sample(scoped, features)
 
         if not verification.get("success"):
             reason = verification.get("reason", "verification_error")
@@ -384,7 +413,7 @@ def partner_verify():
 
         # Persist verification sample untuk audit / drift tracking
         save_biometric_sample(
-            username=username,
+            username=scoped,
             user_id=user_id,
             features=features,
             event_type="login",
