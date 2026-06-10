@@ -16,6 +16,11 @@ class Config:
     # Flask Core
     SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-key-change-in-prod"
 
+    # Trusted public base URL for links in outgoing emails. When set, external
+    # URLs are built from this value instead of the request Host header, which
+    # closes the host-header-injection vector on password-reset links.
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+
     # Database
     DATABASE_TYPE = os.environ.get("DATABASE_TYPE", "sqlite")
     DATABASE_PATH = os.environ.get("DATABASE_PATH", "data/biometric_auth.db")

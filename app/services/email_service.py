@@ -9,9 +9,26 @@ from __future__ import annotations
 import logging
 from typing import Optional, List
 
-from flask import current_app, render_template
+from flask import current_app, render_template, url_for
 
 logger = logging.getLogger(__name__)
+
+
+def _external_url(endpoint: str, **values) -> str:
+    """Build an absolute URL for an email link.
+
+    SECURITY: when ``APP_BASE_URL`` is configured we prefix the path-only URL
+    with that trusted base and ignore the request Host header entirely. Without
+    it (e.g. local dev) we fall back to Flask's Host-based ``_external`` URL.
+    The Host-based path is vulnerable to host-header injection — a spoofed
+    Host/X-Forwarded-Host would otherwise place a valid reset token on an
+    attacker-controlled domain — so production MUST set APP_BASE_URL.
+    """
+    base = (current_app.config.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        path = url_for(endpoint, _external=False, **values)
+        return f"{base}{path}"
+    return url_for(endpoint, _external=True, **values)
 
 
 class EmailService:
@@ -112,18 +129,16 @@ class EmailService:
 
     def send_verification_email(self, user, token: str, purpose: Optional[str] = None) -> bool:
         """Render and send a verification email based on purpose."""
-        from flask import url_for
-
         # 1. Determine URL and Subject
         if purpose == "admin_reset":
             subject = "Admin password reset for your account"
-            verification_url = url_for("auth.reset_complete_page", username=user.username, reset_token=token, _external=True)
+            verification_url = _external_url("auth.reset_complete_page", username=user.username, reset_token=token)
         elif purpose == "user_reset":
             subject = "Reset Password for Your Account"
-            verification_url = url_for("auth.reset_verify_code_page", username=user.username, _external=True)
+            verification_url = _external_url("auth.reset_verify_code_page", username=user.username)
         else:
             subject = "Verify your account"
-            verification_url = url_for("auth.verify_page", username=user.username, _external=True)
+            verification_url = _external_url("auth.verify_page", username=user.username)
 
         # 2. Render HTML body from template
         try:

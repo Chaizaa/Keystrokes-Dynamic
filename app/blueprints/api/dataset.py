@@ -329,11 +329,14 @@ def dataset_submit():
         if not isinstance(raw_events, list) or len(raw_events) > 500:
             return jsonify({"success": False, "error": "Format raw_events tidak valid."}), 400
 
-        # Verify session token — prevents unauthorized agents from submitting
-        # to arbitrary subject codes. Token is HMAC-SHA256(subject_code, SECRET_KEY).
+        # Optional session token. It is NOT a real secret (it is derived solely
+        # from the enumerable subject_code), so the authoritative integrity gate
+        # is the per-subject password check further below. A missing token is
+        # therefore allowed — this is what lets the resume flow work without the
+        # client re-deriving the HMAC, and it means /status no longer needs to
+        # hand the token out. When a token IS sent it must still be correct.
         provided_token = request.headers.get("X-Session-Token", "")
-        expected_token = _make_session_token(subject_code)
-        if not provided_token or not hmac.compare_digest(provided_token, expected_token):
+        if provided_token and not hmac.compare_digest(provided_token, _make_session_token(subject_code)):
             logger.warning(
                 "SUBMIT_INVALID_TOKEN subject=%s ip=%s",
                 subject_code, request.remote_addr,
@@ -445,6 +448,10 @@ def dataset_status(subject_code):
 
         collected = subject.total_entries()
 
+        # NOTE: session_token is intentionally NOT returned here. It is derived
+        # only from the (enumerable) subject_code, so exposing it on this
+        # unauthenticated status endpoint made it a non-secret. /submit now
+        # treats the token as optional and relies on the password check instead.
         return jsonify({
             "success":       True,
             "subject_code":  subject.subject_code,
@@ -452,7 +459,6 @@ def dataset_status(subject_code):
             "is_complete":   subject.is_complete(),
             "collected":     collected,
             "total_samples": DATASET_TOTAL_SAMPLES,
-            "session_token": _make_session_token(subject.subject_code),
         }), 200
 
     except Exception as e:
