@@ -17,7 +17,7 @@
 
     <!-- Tactical Header -->
     <header
-        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+        class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
         <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
             <a href="/"
                 class="font-sans text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors uppercase">JANUS</a>
@@ -32,7 +32,7 @@
             <!-- Loading State -->
             <div id="loadingSection" class="py-24 flex flex-col items-center justify-center space-y-5">
                 <div class="w-10 h-10 border-[3px] border-border-dim border-t-safety rounded-full animate-spin"></div>
-                <p class="text-muted text-[10px] font-bold uppercase tracking-widest font-sans animate-pulse">
+                <p class="text-muted text-[12px] font-bold uppercase tracking-widest font-sans animate-pulse">
                     Synchronizing Data Node...</p>
             </div>
 
@@ -40,7 +40,7 @@
             <div id="mainContent" class="hidden space-y-10">
 
                 <!-- Subject Profile (moved to top) -->
-                <section class="bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl">
+                <section class="bg-void/90 border border-border-dim p-8 shadow-2xl">
                     <div class="flex items-center gap-4 mb-8">
                         <h2 class="font-sans text-xl font-bold text-stark uppercase tracking-widest">Profile
                         </h2>
@@ -52,12 +52,12 @@
                         <div class="flex flex-col gap-6 border-b border-border-dim pb-4 md:border-none md:pb-0">
                             <div class="flex justify-between items-center">
                                 <span
-                                    class="text-[10px] font-bold text-muted uppercase tracking-widest font-sans">Username</span>
+                                    class="text-[12px] font-bold text-muted uppercase tracking-widest font-sans">Username</span>
                                 <span id="username" class="text-sm font-sans text-stark">---</span>
                             </div>
                             <!-- Tombol Reset Password -->
                             <button id="resetBtn"
-                                class="self-start bg-surface border border-border-dim text-safety px-8 py-3 uppercase text-[10px] font-bold tracking-widest hover:border-safety transition-colors font-sans">
+                                class="self-start bg-surface border border-border-dim text-safety px-8 py-3 uppercase text-[12px] font-bold tracking-widest hover:border-safety transition-colors font-sans">
                                 Reset Password
                             </button>
                         </div>
@@ -66,7 +66,7 @@
                         <div class="flex flex-col justify-start border-b border-border-dim pb-4 md:border-none md:pb-0">
                             <div class="flex justify-between items-center">
                                 <span
-                                    class="text-[10px] font-bold text-muted uppercase tracking-widest font-sans">Registration
+                                    class="text-[12px] font-bold text-muted uppercase tracking-widest font-sans">Registration
                                     Date</span>
                                 <span id="createdAt" class="text-sm font-sans text-stark">---</span>
                             </div>
@@ -77,51 +77,51 @@
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div
-                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
-                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">
+                        class="data-card bg-void/90 border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[12px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">
                             Biometric Samples</div>
                         <div class="h-16 flex items-center">
                             <span id="enrollmentCount"
                                 class="text-6xl font-sans font-bold text-stark leading-none">0</span>
                         </div>
-                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                        <div class="mt-auto pt-6 text-[11px] text-muted uppercase font-bold tracking-widest font-sans">
                             Enrolled Patterns</div>
                     </div>
                     <div
-                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
-                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">API
+                        class="data-card bg-void/90 border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[12px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">API
                             Count</div>
                         <div class="h-16 flex items-center">
                             <span id="apiKeyCount" class="text-6xl font-sans font-bold text-stark leading-none">0</span>
                         </div>
-                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                        <div class="mt-auto pt-6 text-[11px] text-muted uppercase font-bold tracking-widest font-sans">
                             Active Keys</div>
                     </div>
 
                     <!-- KOTAK BARU: EMAIL STATUS -->
                     <div
-                        class="data-card bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl flex flex-col">
-                        <div class="text-[10px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">Email
+                        class="data-card bg-void/90 border border-border-dim p-8 shadow-2xl flex flex-col">
+                        <div class="text-[12px] font-bold text-safety uppercase tracking-widest mb-4 font-sans">Email
                             Status</div>
                         <div class="h-16 flex items-center">
                             <span id="emailStatusCard"
                                 class="text-4xl font-sans font-bold text-stark uppercase leading-none">Validating</span>
                         </div>
-                        <div class="mt-auto pt-6 text-[9px] text-muted uppercase font-bold tracking-widest font-sans">
+                        <div class="mt-auto pt-6 text-[11px] text-muted uppercase font-bold tracking-widest font-sans">
                             Verification</div>
                     </div>
                 </div>
 
                 <!-- API INTEGRATION KEYS: CREATE FORM -->
-                <section class="bg-void/90 backdrop-blur-xl border border-border-dim p-8 shadow-2xl mt-8">
+                <section class="bg-void/90 border border-border-dim p-8 shadow-2xl mt-8">
                     <div class="flex items-center gap-4 mb-8">
                         <h2 class="font-sans text-xl font-bold text-stark uppercase tracking-widest">API Integration
                             Keys</h2>
                         <div class="h-[1px] flex-grow bg-border-dim"></div>
                     </div>
-                    <p class="text-[10px] text-gray-300 uppercase tracking-widest font-semibold font-sans mb-8">
+                    <p class="text-[12px] text-gray-300 uppercase tracking-widest font-semibold font-sans mb-8">
                         Generate API keys for partner website integration. <span
-                            class="text-[10px] text-safety tracking-widest font-bold font-sans mb-8">A
+                            class="text-[12px] text-safety tracking-widest font-bold font-sans mb-8">A
                             new key
                             is shown only once.</span>
                     </p>
@@ -130,7 +130,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label
-                                    class="block text-[10px] text-gray-300 uppercase tracking-widest mb-2 font-sans">Partner
+                                    class="block text-[12px] text-gray-300 uppercase tracking-widest mb-2 font-sans">Partner
                                     Name *</label>
                                 <input type="text" id="partnerName" required
                                     class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
@@ -138,7 +138,7 @@
                             </div>
                             <div>
                                 <label
-                                    class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Rate
+                                    class="block text-[12px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Rate
                                     Limit / Hour</label>
                                 <input type="number" id="apiRateLimit" value="100"
                                     class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all">
@@ -147,7 +147,7 @@
 
                         <div>
                             <label
-                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Description</label>
+                                class="block text-[12px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Description</label>
                             <input type="text" id="apiDescription"
                                 class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
                                 placeholder="Optional note for this key">
@@ -155,7 +155,7 @@
 
                         <div>
                             <label
-                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Allowed
+                                class="block text-[12px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Allowed
                                 Origins (Comma Separated)</label>
                             <input type="text" id="allowedOrigins"
                                 class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
@@ -164,7 +164,7 @@
 
                         <div class="w-full md:w-1/2 md:pr-3">
                             <label
-                                class="block text-[10px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Expires
+                                class="block text-[12px] text-gray-300 font-bold uppercase tracking-widest mb-2 font-sans">Expires
                                 In (Days)</label>
                             <input type="number" id="expiresIn"
                                 class="w-full bg-surface border border-border-dim py-3 px-4 text-xs text-stark focus:border-safety focus:ring-1 focus:ring-safety outline-none transition-all placeholder-muted/30"
@@ -172,7 +172,7 @@
                         </div>
 
                         <button type="submit" id="generateApiKeyBtn"
-                            class="bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 px-8 hover:bg-opacity-90 transition-colors font-sans w-full md:w-auto">
+                            class="bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 px-8 hover:bg-opacity-90 transition-colors font-sans w-full md:w-auto">
                             Generate API Key
                         </button>
                     </form>
@@ -182,7 +182,7 @@
                         <h3 class="text-safety font-bold uppercase tracking-widest mb-2 text-sm font-sans">
                             ATTENTION: NEW KEY GENERATED
                         </h3>
-                        <p class="text-muted text-[10px] uppercase tracking-widest mb-4 font-sans">
+                        <p class="text-muted text-[12px] uppercase tracking-widest mb-4 font-sans">
                             Please copy this key immediately. It will not be shown again.
                         </p>
                         <div class="flex flex-col sm:flex-row items-stretch gap-4">
@@ -190,7 +190,7 @@
                                 class="flex-grow bg-void border border-border-dim p-4 text-stark text-sm break-all"></code>
 
                             <button onclick="copyNewKey(this)"
-                                class="bg-surface border border-border-dim text-stark px-8 py-4 uppercase text-[10px] font-bold tracking-widest hover:text-safety hover:border-safety transition-colors">
+                                class="bg-surface border border-border-dim text-stark px-8 py-4 uppercase text-[12px] font-bold tracking-widest hover:text-safety hover:border-safety transition-colors">
                                 COPY
                             </button>
                         </div>
@@ -199,7 +199,7 @@
                     <div id="apiKeysList" class="space-y-4">
                         <!-- Empty State: Ditampilkan kalau belum ada API Key -->
                         <div class="border border-border-dim bg-surface p-8 text-center">
-                            <p class="text-[10px] text-gray-300 uppercase tracking-widest font-sans">
+                            <p class="text-[12px] text-gray-300 uppercase tracking-widest font-sans">
                                 No API keys generated yet.
                             </p>
                         </div>
@@ -208,7 +208,7 @@
                 <!-- Tombol Logout Paling Bawah -->
                 <div class="pt-4 pb-8 flex justify-center">
                     <button onclick="logout()"
-                        class="w-full md:w-auto bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 px-16 hover:bg-opacity-90 transition-colors font-sans">
+                        class="w-full md:w-auto bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 px-16 hover:bg-opacity-90 transition-colors font-sans">
                         LOGOUT
                     </button>
                 </div>

@@ -11,25 +11,25 @@
     <div class="absolute top-20 left-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>
     <div class="absolute bottom-20 right-10 w-64 h-64 bg-[#FF4500]/5 rounded-full filter blur-3xl"></div>
 
-    <div class="relative z-10 w-full max-w-2xl bg-[#050505] border border-zinc-800 p-8 md:p-12 shadow-2xl cut-tl">
+    <div class="relative z-10 w-full max-w-2xl bg-[#1c1c22] border border-zinc-800 p-8 md:p-12 shadow-2xl cut-tl">
         <!-- Header -->
         <header class="mb-10 border-b border-zinc-900 pb-8">
             <div class="flex items-center gap-3 mb-2">
                 <div class="w-1.5 h-1.5 bg-[#FF4500] animate-pulse"></div>
-                <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Protocol // API INTEGRATION</span>
+                <span class="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">Protocol // API INTEGRATION</span>
             </div>
             <h2 class="font-brutal text-4xl text-white uppercase tracking-tight">Access Node Key</h2>
         </header>
 
         <div class="space-y-8">
             <!-- Warning -->
-            <div class="p-4 bg-zinc-900/50 border-l-2 border-[#FF4500] text-zinc-400 text-[11px] font-medium uppercase tracking-wider leading-relaxed">
+            <div class="p-4 bg-zinc-900/50 border-l-2 border-[#FF4500] text-zinc-400 text-[12px] font-medium uppercase tracking-wider leading-relaxed">
                 Use this private key to authenticate external requests to the JANUS telemetry cluster. This key grants high-level access.
             </div>
 
             <!-- Key Display -->
             <div class="space-y-4">
-                <label class="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Secret Identification Key</label>
+                <label class="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest">Secret Identification Key</label>
                 <div class="flex flex-col sm:flex-row gap-4">
                     <div class="relative flex-grow">
                         <input 
@@ -48,22 +48,22 @@
                     </div>
                     <button 
                         onclick="copyApiKey()" 
-                        class="bg-white text-black font-bold text-[11px] px-8 py-4 uppercase tracking-widest hover:bg-zinc-200 transition-all"
+                        class="bg-white text-black font-bold text-[12px] px-8 py-4 uppercase tracking-widest hover:bg-zinc-200 transition-all"
                     >
                         Copy Key
                     </button>
                 </div>
-                <p class="text-[9px] font-bold text-zinc-700 uppercase tracking-widest italic">
+                <p class="text-[11px] font-bold text-zinc-700 uppercase tracking-widest italic">
                     Security Warning: Never expose this key in public client-side code or repositories.
                 </p>
             </div>
 
             <!-- Footer -->
             <div class="pt-8 border-t border-zinc-900 flex flex-col sm:flex-row justify-between items-center gap-6">
-                <a href="{{ url_for('main.home') }}" class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2">
+                <a href="{{ url_for('main.home') }}" class="text-[12px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2">
                     <span class="text-xs">&larr;</span> Back to Terminal
                 </a>
-                <button onclick="revokeKey()" class="text-[10px] font-bold text-red-600 hover:text-red-500 uppercase tracking-widest transition-colors">
+                <button onclick="revokeKey()" class="text-[12px] font-bold text-red-600 hover:text-red-500 uppercase tracking-widest transition-colors">
                     Revoke Integration Node
                 </button>
             </div>

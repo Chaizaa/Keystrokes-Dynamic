@@ -32,18 +32,18 @@
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
-    -webkit-text-fill-color: #ffffff;
-    -webkit-box-shadow: 0 0 0 1000px #000000 inset;
+    -webkit-text-fill-color: #f5f5f7;
+    -webkit-box-shadow: 0 0 0 1000px #0c0c0f inset;
     transition: background-color 5000s ease-in-out 0s;
   }
 
   input {
-    background-color: #000000;
-    color: #ffffff;
+    background-color: #0c0c0f;
+    color: #f5f5f7;
   }
 
   input::placeholder {
-    color: #27272a;
+    color: #5b5b66;
   }
 }
 

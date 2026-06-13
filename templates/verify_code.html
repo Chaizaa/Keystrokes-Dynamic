@@ -19,7 +19,7 @@
 
     <!-- Tactical Header -->
     <header
-        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+        class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
         <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
             <a href="/"
                 class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
@@ -30,7 +30,7 @@
     <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
         <!-- Centered Verify Card -->
         <div
-            class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+            class="w-full max-w-lg bg-void/90 border border-border-dim p-8 md:p-12 shadow-2xl relative">
 
             <!-- Header -->
             <div class="mb-10 text-center">
@@ -47,12 +47,12 @@
                 <input id="vcUsername" type="hidden">
                 <!-- Verification Code -->
                 <div>
-                    <label class="block text-[10px] text-safety font-bold uppercase tracking-widest mb-2 font-mono">
+                    <label class="block text-[12px] text-safety font-bold uppercase tracking-widest mb-2 font-mono">
                         Verification Code
                     </label>
                     <input id="vcCode" type="text" class="w-full tactical-input py-3 px-4 text-xs tracking-wider"
                         placeholder="ENTER 6-DIGIT CODE" autocomplete="off" required>
-                    <p class="text-[10px] text-muted mt-2 font-mono">Enter the 6-digit code or paste the token from the
+                    <p class="text-[12px] text-muted mt-2 font-mono">Enter the 6-digit code or paste the token from the
                         email</p>
                 </div>
 
@@ -62,7 +62,7 @@
                 <!-- Actions / Buttons -->
                 <div class="mt-4 flex flex-col gap-3">
                     <button id="verifyBtn"
-                        class="flex justify-center items-center gap-2 w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+                        class="flex justify-center items-center gap-2 w-full bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono"
                         disabled>
                         <span id="verifySpinner"
                             class="hidden w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin"></span>
@@ -70,18 +70,18 @@
                     </button>
 
                     <button id="resendBtn"
-                        class="w-full bg-void border border-border-dim hover:border-safety text-stark hover:text-safety transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        class="w-full bg-void border border-border-dim hover:border-safety text-stark hover:text-safety transition-colors font-mono text-[12px] font-bold uppercase tracking-widest py-4">
                         Resend Code
                     </button>
 
                     {% if current_user.is_authenticated %}
                     <a href="{{ url_for('main.home') }}"
-                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[12px] font-bold uppercase tracking-widest py-4">
                         Back to Dashboard
                     </a>
                     {% else %}
                     <a href="{{ url_for('auth.register_page') }}"
-                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[11px] font-bold uppercase tracking-widest py-4">
+                        class="block text-center w-full bg-void border border-border-dim text-muted hover:text-stark hover:border-muted transition-colors font-mono text-[12px] font-bold uppercase tracking-widest py-4">
                         Back to Register
                     </a>
                     {% endif %}

@@ -10,30 +10,30 @@
   <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
   <!-- Tactical Header -->
-  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+  <header class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
     <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
       <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
     <div class="flex items-center px-6 lg:px-8 border-l border-border-dim h-full">
-      <a href="/login" class="text-[10px] text-muted uppercase tracking-widest hover:text-safety transition-colors">User Login &rarr;</a>
+      <a href="/login" class="text-[12px] text-muted uppercase tracking-widest hover:text-safety transition-colors">User Login &rarr;</a>
     </div>
   </header>
 
   <!-- Main Content Area -->
   <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
 
-    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+    <div class="w-full max-w-lg bg-void/90 border border-border-dim p-8 md:p-12 shadow-2xl relative">
       <span class="reticle reticle-tl"></span>
 
       <div class="mb-8 text-center">
         <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">Admin</h1>
-        <p class="font-sans text-[10px] text-muted uppercase tracking-[0.3em]">Administrators Only</p>
+        <p class="font-sans text-[12px] text-muted uppercase tracking-[0.3em]">Administrators Only</p>
       </div>
 
       <form id="adminLoginForm" class="flex flex-col gap-5" onsubmit="event.preventDefault(); handleAdminLogin();">
 
         <div>
-          <label for="a_username" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex">
+          <label for="a_username" class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex">
             <span>Username or Email</span>
           </label>
           <input id="a_username" type="text" required autocomplete="off" spellcheck="false"
@@ -41,7 +41,7 @@
         </div>
 
         <div>
-          <label for="a_password" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+          <label for="a_password" class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
             <span>Password</span>
             <span id="sys-message" class="text-safety"></span>
           </label>
@@ -59,11 +59,11 @@
         </div>
 
         <button type="submit" id="btn-admin-login"
-                class="w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                class="w-full bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
           Sign In as Admin
         </button>
 
-        <div id="adminResult" class="hidden border px-4 py-3 text-[11px] font-bold uppercase tracking-widest"></div>
+        <div id="adminResult" class="hidden border px-4 py-3 text-[12px] font-bold uppercase tracking-widest"></div>
       </form>
     </div>
   </main>
@@ -88,7 +88,7 @@
       const cls = tone === 'success'
         ? 'bg-safety/10 border-safety/40 text-stark'
         : 'bg-void/60 border-safety/40 text-safety';
-      el.className = 'border px-4 py-3 text-[11px] font-bold uppercase tracking-widest ' + cls;
+      el.className = 'border px-4 py-3 text-[12px] font-bold uppercase tracking-widest ' + cls;
       el.textContent = msg;
     }
 

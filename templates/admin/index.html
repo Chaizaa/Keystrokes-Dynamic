@@ -10,15 +10,15 @@
   <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
   <!-- Tactical Header -->
-  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+  <header class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
     <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
       <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
     <div class="flex items-center gap-4 px-4 lg:px-6 h-full">
-      <span class="text-[10px] text-muted uppercase tracking-widest hidden sm:inline">{{ current_user.username if current_user.is_authenticated else '' }}</span>
+      <span class="text-[12px] text-muted uppercase tracking-widest hidden sm:inline">{{ current_user.username if current_user.is_authenticated else '' }}</span>
       <button id="adminLogoutBtn"
               data-logout-url="{{ url_for('auth.logout') }}"
-              class="inline-flex items-center px-4 py-2 bg-safety text-void text-[10px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors font-sans">
+              class="inline-flex items-center px-4 py-2 bg-safety text-void text-[12px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors font-sans">
         Logout
       </button>
     </div>
@@ -29,7 +29,7 @@
     <!-- Page Title -->
     <div class="mb-8">
       <h1 class="font-sans text-3xl md:text-4xl font-bold text-stark tracking-wide uppercase">Admin Dashboard</h1>
-      <p class="text-[10px] text-muted uppercase tracking-[0.25em] mt-2">Operator: {{ current_user.username if current_user.is_authenticated else '—' }}</p>
+      <p class="text-[12px] text-muted uppercase tracking-[0.25em] mt-2">Operator: {{ current_user.username if current_user.is_authenticated else '—' }}</p>
     </div>
 
     <!-- Stats Grid -->
@@ -37,17 +37,17 @@
       <div class="data-card relative bg-void/80 border border-border-dim p-5">
         <span class="reticle reticle-tl"></span>
         <div id="stat-total-users" class="font-brutal text-4xl font-bold text-stark">{{ total_users if total_users is defined else users|length }}</div>
-        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Total Users</div>
+        <div class="text-[12px] text-muted uppercase tracking-[0.25em] mt-3">Total Users</div>
       </div>
       <div class="data-card relative bg-void/80 border border-border-dim p-5">
         <span class="reticle reticle-tl"></span>
         <div class="font-brutal text-4xl font-bold text-stark">{{ total_audits if total_audits is defined else audits|length }}</div>
-        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Audit Entries</div>
+        <div class="text-[12px] text-muted uppercase tracking-[0.25em] mt-3">Audit Entries</div>
       </div>
       <div class="data-card relative bg-void/80 border border-border-dim p-5">
         <span class="reticle reticle-tl"></span>
         <div class="font-brutal text-4xl font-bold text-stark">{{ total_enrollments or 0 }}</div>
-        <div class="text-[10px] text-muted uppercase tracking-[0.25em] mt-3">Enrolled Samples</div>
+        <div class="text-[12px] text-muted uppercase tracking-[0.25em] mt-3">Enrolled Samples</div>
       </div>
     </div>
 
@@ -57,7 +57,7 @@
         <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Users</h2>
         {% set users_start = ((users_page - 1) * users_page_size) + (1 if users|length else 0) %}
         {% set users_end = users_start + users|length - (1 if users|length else 0) %}
-        <span class="text-[10px] text-muted uppercase tracking-widest">
+        <span class="text-[12px] text-muted uppercase tracking-widest">
           {% if total_users %}{{ users_start }}–{{ users_end }} of {{ total_users }}{% else %}0 of 0{% endif %}
         </span>
       </div>
@@ -65,12 +65,12 @@
         <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="users">
           <thead>
             <tr class="border-b border-border-dim">
-              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Username<span class="sort-icon"></span></th>
-              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Email<span class="sort-icon"></span></th>
-              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Role<span class="sort-icon"></span></th>
-              <th data-sortable data-sort-type="number" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Enrolled<span class="sort-icon"></span></th>
-              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Created<span class="sort-icon"> ▼</span></th>
-              <th class="px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold">Actions</th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Username<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Email<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Role<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="number" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Enrolled<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Created<span class="sort-icon"> ▼</span></th>
+              <th class="px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -80,9 +80,9 @@
               <td class="px-4 py-3 text-muted text-sm">{{ u.email or '—' }}</td>
               <td class="px-4 py-3" data-sort-value="{{ u.role }}">
                 {% if u.role|lower == 'admin' %}
-                <span class="inline-flex items-center px-2 py-0.5 border border-safety/60 text-safety text-[9px] font-bold uppercase tracking-widest">Admin</span>
+                <span class="inline-flex items-center px-2 py-0.5 border border-safety/60 text-safety text-[11px] font-bold uppercase tracking-widest">Admin</span>
                 {% else %}
-                <span class="inline-flex items-center px-2 py-0.5 border border-border-dim text-muted text-[9px] font-bold uppercase tracking-widest">{{ u.role }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 border border-border-dim text-muted text-[11px] font-bold uppercase tracking-widest">{{ u.role }}</span>
                 {% endif %}
               </td>
               <td class="px-4 py-3 text-stark text-sm">{{ u.get_enrollment_count() }}</td>
@@ -90,13 +90,13 @@
               <td class="px-4 py-3">
                 {% if current_user.is_authenticated and current_user.is_admin() %}
                 <div class="flex gap-2 items-center">
-                  <button class="admin-action-reset inline-flex items-center px-2 py-1 border border-border-dim bg-void/60 text-stark text-[9px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors"
+                  <button class="admin-action-reset inline-flex items-center px-2 py-1 border border-border-dim bg-void/60 text-stark text-[11px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors"
                           data-user-id="{{ u.id }}" data-username="{{ u.username }}" aria-label="Reset password for {{ u.username }}">Reset</button>
                   {% if current_user.id == u.id %}
-                  <button class="inline-flex items-center px-2 py-1 border border-border-dim text-muted text-[9px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed"
+                  <button class="inline-flex items-center px-2 py-1 border border-border-dim text-muted text-[11px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed"
                           title="Cannot delete your own admin account" aria-disabled="true" disabled>Delete</button>
                   {% else %}
-                  <button class="admin-action-delete inline-flex items-center px-2 py-1 border border-safety/60 bg-safety/10 text-safety text-[9px] font-bold uppercase tracking-widest hover:bg-safety hover:text-void transition-colors"
+                  <button class="admin-action-delete inline-flex items-center px-2 py-1 border border-safety/60 bg-safety/10 text-safety text-[11px] font-bold uppercase tracking-widest hover:bg-safety hover:text-void transition-colors"
                           data-user-id="{{ u.id }}" data-username="{{ u.username }}" aria-label="Delete user {{ u.username }}">Delete</button>
                   {% endif %}
                 </div>
@@ -114,19 +114,19 @@
       <!-- Users pagination -->
       {% if users_pages > 1 %}
       <nav class="flex items-center justify-between mt-4" aria-label="Users pagination">
-        <span class="text-[10px] text-muted uppercase tracking-widest">Page {{ users_page }} of {{ users_pages }}</span>
+        <span class="text-[12px] text-muted uppercase tracking-widest">Page {{ users_page }} of {{ users_pages }}</span>
         <div class="flex gap-2">
           {% if users_page > 1 %}
           <a href="?users_page={{ users_page - 1 }}&audits_page={{ audits_page }}#recent-users"
-             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[12px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
           {% else %}
-          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[12px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
           {% endif %}
           {% if users_page < users_pages %}
           <a href="?users_page={{ users_page + 1 }}&audits_page={{ audits_page }}#recent-users"
-             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[12px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
           {% else %}
-          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[12px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
           {% endif %}
         </div>
       </nav>
@@ -139,7 +139,7 @@
         <h2 class="font-sans text-xl font-bold text-stark tracking-wide uppercase">Recent Audit Entries</h2>
         {% set audits_start = ((audits_page - 1) * audits_page_size) + (1 if audits|length else 0) %}
         {% set audits_end = audits_start + audits|length - (1 if audits|length else 0) %}
-        <span class="text-[10px] text-muted uppercase tracking-widest">
+        <span class="text-[12px] text-muted uppercase tracking-widest">
           {% if total_audits %}{{ audits_start }}–{{ audits_end }} of {{ total_audits }}{% else %}0 of 0{% endif %}
         </span>
       </div>
@@ -147,10 +147,10 @@
         <table class="w-full text-left border-collapse min-w-[760px] sortable-table" data-table="audits">
           <thead>
             <tr class="border-b border-border-dim">
-              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">When<span class="sort-icon"> ▼</span></th>
-              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">User<span class="sort-icon"></span></th>
-              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Action<span class="sort-icon"></span></th>
-              <th class="px-4 py-3 text-[10px] text-muted uppercase tracking-widest font-bold">Details</th>
+              <th data-sortable data-sort-type="date"   data-sort-dir="desc" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">When<span class="sort-icon"> ▼</span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">User<span class="sort-icon"></span></th>
+              <th data-sortable data-sort-type="string" class="sort-th px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold cursor-pointer select-none hover:text-safety transition-colors">Action<span class="sort-icon"></span></th>
+              <th class="px-4 py-3 text-[12px] text-muted uppercase tracking-widest font-bold">Details</th>
             </tr>
           </thead>
           <tbody>
@@ -172,19 +172,19 @@
       <!-- Audits pagination -->
       {% if audits_pages > 1 %}
       <nav class="flex items-center justify-between mt-4" aria-label="Audits pagination">
-        <span class="text-[10px] text-muted uppercase tracking-widest">Page {{ audits_page }} of {{ audits_pages }}</span>
+        <span class="text-[12px] text-muted uppercase tracking-widest">Page {{ audits_page }} of {{ audits_pages }}</span>
         <div class="flex gap-2">
           {% if audits_page > 1 %}
           <a href="?users_page={{ users_page }}&audits_page={{ audits_page - 1 }}#recent-audits"
-             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[12px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Prev</a>
           {% else %}
-          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[12px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Prev</span>
           {% endif %}
           {% if audits_page < audits_pages %}
           <a href="?users_page={{ users_page }}&audits_page={{ audits_page + 1 }}#recent-audits"
-             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[10px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
+             class="inline-flex items-center px-3 py-1.5 border border-border-dim text-stark text-[12px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Next</a>
           {% else %}
-          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[10px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
+          <span class="inline-flex items-center px-3 py-1.5 border border-border-dim text-muted text-[12px] font-bold uppercase tracking-widest opacity-40 cursor-not-allowed">Next</span>
           {% endif %}
         </div>
       </nav>
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function(){
       : tone === 'success'
         ? 'border-safety/60 bg-safety/15 text-stark'
         : 'border-border-dim bg-void/90 text-stark';
-    t.className = 'font-sans border px-4 py-3 text-[13px] font-semibold tracking-normal transition-opacity duration-300 ' + toneCls;
+    t.className = 'font-sans border px-4 py-3 text-[14px] font-semibold tracking-normal transition-opacity duration-300 ' + toneCls;
     container.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
   }

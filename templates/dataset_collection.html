@@ -9,9 +9,9 @@
 <div class="min-h-screen flex items-start justify-center px-4 pb-16 pt-10 bg-[radial-gradient(circle_at_10%_12%,rgba(255,122,42,0.18),transparent_34%),radial-gradient(circle_at_86%_8%,rgba(255,122,42,0.08),transparent_35%),linear-gradient(160deg,#06080d_0%,#090c12_52%,#050608_100%)]">
 <div class="w-full max-w-[560px] p-9 md:p-10 bg-[linear-gradient(160deg,rgba(18,22,30,0.98),rgba(10,13,18,0.98))] border border-white/10 rounded-sm text-slate-200 shadow-[0_24px_46px_rgba(0,0,0,0.48),inset_0_0_0_1px_rgba(255,122,42,0.07)]">
 
-    <div class="text-[12px] font-bold uppercase tracking-[0.1em] text-[#ffb066] mb-2">Keystroke Dynamics · Riset</div>
+    <div class="text-[13px] font-bold uppercase tracking-[0.1em] text-[#ffb066] mb-2">Keystroke Dynamics · Riset</div>
     <h1 class="text-[30px] font-bold text-slate-50 mb-2 font-brutal uppercase tracking-[0.07em]">Pengumpulan Data Ketikan</h1>
-    <p class="text-[12px] text-[#aab2bf] uppercase tracking-[0.08em] mb-6">Yuk bantu kami kumpulin data ketikan buat penelitian!</p>
+    <p class="text-[13px] text-[#aab2bf] uppercase tracking-[0.08em] mb-6">Yuk bantu kami kumpulin data ketikan buat penelitian!</p>
 
     <!-- ─────────────────────────────── STAGE: INTRO ─────────────────────── -->
     <div id="stage-intro" class="ds-stage">
@@ -20,11 +20,11 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             <div class="bg-[rgba(8,11,16,0.9)] border border-white/10 rounded-sm p-3 text-center shadow-[inset_0_0_0_1px_rgba(255,122,42,0.04)]">
                 <div class="text-[26px] font-extrabold text-[#ffb066] leading-none mb-1 font-brutal">{{ total_samples }}</div>
-                <div class="text-[11px] text-[#8e96a4] uppercase tracking-[0.08em]">Total Sampel</div>
+                <div class="text-[12px] text-[#8e96a4] uppercase tracking-[0.08em]">Total Sampel</div>
             </div>
             <div class="bg-[rgba(8,11,16,0.9)] border border-white/10 rounded-sm p-3 text-center shadow-[inset_0_0_0_1px_rgba(255,122,42,0.04)]">
                 <div class="text-[26px] font-extrabold text-[#ffb066] leading-none mb-1 font-brutal">&asymp;{{ (total_samples // 60) + 1 }}&ndash;{{ (total_samples // 30) + 1 }}<span class="text-[14px] font-medium text-[#b7bfcd]"> menit</span></div>
-                <div class="text-[11px] text-[#8e96a4] uppercase tracking-[0.08em]">Estimasi Waktu</div>
+                <div class="text-[12px] text-[#8e96a4] uppercase tracking-[0.08em]">Estimasi Waktu</div>
             </div>
         </div>
 
@@ -54,7 +54,7 @@
 
         <!-- Registration form -->
         <div class="mb-[18px]">
-            <label class="block text-[11px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-name">Nama / Inisial <span class="text-[#7c8596] font-normal">(opsional)</span></label>
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-name">Nama / Inisial <span class="text-[#7c8596] font-normal">(opsional)</span></label>
             <input
                 class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)]"
                 type="text"
@@ -65,7 +65,7 @@
         </div>
 
         <div class="mb-[18px]">
-            <label class="block text-[11px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-password">Bikin Kata Sandi Kamu</label>
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-password">Bikin Kata Sandi Kamu</label>
             <div class="relative flex items-center">
                 <input
                     class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)] pr-10"
@@ -93,17 +93,17 @@
             </div>
         </div>
 
-        <button id="ds-register-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[13px] font-bold uppercase tracking-[0.08em] border border-[#ff7a2a]/85 bg-[linear-gradient(135deg,#ff7a2a_0%,#e6671d_100%)] text-white hover:opacity-95 transition">
+        <button id="ds-register-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[14px] font-bold uppercase tracking-[0.08em] border border-[#ff7a2a]/85 bg-[linear-gradient(135deg,#ff7a2a_0%,#e6671d_100%)] text-white hover:opacity-95 transition">
             Mulai
         </button>
 
         <!-- Resume option -->
         <div class="mt-4 text-center">
-            <button class="text-[#ffb066] text-[13px] underline underline-offset-4 hover:text-[#ffcf9f]" onclick="document.getElementById('ds-resume-section').classList.toggle('hidden')">
+            <button class="text-[#ffb066] text-[14px] underline underline-offset-4 hover:text-[#ffcf9f]" onclick="document.getElementById('ds-resume-section').classList.toggle('hidden')">
                 Udah punya kode subjek? Lanjut aja →
             </button>
             <div id="ds-resume-section" class="mt-4 p-4 bg-[rgba(8,11,16,0.9)] border border-white/10 rounded-sm hidden">
-                <label class="block text-[11px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-resume-code">Kode Subjek</label>
+                <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-resume-code">Kode Subjek</label>
                 <input
                     class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)] mb-4"
                     type="text"
@@ -111,7 +111,7 @@
                     placeholder="Contoh: s001"
                     maxlength="10"
                     autocomplete="off">
-                <button id="ds-resume-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[13px] font-bold uppercase tracking-[0.08em] border border-white/20 bg-transparent text-[#b7bfcd] hover:border-[#ff7a2a]/65 hover:text-[#ffcf9f] hover:bg-[#ff7a2a]/10 transition">
+                <button id="ds-resume-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[14px] font-bold uppercase tracking-[0.08em] border border-white/20 bg-transparent text-[#b7bfcd] hover:border-[#ff7a2a]/65 hover:text-[#ffcf9f] hover:bg-[#ff7a2a]/10 transition">
                     Lanjutkan
                 </button>
             </div>
@@ -152,7 +152,7 @@
 
         <!-- Input field -->
         <div class="mb-[18px]">
-            <label class="block text-[11px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-input">Ketik Kata Sandi Kamu</label>
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-input">Ketik Kata Sandi Kamu</label>
             <div class="relative flex items-center">
                 <input
                     class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)] pr-10"
@@ -180,7 +180,7 @@
             </div>
         </div>
 
-        <button id="ds-submit-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[13px] font-bold uppercase tracking-[0.08em] border border-[#ff7a2a]/80 bg-[linear-gradient(135deg,#f08a3f_0%,#dd6a1f_100%)] text-white hover:opacity-95 transition">
+        <button id="ds-submit-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[14px] font-bold uppercase tracking-[0.08em] border border-[#ff7a2a]/80 bg-[linear-gradient(135deg,#f08a3f_0%,#dd6a1f_100%)] text-white hover:opacity-95 transition">
             Kirim (Enter)
         </button>
 
@@ -206,7 +206,7 @@
     </div>
 
     <!-- Single shared status bar, shown by JS across all stages -->
-    <span id="ds-status" class="hidden mt-0 rounded-sm border px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em]"></span>
+    <span id="ds-status" class="hidden mt-0 rounded-sm border px-3 py-2 text-[12px] font-bold uppercase tracking-[0.08em]"></span>
 
 </div><!-- .ds-card -->
 </div><!-- .ds-container -->

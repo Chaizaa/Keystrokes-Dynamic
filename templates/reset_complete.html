@@ -8,7 +8,7 @@
 
   <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
-  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+  <header class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
     <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
       <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
@@ -16,7 +16,7 @@
 
   <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
 
-    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+    <div class="w-full max-w-lg bg-void/90 border border-border-dim p-8 md:p-12 shadow-2xl relative">
 
       <div class="mb-8 text-center">
         <h1 id="rcTitle" class="font-sans text-3xl md:text-4xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Master Password</h1>
@@ -31,7 +31,7 @@
 
         <!-- New master password -->
         <div>
-          <label for="rcPassword" class="block text-[10px] text-muted font-bold uppercase tracking-widest mb-2">New Master Password</label>
+          <label for="rcPassword" class="block text-[12px] text-muted font-bold uppercase tracking-widest mb-2">New Master Password</label>
           <div class="relative">
             <input id="rcPassword" type="password" placeholder="Create a secure password"
                    class="w-full tactical-input py-3 pl-4 pr-12 text-xs tracking-wider text-safety">
@@ -43,18 +43,18 @@
               </svg>
             </button>
           </div>
-          <p class="text-[10px] text-muted mt-2">This password will be used for biometric re-enrollment.</p>
+          <p class="text-[12px] text-muted mt-2">This password will be used for biometric re-enrollment.</p>
         </div>
 
         <!-- Enrollment section -->
         <div id="enrollmentSection" class="mt-4 pt-6 border-t border-border-dim">
-          <h3 class="text-[10px] font-bold text-muted tracking-widest uppercase mb-2">Biometric Re-enrollment</h3>
-          <p class="text-[10px] text-muted mb-4">Type your new password naturally to train the system.</p>
+          <h3 class="text-[12px] font-bold text-muted tracking-widest uppercase mb-2">Biometric Re-enrollment</h3>
+          <p class="text-[12px] text-muted mb-4">Type your new password naturally to train the system.</p>
 
           <div class="bg-surface border border-border-dim p-5 mb-5 flex justify-between items-center cut-tl">
             <div>
-              <div class="text-[10px] text-muted font-bold tracking-widest uppercase">Enrollment Progress</div>
-              <div id="motivationalMsg" class="text-[10px] text-muted mt-1">Take your time, type naturally</div>
+              <div class="text-[12px] text-muted font-bold tracking-widest uppercase">Enrollment Progress</div>
+              <div id="motivationalMsg" class="text-[12px] text-muted mt-1">Take your time, type naturally</div>
             </div>
             <div class="text-4xl font-brutal text-stark">
               <span id="countDisplay">0</span><span class="text-muted text-2xl" id="targetCount">/10</span>
@@ -62,7 +62,7 @@
           </div>
 
           <div>
-            <label for="typingField" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+            <label for="typingField" class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
               <span>Type Password &amp; Press Enter</span>
               <span id="status" class="text-safety"></span>
             </label>
@@ -89,7 +89,7 @@
         </div>
         <h3 class="font-sans text-xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Complete</h3>
         <p class="text-sm text-muted mb-6">Your password was updated and biometrics re-enrolled.</p>
-        <a href="/login" class="inline-flex items-center justify-center px-8 py-3 bg-safety text-void text-[11px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors">Continue to Login</a>
+        <a href="/login" class="inline-flex items-center justify-center px-8 py-3 bg-safety text-void text-[12px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors">Continue to Login</a>
       </div>
     </div>
   </main>

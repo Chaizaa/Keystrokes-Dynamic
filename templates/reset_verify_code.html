@@ -8,7 +8,7 @@
 
   <div class="blueprint-grid blueprint-grid-fixed z-0 pointer-events-none"></div>
 
-  <header class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+  <header class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
     <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
       <a href="/" class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
     </div>
@@ -16,7 +16,7 @@
 
   <main class="flex-grow relative z-10 flex items-start sm:items-center justify-center p-4 py-12">
 
-    <div class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+    <div class="w-full max-w-lg bg-void/90 border border-border-dim p-8 md:p-12 shadow-2xl relative">
 
       <div class="mb-8 text-center">
         <h1 class="font-sans text-3xl md:text-4xl font-bold text-stark mb-2 tracking-wide uppercase">Reset Password</h1>
@@ -26,31 +26,31 @@
       <form class="flex flex-col gap-5" onsubmit="event.preventDefault();">
 
         <div>
-          <label for="rcvUsername" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Username</span></label>
+          <label for="rcvUsername" class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Username</span></label>
           <input id="rcvUsername" type="text" readonly class="w-full tactical-input py-3 px-4 text-xs tracking-wider opacity-70 cursor-not-allowed">
         </div>
 
         <div>
-          <label for="rcvCode" class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Reset Code</span></label>
+          <label for="rcvCode" class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex"><span>Reset Code</span></label>
           <input id="rcvCode" type="text" placeholder="Enter 6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
                  class="w-full tactical-input py-3 px-4 text-lg tracking-[0.4em] text-center font-mono">
-          <p class="text-[10px] text-muted mt-2 font-sans">Check your email for the 6-digit reset code.</p>
+          <p class="text-[12px] text-muted mt-2 font-sans">Check your email for the 6-digit reset code.</p>
         </div>
 
         <div id="rcvAlert" class="hidden"></div>
 
         <div class="flex flex-col sm:flex-row gap-3 mt-2">
           <button id="rcvVerifyBtn" type="button" disabled
-                  class="inline-flex items-center justify-center gap-2 flex-1 bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-3 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  class="inline-flex items-center justify-center gap-2 flex-1 bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-3 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <span id="rcvSpinner" class="hidden w-4 h-4 border-2 border-void/40 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
             <span id="rcvBtnText">Verify Code</span>
           </button>
           <button id="rcvResendBtn" type="button"
-                  class="inline-flex items-center justify-center px-4 py-3 border border-border-dim bg-void text-stark text-[11px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Resend</button>
+                  class="inline-flex items-center justify-center px-4 py-3 border border-border-dim bg-void text-stark text-[12px] font-bold uppercase tracking-widest hover:border-safety hover:text-safety transition-colors">Resend</button>
         </div>
 
         <a href="{{ url_for('auth.login_page') }}"
-           class="text-center text-[10px] text-muted uppercase tracking-widest hover:text-safety transition-colors mt-2">&larr; Back to Login</a>
+           class="text-center text-[12px] text-muted uppercase tracking-widest hover:text-safety transition-colors mt-2">&larr; Back to Login</a>
       </form>
     </div>
   </main>
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resendBtn   = document.getElementById('rcvResendBtn');
 
   function showAlert(msg, tone) {
-    const base = 'border px-4 py-3 text-[11px] font-bold uppercase tracking-widest';
+    const base = 'border px-4 py-3 text-[12px] font-bold uppercase tracking-widest';
     const cls  = tone === 'success'
       ? 'bg-safety/10 border-safety/40 text-stark'
       : 'bg-void/60 border-safety/40 text-safety';

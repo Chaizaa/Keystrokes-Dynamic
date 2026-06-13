@@ -18,7 +18,7 @@
 
     <!-- Tactical Header -->
     <header
-        class="border-b border-border-dim bg-void/80 backdrop-blur-md flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
+        class="border-b border-border-dim bg-void/80 flex justify-between items-stretch h-16 shrink-0 z-50 sticky top-0">
         <div class="flex items-center px-6 lg:px-8 border-r border-border-dim h-full">
             <a href="/"
                 class="font-brutal text-2xl font-bold tracking-widest text-stark hover:text-safety transition-colors">JANUS</a>
@@ -30,7 +30,7 @@
 
         <!-- Centered Login Card -->
         <div
-            class="w-full max-w-lg bg-void/90 backdrop-blur-xl border border-border-dim p-8 md:p-12 shadow-2xl relative">
+            class="w-full max-w-lg bg-void/90 border border-border-dim p-8 md:p-12 shadow-2xl relative">
 
             <div class="mb-8 text-center">
                 <h1 class="font-sans text-4xl md:text-5xl font-bold text-stark mb-2 tracking-wide uppercase">
@@ -50,7 +50,7 @@
                 <!-- Username -->
                 <div>
                     <label
-                        class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+                        class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
                         <span>Username or Email</span>
                     </label>
                     <input type="text" id="login-username"
@@ -66,7 +66,7 @@
                 <!-- Password with Biometrics -->
                 <div>
                     <label
-                        class="w-full text-[10px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
+                        class="w-full text-[12px] text-muted font-bold uppercase tracking-widest mb-2 flex justify-between">
                         <span>Password</span>
                         <span id="sys-message" class="text-safety"></span>
                     </label>
@@ -87,13 +87,13 @@
                             </svg>
                         </button>
                     </div>
-                    <p class="text-[9px] text-muted mt-2 uppercase tracking-widest">Type rhythmically to verify your
+                    <p class="text-[11px] text-muted mt-2 uppercase tracking-widest">Type rhythmically to verify your
                         biometric signature.</p>
                 </div>
 
                 <!-- Submit Button -->
                 <button type="submit" id="btn-login"
-                    class="w-full bg-safety text-void font-bold text-[11px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    class="w-full bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     Login
                 </button>
 
@@ -321,7 +321,7 @@
 
                 if (res.status === 200 && data.success) {
                     loginBtn.innerText = "ACCESS GRANTED";
-                    loginBtn.className = "w-full bg-stark text-void font-bold text-[11px] uppercase tracking-widest py-4 mt-2";
+                    loginBtn.className = "w-full bg-stark text-void font-bold text-[12px] uppercase tracking-widest py-4 mt-2";
 
                     // Handle 2FA redirect or normal login redirect
                     setTimeout(() => {
