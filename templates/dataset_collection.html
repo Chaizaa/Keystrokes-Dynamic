@@ -11,7 +11,7 @@
 
     <div class="text-[13px] font-bold uppercase tracking-[0.1em] text-[#ffb066] mb-2">Keystroke Dynamics · Riset</div>
     <h1 class="text-[30px] font-bold text-slate-50 mb-2 font-brutal uppercase tracking-[0.07em]">Pengumpulan Data Ketikan</h1>
-    <p class="text-[13px] text-[#aab2bf] uppercase tracking-[0.08em] mb-6">Yuk bantu kami kumpulin data ketikan buat penelitian!</p>
+    <p class="text-[13px] text-[#aab2bf] uppercase tracking-[0.08em] mb-6">Partisipasi Anda mendukung penelitian autentikasi biometrik keystroke dynamics.</p>
 
     <!-- ─────────────────────────────── STAGE: INTRO ─────────────────────── -->
     <div id="stage-intro" class="ds-stage">
@@ -23,7 +23,7 @@
                 <div class="text-[12px] text-[#8e96a4] uppercase tracking-[0.08em]">Total Sampel</div>
             </div>
             <div class="bg-[rgba(8,11,16,0.9)] border border-white/10 rounded-sm p-3 text-center shadow-[inset_0_0_0_1px_rgba(255,122,42,0.04)]">
-                <div class="text-[26px] font-extrabold text-[#ffb066] leading-none mb-1 font-brutal">&asymp;{{ (total_samples // 60) + 1 }}&ndash;{{ (total_samples // 30) + 1 }}<span class="text-[14px] font-medium text-[#b7bfcd]"> menit</span></div>
+                <div class="text-[26px] font-extrabold text-[#ffb066] leading-none mb-1 font-brutal">&asymp;{{ [1, (total_samples * 5 + 59) // 60] | max }}<span class="text-[14px] font-medium text-[#b7bfcd]"> menit</span></div>
                 <div class="text-[12px] text-[#8e96a4] uppercase tracking-[0.08em]">Estimasi Waktu</div>
             </div>
         </div>
@@ -32,21 +32,19 @@
         <ul class="list-none p-0 m-0">
             <li class="flex gap-2 items-start py-2 text-[14px] text-[#b7bfcd] border-b border-white/10">
                 <span class="text-[16px] text-[#ffb066] mt-0.5 shrink-0">&#x2013;</span>
-                <span>Kamu bakal ngetik kata sandi kamu sebanyak
-                      <strong>{{ total_samples }} kali</strong>. Gampang kok!</span>
+                <span>Anda akan mengetik kata sandi sebanyak <strong>{{ total_samples }} kali</strong>.</span>
             </li>
             <li class="flex gap-2 items-start py-2 text-[14px] text-[#b7bfcd] border-b border-white/10">
                 <span class="text-[16px] text-[#ffb066] mt-0.5 shrink-0">&#x2013;</span>
-                <span>Ketik santai aja, nggak perlu dipaksa cepet atau pelan.</span>
+                <span>Ketik dengan kecepatan alami Anda.</span>
             </li>
             <li class="flex gap-2 items-start py-2 text-[14px] text-[#b7bfcd] border-b border-white/10">
                 <span class="text-[16px] text-[#ffb066] mt-0.5 shrink-0">&#x2013;</span>
-                <span>Yang kita rekam cuma <strong>pola waktu ketikan</strong>-nya,
-                      bukan isi kata sandinya. Privasi kamu aman kok!</span>
+                <span>Hanya pola waktu ketikan yang direkam, bukan isi kata sandi.</span>
             </li>
             <li class="flex gap-2 items-start py-2 text-[14px] text-[#b7bfcd]">
                 <span class="text-[16px] text-[#ffb066] mt-0.5 shrink-0">&#x2013;</span>
-                <span>Bisa dicicil kapan aja. Simpan kode subjekmu buat lanjut nanti.</span>
+                <span>Proses dapat dilanjutkan kapan saja menggunakan kode subjek Anda.</span>
             </li>
         </ul>
 
@@ -65,13 +63,26 @@
         </div>
 
         <div class="mb-[18px]">
-            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-password">Bikin Kata Sandi Kamu</label>
+            {% if fixed_phrase %}
+            <div class="mb-3 p-3 rounded-sm bg-[rgba(255,122,42,0.08)] border border-[#ff7a2a]/40 text-[14px] text-[#ffcf9f]">
+                Untuk penelitian ini, ketik kata sandi berikut <strong>persis</strong> seperti tertulis (huruf besar/kecil, angka, dan simbol harus sama):
+                <div class="mt-2 font-mono text-[18px] font-bold text-[#ffd7bf] tracking-wide select-all" style="text-transform:none">{{ fixed_phrase }}</div>
+            </div>
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-password">Kata Sandi Penelitian</label>
+            <input
+                class="w-full px-3.5 py-3 bg-[rgba(10,13,18,0.95)] border border-white/15 rounded-sm text-[#ffd7bf] text-[15px] font-mono outline-none cursor-not-allowed"
+                type="text"
+                id="ds-password"
+                value="{{ fixed_phrase }}"
+                readonly>
+            {% else %}
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-password">Kata Sandi</label>
             <div class="relative flex items-center">
                 <input
                     class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)] pr-10"
                     type="password"
                     id="ds-password"
-                    placeholder="Ini yang bakal kamu ketik {{ total_samples }} kali"
+                    placeholder="Kata sandi yang akan diketik {{ total_samples }} kali"
                     autocomplete="new-password"
                     maxlength="128">
                 <button type="button" class="absolute right-2.5 flex items-center text-[#8e96a4] hover:text-[#ffb066]" id="ds-pwd-toggle-intro"
@@ -83,7 +94,7 @@
                 </button>
             </div>
             <p class="text-xs text-[#8e96a4] mt-1">
-                Campur huruf besar, kecil, angka, dan simbol biar makin kuat ya!
+                Gunakan kombinasi huruf besar, huruf kecil, angka, dan simbol.
             </p>
             <div class="mt-2" id="ds-pw-strength-intro">
                 <div class="h-1.5 bg-white/10 rounded-md overflow-hidden mb-1">
@@ -91,6 +102,7 @@
                 </div>
                 <div class="text-xs text-[#8e96a4]" id="ds-pw-label-intro">Kekuatan kata sandi: —</div>
             </div>
+            {% endif %}
         </div>
 
         <button id="ds-register-btn" class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-sm text-[14px] font-bold uppercase tracking-[0.08em] border border-[#ff7a2a]/85 bg-[linear-gradient(135deg,#ff7a2a_0%,#e6671d_100%)] text-white hover:opacity-95 transition">
@@ -100,7 +112,7 @@
         <!-- Resume option -->
         <div class="mt-4 text-center">
             <button class="text-[#ffb066] text-[14px] underline underline-offset-4 hover:text-[#ffcf9f]" onclick="document.getElementById('ds-resume-section').classList.toggle('hidden')">
-                Udah punya kode subjek? Lanjut aja →
+                Sudah memiliki kode subjek? Lanjutkan →
             </button>
             <div id="ds-resume-section" class="mt-4 p-4 bg-[rgba(8,11,16,0.9)] border border-white/10 rounded-sm hidden">
                 <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-resume-code">Kode Subjek</label>
@@ -146,19 +158,19 @@
             </div>
             <div class="flex justify-between text-xs text-[#8e96a4]">
                 <span id="ds-progress-label">0 / {{ total_samples }} sampel</span>
-                <span class="text-[#ffb066]">Catat kode subjekmu!</span>
+                <span class="text-[#ffb066]">Simpan kode subjek Anda.</span>
             </div>
         </div>
 
         <!-- Input field -->
         <div class="mb-[18px]">
-            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-input">Ketik Kata Sandi Kamu</label>
+            <label class="block text-[12px] font-bold uppercase tracking-[0.08em] text-[#b7bfcd] mb-1.5" for="ds-input">Ketik Kata Sandi{% if fixed_phrase %}: <span class="font-mono text-[#ffd7bf] tracking-normal" style="text-transform:none">{{ fixed_phrase }}</span>{% endif %}</label>
             <div class="relative flex items-center">
                 <input
                     class="w-full px-3.5 py-3 bg-[linear-gradient(160deg,rgba(10,13,18,0.95),rgba(7,9,13,0.95))] border border-white/15 rounded-sm text-slate-50 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[#ff7a2a]/85 focus:shadow-[0_0_0_1px_rgba(255,122,42,0.35)] pr-10"
                     type="password"
                     id="ds-input"
-                    placeholder="Ketik kata sandinya, terus Enter deh!"
+                    placeholder="Ketik kata sandi, lalu tekan Enter"
                     autocomplete="off"
                     autocorrect="off"
                     autocapitalize="off"
@@ -185,23 +197,23 @@
         </button>
 
         <p class="text-xs text-[#7c8596] text-center mt-4">
-            Jangan ditutup dulu ya, belum selesai!
+            Jangan tutup halaman sebelum proses selesai.
         </p>
     </div>
 
     <!-- ─────────────────────────────── STAGE: DONE ──────────────────────── -->
     <div id="stage-done" class="ds-stage hidden text-center">
-        <h2 class="text-[#ffd7bf] font-brutal uppercase tracking-[0.08em] mb-2">Semua Sampel Selesai!</h2>
+        <h2 class="text-[#ffd7bf] font-brutal uppercase tracking-[0.08em] mb-2">Pengumpulan Selesai</h2>
         <p class="text-[#b7bfcd] text-[15px] mb-5">
-            Makasih banyak udah mau bantu kami!<br>
-            Data ketikanmu udah kami simpan dan bakal jadi bagian dari penelitian ini.
+            Terima kasih atas partisipasi Anda.<br>
+            Data ketikan Anda telah tersimpan untuk keperluan penelitian.
         </p>
         <div class="my-4">
-            <span class="block text-xs text-[#8e96a4] uppercase tracking-[0.08em] mb-1.5">Kode Subjek Kamu</span>
+            <span class="block text-xs text-[#8e96a4] uppercase tracking-[0.08em] mb-1.5">Kode Subjek Anda</span>
             <span id="ds-done-code" class="inline-block bg-[rgba(28,20,14,0.86)] border border-[#ff7a2a]/50 rounded-sm px-3 py-2 font-mono text-[22px] font-bold text-[#ffcf9f] tracking-[2px]"></span>
         </div>
         <p class="text-sm text-[#b7bfcd]">
-            Ada yang mau ditanyain? Kontak peneliti aja dan kasih tau kode subjekmu.
+            Untuk pertanyaan, hubungi peneliti dengan menyertakan kode subjek Anda.
         </p>
     </div>
 

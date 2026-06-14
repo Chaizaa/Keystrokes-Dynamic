@@ -10,7 +10,7 @@ Routes:
 
 from flask import Blueprint, render_template
 
-from app.models.dataset import DATASET_TOTAL_SAMPLES
+from app.models.dataset import DATASET_FIXED_PHRASE, DATASET_TOTAL_SAMPLES
 
 dataset_bp = Blueprint("dataset", __name__)
 
@@ -21,4 +21,5 @@ def collection_page():
     return render_template(
         "dataset_collection.html",
         total_samples=DATASET_TOTAL_SAMPLES,
+        fixed_phrase=DATASET_FIXED_PHRASE,
     )

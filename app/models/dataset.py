@@ -8,10 +8,11 @@ Each subject creates their own password once at registration.
 That password is hashed (pbkdf2:sha256 + salt via werkzeug) and stored in DatasetSubject.password_hash.
 All subsequent sample submissions are verified against that hash.
 
-Total samples per subject: 100
+Total samples per subject: see DATASET_TOTAL_SAMPLES.
 """
 
 import json
+import os
 from datetime import datetime
 
 from . import db
@@ -20,7 +21,14 @@ from . import db
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-DATASET_TOTAL_SAMPLES = 100
+DATASET_TOTAL_SAMPLES = 10
+
+# Experiment mode: when DATASET_FIXED_PHRASE is set (e.g. "Telkom_2019"), every
+# respondent is instructed to type that SAME password instead of inventing one.
+# Required for the FAR/threshold experiment, where all subjects must type an
+# identical string so their keystroke vectors are comparable. Empty = each
+# respondent creates their own password (default collection behaviour).
+DATASET_FIXED_PHRASE = os.environ.get("DATASET_FIXED_PHRASE", "").strip()
 
 # Kept for backward-compat with existing migration files; do not use in new code.
 DATASET_SESSIONS         = 1

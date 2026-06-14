@@ -126,12 +126,12 @@ async function registerSubject() {
     const pwVal     = pwInput   ? pwInput.value : "";
 
     if (!pwVal) {
-        setStatus("Kata sandinya belum diisi nih.", "warning");
+        setStatus("Kata sandi belum diisi.", "warning");
         if (pwInput) pwInput.focus();
         return;
     }
     if (pwVal.length < 6) {
-        setStatus("Kata sandinya minimal 6 karakter ya.", "warning");
+        setStatus("Kata sandi minimal 6 karakter.", "warning");
         if (pwInput) pwInput.focus();
         return;
     }
@@ -147,7 +147,7 @@ async function registerSubject() {
         const data = await res.json();
 
         if (!res.ok || !data.success) {
-            throw new Error(data.error || "Gagal daftar, coba lagi ya");
+            throw new Error(data.error || "Pendaftaran gagal. Silakan coba lagi.");
         }
 
         subjectCode        = data.subject_code;
@@ -172,7 +172,7 @@ async function resumeSession() {
     const btn       = $("ds-resume-btn");
     const code      = codeInput ? codeInput.value.trim().toLowerCase() : "";
 
-    if (!code) { setStatus("Masukkin kode subjeknya dulu dong!", "error"); return; }
+    if (!code) { setStatus("Masukkan kode subjek terlebih dahulu.", "error"); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Memuat…"; }
 
     try {
@@ -180,7 +180,7 @@ async function resumeSession() {
         const data = await res.json();
 
         if (!res.ok || !data.success) {
-            throw new Error(data.error || "Kode subjeknya nggak ketemu nih");
+            throw new Error(data.error || "Kode subjek tidak ditemukan.");
         }
 
         if (data.is_complete) {
@@ -283,7 +283,7 @@ function prepareInput() {
                 backspaceCount = 0;
                 updateStrengthBar("", "ds-pw-fill-capture", "ds-pw-label-capture");
                 setStatus(
-                    `Kebanyakan hapus nih (maks ${MAX_BACKSPACE}x). Ketik ulang dari awal ya!`,
+                    `Terlalu banyak penghapusan (maks ${MAX_BACKSPACE}x). Silakan ketik ulang dari awal.`,
                     "warning"
                 );
                 return;
@@ -316,17 +316,17 @@ async function submitSample() {
 
     // Basic validation
     if (!typed || typed.length === 0) {
-        setStatus("Kata sandinya belum diketik nih!", "warning");
+        setStatus("Kata sandi belum diketik.", "warning");
         return;
     }
     if (events.length < 4) {
-        setStatus("Ketukan keyboard nggak ke-detect. Coba lagi ya?", "warning");
+        setStatus("Ketukan keyboard tidak terdeteksi. Silakan coba lagi.", "warning");
         return;
     }
 
     // Client-side consistency check (only when password is known from this session)
     if (registeredPassword && typed !== registeredPassword) {
-        setStatus("Kata sandinya nggak cocok sama yang tadi didaftarin. Coba ketik lagi ya.", "warning");
+        setStatus("Kata sandi tidak cocok dengan yang didaftarkan. Silakan ketik ulang.", "warning");
         prepareInput();
         return;
     }
@@ -362,7 +362,7 @@ async function submitSample() {
         }
 
         if (!res.ok || !data.success) {
-            throw new Error(data.error || "Gagal nyimpen sampel, coba lagi");
+            throw new Error(data.error || "Gagal menyimpan sampel. Silakan coba lagi.");
         }
 
         // Update state from server response
