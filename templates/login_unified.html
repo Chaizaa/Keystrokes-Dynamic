@@ -91,6 +91,14 @@
                         biometric signature.</p>
                 </div>
 
+                <!-- Forgot password -->
+                <div class="-mt-1 text-right">
+                    <button type="button" id="forgot-pw-link"
+                        class="text-[11px] font-bold text-muted hover:text-safety uppercase tracking-widest transition-colors">
+                        Forgot password?
+                    </button>
+                </div>
+
                 <!-- Submit Button -->
                 <button type="submit" id="btn-login"
                     class="w-full bg-safety text-void font-bold text-[12px] uppercase tracking-widest py-4 hover:bg-opacity-90 transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -100,6 +108,34 @@
             </form>
         </div>
     </main>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotModal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/90" id="forgot-backdrop"></div>
+        <div class="relative bg-surface border border-border-dim p-8 max-w-md w-full shadow-2xl">
+            <h3 class="font-sans text-xl font-bold text-stark tracking-wide mb-2 uppercase">Reset Password</h3>
+            <p class="font-sans text-[13px] text-muted mb-6 leading-relaxed">
+                Enter your account email. If it is registered, a 6-digit reset code will be sent to it.
+            </p>
+            <form id="forgot-form" onsubmit="event.preventDefault();" class="flex flex-col gap-4">
+                <div>
+                    <label for="forgot-email" class="block text-[12px] text-muted font-bold uppercase tracking-widest mb-2">Email</label>
+                    <input type="email" id="forgot-email" autocomplete="email" spellcheck="false" placeholder="you@example.com"
+                        class="w-full tactical-input py-3 px-4 text-xs tracking-wider">
+                </div>
+                <div id="forgot-alert" class="hidden text-[12px] font-bold uppercase tracking-widest px-4 py-3 border"></div>
+                <div class="flex justify-end gap-3 mt-2">
+                    <button type="button" id="forgot-cancel"
+                        class="px-5 py-2 text-muted hover:text-stark text-[12px] font-bold uppercase tracking-widest transition-colors">Cancel</button>
+                    <button type="submit" id="forgot-submit"
+                        class="inline-flex items-center gap-2 px-6 py-2 bg-safety text-void text-[12px] font-bold uppercase tracking-widest hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span id="forgot-spinner" class="hidden w-4 h-4 border-2 border-void/40 border-t-void rounded-full animate-spin" aria-hidden="true"></span>
+                        <span id="forgot-btn-text">Send Code</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
 </div>
 {% endblock %}
@@ -232,7 +268,15 @@
 
         // Keystroke Capture
         pwdInput.addEventListener('keydown', (e) => {
-            if (e.repeat) return; // Prevent Auto-Repeat keys ruining telemetry
+            // Auto-repeat from a held key is OS-generated, not a real keystroke.
+            // Mirror the enrollment recorder: never record it in the telemetry,
+            // AND suppress the repeated *character* so holding "a" yields a
+            // single "a" instead of "aaaa". Editing/navigation keys (Backspace,
+            // arrows, Shift, …) are length > 1 and keep their normal behaviour.
+            if (e.repeat) {
+                if (e.key.length === 1) e.preventDefault();
+                return;
+            }
 
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -343,6 +387,81 @@
                 loginBtn.disabled = false;
             }
         }
+    });
+</script>
+
+<!-- Forgot-password modal logic -->
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal    = document.getElementById('forgotModal');
+        const openBtn  = document.getElementById('forgot-pw-link');
+        const cancel   = document.getElementById('forgot-cancel');
+        const backdrop = document.getElementById('forgot-backdrop');
+        const form     = document.getElementById('forgot-form');
+        const emailEl  = document.getElementById('forgot-email');
+        const submit   = document.getElementById('forgot-submit');
+        const spinner  = document.getElementById('forgot-spinner');
+        const btnText  = document.getElementById('forgot-btn-text');
+        const alertEl  = document.getElementById('forgot-alert');
+        if (!modal || !openBtn) return;
+
+        function showAlert(msg, tone) {
+            alertEl.textContent = msg;
+            alertEl.className = 'text-[12px] font-bold uppercase tracking-widest px-4 py-3 border ' +
+                (tone === 'success' ? 'bg-safety/10 border-safety/40 text-stark' : 'border-safety/40 text-safety');
+        }
+        function open() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Prefill from the login identifier if it looks like an email.
+            const id = (document.getElementById('login-username') || {}).value || '';
+            if (id.includes('@')) emailEl.value = id.trim();
+            setTimeout(() => { try { emailEl.focus(); } catch (e) {} }, 50);
+        }
+        function close() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            alertEl.className = 'hidden';
+        }
+
+        openBtn.addEventListener('click', open);
+        cancel.addEventListener('click', close);
+        backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+        form.addEventListener('submit', async () => {
+            const email = (emailEl.value || '').trim();
+            alertEl.className = 'hidden';
+            if (!email || !email.includes('@')) { showAlert('Enter a valid email', 'error'); return; }
+            submit.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.textContent = 'Sending...';
+            try {
+                const resp = await fetch('/api/send_reset_verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                // The endpoint always responds generically (anti-enumeration);
+                // on any 2xx we proceed to the code-entry page.
+                if (resp.ok) {
+                    showAlert('If that email is registered, a code was sent.', 'success');
+                    setTimeout(() => { window.location.href = '/reset/verify-code'; }, 900);
+                } else if (resp.status === 429) {
+                    showAlert('Too many requests. Try again shortly.', 'error');
+                    submit.disabled = false;
+                } else {
+                    showAlert('Something went wrong. Try again.', 'error');
+                    submit.disabled = false;
+                }
+            } catch (e) {
+                showAlert('Network error. Try again.', 'error');
+                submit.disabled = false;
+            } finally {
+                spinner.classList.add('hidden');
+                btnText.textContent = 'Send Code';
+            }
+        });
     });
 </script>
 {% endblock %}

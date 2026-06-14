@@ -64,6 +64,12 @@ class Config:
     # Email verification expiry (hours)
     EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get("EMAIL_VERIFICATION_EXPIRY_HOURS", "1"))
 
+    # Password-reset code: short-lived + brute-force-limited. A 6-digit code has
+    # only 1M combinations, so we keep the window tight (default 10 min) and lock
+    # the code after a few wrong tries instead of relying on per-IP limits alone.
+    PASSWORD_RESET_CODE_EXPIRY_MINUTES = int(os.environ.get("PASSWORD_RESET_CODE_EXPIRY_MINUTES", "10"))
+    PASSWORD_RESET_MAX_ATTEMPTS = int(os.environ.get("PASSWORD_RESET_MAX_ATTEMPTS", "5"))
+
     # Rate Limiting
     RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "True") == "True"
     RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "100 per hour")

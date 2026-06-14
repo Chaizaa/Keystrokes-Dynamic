@@ -5,11 +5,12 @@ Email verification, password-reset verification, and resend endpoints.
 from __future__ import annotations
 
 import traceback
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 
-from flask import current_app, jsonify, request
+from flask import current_app, jsonify, request, session
 from sqlalchemy import select
 
 from app.models import AdminAudit, User, db
@@ -31,6 +32,39 @@ def _fetch_user(username: str) -> Optional[User]:
     if not username:
         return None
     return db.session.execute(select(User).where(User.username == username)).scalars().first()
+
+
+def _fetch_user_by_email(email: str) -> Optional[User]:
+    if not email:
+        return None
+    return db.session.execute(
+        select(User).where(User.email == email.strip().lower())
+    ).scalars().first()
+
+
+# Session keys binding an in-flight reset to a specific account *server-side*.
+# Identity for verify_reset / reset_password is read from here, never from the
+# client request body — so the code/token can only ever be checked against the
+# account that actually requested the reset, and the username/email never has to
+# travel in a URL or be guessable by the caller.
+_RESET_UID_KEY = "pwreset_uid"
+_RESET_TOKEN_KEY = "pwreset_token"
+
+
+def _resolve_reset_user() -> Optional[User]:
+    """Return the account bound to the current reset session, or None."""
+    uid = session.get(_RESET_UID_KEY)
+    if not uid:
+        return None
+    try:
+        return db.session.get(User, uuid.UUID(str(uid)))
+    except (ValueError, TypeError):
+        return None
+
+
+def _clear_reset_session():
+    session.pop(_RESET_UID_KEY, None)
+    session.pop(_RESET_TOKEN_KEY, None)
 
 
 # Server-side cooldown between consecutive code issues to the same user.
@@ -213,87 +247,133 @@ def send_verification():
 @api_bp.route("/send_reset_verification", methods=["POST"])
 @_limiter.limit("3 per minute;20 per hour")
 def send_reset_verification():
-    """Send a password-reset code to user email.
+    """Initiate a password reset.
 
-    Per-user cooldown enforced server-side via `password_reset_sent_at` so the
-    endpoint cannot be spammed even when the per-IP Flask-Limiter is bypassed
-    (rotated IPs, disabled limiter, etc.).
+    Accepts ``{email}`` (public forgot-password on the login page) or
+    ``{username}`` (authenticated dashboard reset). The response is ALWAYS the
+    same generic success message: the endpoint never reveals whether an account
+    exists, closing the user/email-enumeration vector. When a real, fully
+    registered account is matched we bind the reset to it server-side via the
+    session (``pwreset_uid``); the identity is never echoed back to the client.
+
+    Per-user cooldown via ``password_reset_sent_at`` still throttles real sends
+    even if the per-IP Flask-Limiter is bypassed (rotated IPs / disabled limiter).
     """
     data = request.json or {}
-    username = data.get("username")
-    if not username:
-        return error_response("Username diperlukan")
+    email = (data.get("email") or "").strip().lower()
+    username = (data.get("username") or "").strip()
 
-    user = _fetch_user(username)
-    if not user:
-        return error_response("User tidak ditemukan", status_code=404)
-    if not user.email:
-        return error_response("Email tidak terdaftar di akun ini")
+    generic_ok = jsonify({
+        "success": True,
+        "message": "Jika akun terkait terdaftar, kode reset telah dikirim ke email-nya.",
+    })
 
-    retry_after = _seconds_until_reissue_allowed(user, purpose="user_reset")
-    if retry_after > 0:
-        return _cooldown_response(retry_after)
+    user = None
+    if email:
+        user = _fetch_user_by_email(email) if is_valid_email(email) else None
+    elif username:
+        user = _fetch_user(username)
+    else:
+        # No identity in the body (e.g. "Resend" on the verify-code page during
+        # the public flow) — fall back to the session-bound account.
+        user = _resolve_reset_user()
 
-    if _issue_and_send_code(user, purpose="user_reset"):
-        return jsonify({"success": True, "message": "Email verifikasi reset terkirim"}), 200
-    return error_response("Gagal mengirim email", status_code=500)
+    # Only act for a real, fully-registered account that has an email on file.
+    if user and user.email and getattr(user, "password_hash", None):
+        retry_after = _seconds_until_reissue_allowed(user, purpose="user_reset")
+        if retry_after <= 0:
+            user.password_reset_attempts = 0  # fresh code => reset the lockout counter
+            _issue_and_send_code(user, purpose="user_reset")  # commits internally
+        # Bind this reset session to the account regardless of cooldown, so a
+        # user who already has a valid code can still proceed to verify it.
+        session[_RESET_UID_KEY] = str(user.id)
+        session.pop(_RESET_TOKEN_KEY, None)
+
+    return generic_ok, 200
 
 
 @api_bp.route("/verify_reset", methods=["POST"])
 @_limiter.limit("10 per minute")
 def verify_reset():
-    """Verify reset code and return a signed token for the public reset flow."""
+    """Verify the 6-digit reset code for the session-bound account.
+
+    Identity comes from the server session (set during initiation), not the
+    request, so a code can only ever be tested against the account that asked
+    for it. The code is single-use (cleared on success) and brute-force-limited
+    (cleared after PASSWORD_RESET_MAX_ATTEMPTS wrong tries), with a short
+    PASSWORD_RESET_CODE_EXPIRY_MINUTES window.
+    """
     data = request.json or {}
-    username = data.get("username")
-    token = str(data.get("token", "")).strip()
-    if not username or not token:
-        return error_response("Data tidak lengkap")
+    code = str(data.get("token", "")).strip()
 
-    user = _fetch_user(username)
-    if not user:
-        return error_response("User tidak ditemukan", status_code=404)
+    user = _resolve_reset_user()
+    if not user or not code:
+        return error_response("Sesi reset tidak valid atau telah berakhir", reason="invalid_session")
 
+    if not user.password_reset_code_hash:
+        return error_response("Kode reset tidak berlaku. Minta kode baru.", reason="invalid_token")
+
+    expiry_seconds = int(current_app.config.get("PASSWORD_RESET_CODE_EXPIRY_MINUTES", 10)) * 60
     ok, reason = verification_service.verify_token(
-        token, user.email, user.password_reset_sent_at, 
-        code_hash=user.password_reset_code_hash
+        code, user.email, user.password_reset_sent_at,
+        code_hash=user.password_reset_code_hash, expiry_seconds=expiry_seconds,
     )
 
     if not ok:
+        max_attempts = int(current_app.config.get("PASSWORD_RESET_MAX_ATTEMPTS", 5))
+        user.password_reset_attempts = (user.password_reset_attempts or 0) + 1
+        locked = user.password_reset_attempts >= max_attempts
+        if locked:
+            # Invalidate the code entirely so it can't be brute-forced further.
+            user.password_reset_code_hash = None
+            user.password_reset_sent_at = None
+        db.session.commit()
+        if locked:
+            return error_response("Terlalu banyak percobaan. Minta kode baru.", reason="locked")
         return error_response(
-            "Token tidak valid" if reason == "invalid" else "Token kadaluarsa",
-            reason=f"{reason}_token"
+            "Kode tidak valid" if reason == "invalid" else "Kode kedaluwarsa",
+            reason=f"{reason}_token",
         )
 
-    # Issue a signed token for the next step (keystroke-based reset)
+    # Success: consume the code (single-use) and reset the lockout counter. We
+    # keep password_reset_sent_at so the signed token below stays bound to it;
+    # both are cleared once the reset actually completes.
+    user.password_reset_code_hash = None
+    user.password_reset_attempts = 0
+    db.session.commit()
+
     reset_token = verification_service.generate_signed_token(
         user.email, salt="password-reset", sent_at=user.password_reset_sent_at
     )
+    session[_RESET_TOKEN_KEY] = reset_token
     return jsonify({"success": True, "reset_token": reset_token}), 200
 
 
 @api_bp.route("/reset_password", methods=["POST"])
-@_limiter.limit("5 per minute")
+@_limiter.limit("20 per minute")
 def reset_password_public():
-    """Final step of password reset: verify signed token + save biometric sample."""
+    """Final step: verify the session-bound signed token + save one biometric
+    sample under the new password. Identity and token are read from the session,
+    never the request body. On completion the reset credentials are wiped and
+    ``session_token_version`` is bumped, killing every pre-existing session.
+    """
     data = request.json or {}
-    username = data.get("username")
-    reset_token = data.get("reset_token")
     events = data.get("events")
     sample_count = int(data.get("sample_count") or 0)
 
-    if not username or not reset_token or not events:
-        return error_response("Data tidak lengkap")
+    user = _resolve_reset_user()
+    reset_token = session.get(_RESET_TOKEN_KEY)
+    if not user or not reset_token or not events:
+        return error_response("Sesi reset tidak valid atau telah berakhir", reason="invalid_session")
 
-    user = _fetch_user(username)
-    if not user:
-        return error_response("User tidak ditemukan", status_code=404)
-
-    # 1. Validate signed token
+    # 1. Validate the signed token (bound to email + password_reset_sent_at).
     ok, reason = verification_service.verify_signed_token(
         reset_token, user.email, user.password_reset_sent_at, salt="password-reset"
     )
     if not ok:
         return error_response("Token reset tidak valid", reason=f"{reason}_token")
+
+    username = user.username
 
     # 2. Process keystroke events
     from .helpers import process_events
@@ -303,14 +383,14 @@ def reset_password_public():
 
     features = result["features"]
     real_pass = result.get("real_password_string")
-    
+
     if not real_pass:
         return error_response("Password master tidak ditemukan dalam sampel")
 
     # 3. Clear old enrollment + trained model on the FIRST sample of the reset
-    # flow so the dashboard count restarts from 0 and the next login retrains
-    # against the new keystroke rhythm (the old model fingerprinted the
-    # previous password — keeping it would lock the user out).
+    # flow so the count restarts from 0 and the next login retrains against the
+    # new keystroke rhythm (the old model fingerprinted the previous password —
+    # keeping it would lock the user out).
     if sample_count == 1:
         from app.models import UsersVector, UserMLModel
         from sqlalchemy import delete
@@ -320,11 +400,11 @@ def reset_password_public():
 
     # 4. Update password & save sample (consolidated helper)
     user.set_password(real_pass)
-    
+
     # Enrichment for audit
     strength = calculate_password_strength(real_pass)
     features["password_strength"] = strength["strength"]
-    
+
     _, save_err = save_biometric_sample(username, user.id, features, result.get("password_hash"))
     if save_err:
         return save_err
@@ -332,8 +412,19 @@ def reset_password_public():
     db.session.commit()
 
     new_status = get_biometric_service().get_enrollment_status(username)
-    # Mirror the register flow: the UI re-enrolls 10 samples (matches MIN_ENROLLMENT_SAMPLES)
     target = int(current_app.config.get("RECOMMENDED_SAMPLES", 10))
+
+    # 5. On completion: invalidate the reset credentials so the code/token can
+    # never be replayed, and bump session_token_version to evict every existing
+    # session (defense against a stale/stolen session surviving the reset).
+    if new_status["ready_for_login"]:
+        user.password_reset_code_hash = None
+        user.password_reset_sent_at = None
+        user.password_reset_attempts = 0
+        user.session_token_version = (user.session_token_version or 0) + 1
+        db.session.commit()
+        _clear_reset_session()
+
     return jsonify({
         "status": "success",
         "message": "Sample reset tersimpan",

@@ -31,29 +31,35 @@ def register_page():
 
 @auth_bp.route("/reset/verify-code")
 def reset_verify_code_page():
-    """User self-initiated password-reset: enter the 6-digit code sent to their email.
-    This is a dedicated page separated from /verify (registration) so the two flows
-    never share endpoints or query-param conventions.
-    If the user arrives here while already logged in (e.g. they initiated the reset from
-    the dashboard), we log them out silently so the rest of the reset flow is clean.
+    """Enter the 6-digit code sent to the account's email.
+
+    Identity is bound server-side in the session (``pwreset_uid``) by the
+    initiation endpoint — never via a URL/query param — so the username/email
+    never travels in the address bar. If there is no active reset session, send
+    the user back to login rather than rendering a dead form.
+
+    A logged-in user (dashboard-initiated reset) stays authenticated throughout:
+    if they abandon the flow they remain logged in (no needless re-auth), and a
+    *completed* reset logs every session out via the session_token_version bump
+    in /api/reset_password. The reset binding lives independently of the auth
+    session, so the two never collide.
     """
-    if current_user.is_authenticated:
-        logout_user()
-        session.clear()
-    username = request.args.get("username", "")
-    return render_template("reset_verify_code.html", username=username)
+    if not session.get("pwreset_uid"):
+        return redirect(url_for("auth.login_page"))
+    return render_template("reset_verify_code.html")
 
 
 @auth_bp.route("/reset/complete")
 def reset_complete_page():
-    """Reset completion page - serve the enrollment UI for setting a new master password.
-    This route exists so verification can redirect to a dedicated URL rather than re-using
-    `/register`. It renders the same enrollment UI but is a distinct page/URL allowing
-    clearer UX and future template divergence if desired.
+    """Set a new master password and re-enroll biometrics.
+
+    Requires a verified reset session (both the account binding and the signed
+    token issued by /api/verify_reset); otherwise redirect to login. As above, a
+    logged-in user stays logged in until the reset actually completes.
     """
-    # Allow logged-in users to access this page during a reset flow
-    username = request.args.get("username", "")
-    return render_template("reset_complete.html", username=username)
+    if not (session.get("pwreset_uid") and session.get("pwreset_token")):
+        return redirect(url_for("auth.login_page"))
+    return render_template("reset_complete.html")
 
 
 @auth_bp.route("/2fa/verify")

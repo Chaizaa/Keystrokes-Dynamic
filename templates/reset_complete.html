@@ -23,10 +23,6 @@
         <p id="rcSubtitle" class="font-sans text-sm text-muted">Set a new master password and re-enroll your biometrics.</p>
       </div>
 
-      <div class="hidden">
-        <input id="rcUsername" type="text" readonly>
-      </div>
-
       <form class="flex flex-col gap-5" onsubmit="event.preventDefault();">
 
         <!-- New master password -->
@@ -99,22 +95,18 @@
 {% block extra_js %}
 <script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', () => {
-  const TARGET_SAMPLES = 10;
+  // Re-enrollment target is driven by the server config (RECOMMENDED_SAMPLES),
+  // so reset and registration stay in lock-step — no hardcoded divergence.
+  const TARGET_SAMPLES = {{ RECOMMENDED_SAMPLES }};
 
   document.getElementById('targetCount').textContent = '/' + TARGET_SAMPLES;
 
-  // Elements
-  const params = new URLSearchParams(window.location.search);
+  // Elements (identity + signed token live in the server session, not here)
   const countDisplay = document.getElementById('countDisplay');
   const progressMsg  = document.getElementById('motivationalMsg');
   const typingInput  = document.getElementById('typingField');
   const mainPassInput = document.getElementById('rcPassword');
-  const usernameEl   = document.getElementById('rcUsername');
   const statusEl     = document.getElementById('status');
-
-  // Prefill username
-  const prefillUsername = params.get('username') || "{{ username|default('') }}";
-  if (prefillUsername) usernameEl.value = prefillUsername;
 
   // Password visibility toggles
   function bindToggle(btnId, inputId) {
@@ -217,12 +209,9 @@ document.addEventListener('DOMContentLoaded', () => {
     flashStatus('Saving sample...', '#FF4500');
 
     try {
-      const resetToken = params.get('reset_token') || '';
       const resp = await fetch('/api/reset_password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: usernameEl.value.trim(),
-          reset_token: resetToken,
           events: rawEvents,
           sample_count: sampleCount + 1,
         }),
@@ -231,11 +220,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const ok = result.status === 'success' || result.success === true;
 
       if (ok) {
-        sampleCount++;
+        // Trust the server's count/completion so the UI can't drift from the
+        // backend's ready_for_login threshold.
+        const prog = result.progress || {};
+        sampleCount = (prog.current != null) ? prog.current : sampleCount + 1;
         countDisplay.textContent = sampleCount;
-        const pct = Math.min(100, (sampleCount / TARGET_SAMPLES) * 100);
-        progressMsg.textContent = sampleCount < TARGET_SAMPLES
-          ? `${sampleCount}/${TARGET_SAMPLES} samples — ${TARGET_SAMPLES - sampleCount} remaining`
+        const complete = prog.complete === true || sampleCount >= TARGET_SAMPLES;
+        progressMsg.textContent = !complete
+          ? `${sampleCount}/${TARGET_SAMPLES} samples — ${Math.max(0, TARGET_SAMPLES - sampleCount)} remaining`
           : 'Complete!';
         typingInput.value = '';
         rawEvents = [];
@@ -243,12 +235,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resetRhythm();
         flashStatus('Sample saved', '#FF4500');
 
-        if (sampleCount >= TARGET_SAMPLES) {
+        if (complete) {
           document.getElementById('enrollmentSection').classList.add('hidden');
           document.getElementById('finishSection').classList.remove('hidden');
-          setTimeout(() => {
-            window.location.href = `/login?username=${encodeURIComponent(usernameEl.value.trim())}&reset=1`;
-          }, 1500);
+          setTimeout(() => { window.location.href = '/login?reset=1'; }, 1500);
           return;
         }
       } else if (resp.status === 429) {

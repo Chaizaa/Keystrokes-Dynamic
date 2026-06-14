@@ -867,6 +867,10 @@ input::placeholder {
   margin-bottom: 1.5rem;
 }
 
+.-mt-1 {
+  margin-top: -0.25rem;
+}
+
 .mb-1 {
   margin-bottom: 0.25rem;
 }
@@ -1626,6 +1630,11 @@ input::placeholder {
   padding-right: 1rem;
 }
 
+.px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
 .px-6 {
   padding-left: 1.5rem;
   padding-right: 1.5rem;
@@ -2104,10 +2113,6 @@ input::placeholder {
 
 .opacity-60 {
   opacity: 0.6;
-}
-
-.opacity-70 {
-  opacity: 0.7;
 }
 
 .opacity-80 {

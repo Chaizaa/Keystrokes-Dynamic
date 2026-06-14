@@ -53,6 +53,14 @@ class User(UserMixin, db.Model):
     # Used by both admin-initiated reset (signed-URL token) and user-initiated reset (6-digit code).
     password_reset_sent_at = db.Column(db.DateTime, nullable=True)
     password_reset_code_hash = db.Column(db.String(255), nullable=True)
+    # Consecutive failed reset-code attempts; the code is invalidated once this
+    # exceeds PASSWORD_RESET_MAX_ATTEMPTS so a 6-digit code can't be brute-forced.
+    password_reset_attempts = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+
+    # Session invalidation: bumped on password reset so every pre-existing
+    # session is rejected by the user_loader (defends against ATO via a stale
+    # or stolen session surviving a reset). New logins snapshot this value.
+    session_token_version = db.Column(db.Integer, default=0, nullable=False, server_default="0")
 
     # Two-Factor Authentication fields
     two_factor_enabled = db.Column(db.Boolean, default=False, nullable=False)

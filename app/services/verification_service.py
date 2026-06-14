@@ -40,18 +40,22 @@ class VerificationService:
         return serializer.dumps(payload)
 
     def verify_token(
-        self, 
-        token: str, 
-        email: str, 
-        expected_sent_at: Optional[datetime], 
-        code_hash: Optional[str] = None, 
-        salt: str = "email-verify"
+        self,
+        token: str,
+        email: str,
+        expected_sent_at: Optional[datetime],
+        code_hash: Optional[str] = None,
+        salt: str = "email-verify",
+        expiry_seconds: Optional[int] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Verify a token (numeric code or signed token).
-        
+
         Returns:
             (True, None) if valid.
             (False, reason) if invalid or expired.
+
+        ``expiry_seconds`` overrides the default email-verification window (used
+        by the password-reset flow to enforce a much shorter lifetime).
         """
         if not token or not email or not expected_sent_at:
             return False, "invalid"
@@ -62,25 +66,28 @@ class VerificationService:
                 return False, "invalid"
             if not check_password_hash(code_hash, token):
                 return False, "invalid"
-            
-            if self._is_expired(expected_sent_at):
+
+            if self._is_expired(expected_sent_at, expiry_seconds):
                 return False, "expired"
             return True, None
 
         # 2. Signed Token Check
-        return self.verify_signed_token(token, email, expected_sent_at, salt=salt)
+        return self.verify_signed_token(
+            token, email, expected_sent_at, salt=salt, expiry_seconds=expiry_seconds
+        )
 
     def verify_signed_token(
-        self, 
-        token: str, 
-        email: str, 
-        expected_sent_at: datetime, 
-        salt: str = "email-verify"
+        self,
+        token: str,
+        email: str,
+        expected_sent_at: datetime,
+        salt: str = "email-verify",
+        expiry_seconds: Optional[int] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Strictly verify a signed token."""
         secret = current_app.config.get("SECRET_KEY")
         serializer = URLSafeSerializer(secret, salt=salt)
-        
+
         try:
             payload = serializer.loads(token)
         except BadSignature:
@@ -100,21 +107,29 @@ class VerificationService:
         # Compare timestamps (allow 60s tolerance for DB precision/skew)
         expected_utc = expected_sent_at.replace(tzinfo=timezone.utc)
         delta = abs(expected_utc.timestamp() - token_dt.timestamp())
-        
+
         if delta > 60:
             logger.debug(f"Token timestamp mismatch: delta={delta}s")
             return False, "invalid"
 
-        if self._is_expired(expected_sent_at):
+        if self._is_expired(expected_sent_at, expiry_seconds):
             return False, "expired"
 
         return True, None
 
     @staticmethod
-    def _is_expired(sent_at: datetime) -> bool:
-        """Check if the timestamp has exceeded the configured expiry hours."""
-        expiry_hours = current_app.config.get("EMAIL_VERIFICATION_EXPIRY_HOURS", 1)
+    def _is_expired(sent_at: datetime, expiry_seconds: Optional[int] = None) -> bool:
+        """Check whether ``sent_at`` is older than the allowed window.
+
+        Defaults to EMAIL_VERIFICATION_EXPIRY_HOURS; callers may pass an explicit
+        ``expiry_seconds`` (e.g. the short password-reset window).
+        """
         sent_utc = sent_at.replace(tzinfo=timezone.utc) if sent_at.tzinfo is None else sent_at
-        return datetime.now(timezone.utc) > (sent_utc + timedelta(hours=int(expiry_hours)))
+        if expiry_seconds is None:
+            expiry_hours = current_app.config.get("EMAIL_VERIFICATION_EXPIRY_HOURS", 1)
+            window = timedelta(hours=int(expiry_hours))
+        else:
+            window = timedelta(seconds=int(expiry_seconds))
+        return datetime.now(timezone.utc) > (sent_utc + window)
 
 verification_service = VerificationService()

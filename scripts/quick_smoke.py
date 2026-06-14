@@ -77,13 +77,19 @@ def main() -> int:
         "/login",
         "/register",
         "/dataset",
-        "/reset/verify-code?username=smoke_user",
         "/verify?username=smoke_user",
         "/health/live",
         "/health/ready",
     ):
         resp = client.get(path, follow_redirects=False)
         assert_status(resp, 200, f"GET {path}")
+
+    # The reset pages now require an active server-side reset session; without
+    # one they redirect to login (no dead form, no identity in the URL).
+    resp = client.get("/reset/verify-code", follow_redirects=False)
+    assert_status(resp, 302, "GET /reset/verify-code (no reset session)")
+    resp = client.get("/reset/complete", follow_redirects=False)
+    assert_status(resp, 302, "GET /reset/complete (no reset session)")
 
     # Anonymous access to protected dashboard should redirect to login
     for path in ("/home", "/dashboard"):
@@ -123,8 +129,15 @@ def main() -> int:
         f"POST /api/login returned 500 (body={login_resp.get_data(as_text=True)})",
     )
 
+    # send_reset_verification is intentionally anti-enumeration: it ALWAYS
+    # returns a generic 200 success, never revealing whether the email/username
+    # exists (and an empty body simply does nothing).
     resp = client.post("/api/send_reset_verification", json={})
-    assert_status(resp, 400, "POST /api/send_reset_verification (missing payload)")
+    assert_status(resp, 200, "POST /api/send_reset_verification (generic)")
+    ensure(
+        (resp.get_json() or {}).get("success") is True,
+        "send_reset_verification should return generic success",
+    )
 
     resp = client.post("/api/verify_reset", json={})
     assert_status(resp, 400, "POST /api/verify_reset (missing payload)")

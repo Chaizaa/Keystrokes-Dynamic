@@ -150,6 +150,10 @@ class AuthService:
             login_user(user, remember=remember)
             session["username"] = user.username
             session["user_id"] = user.id
+            # Snapshot the session-invalidation version. A password reset bumps
+            # User.session_token_version; the user_loader rejects any session
+            # whose snapshot no longer matches, so a reset kills stale sessions.
+            session["stv"] = user.session_token_version
             return True
         except Exception as e:
             print(f"[ERROR] login_user_session: {e}")

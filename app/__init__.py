@@ -221,13 +221,24 @@ def create_app(config_name="development"):
 
     @login_manager.user_loader
     def load_user(user_id):
+        from flask import session
         from app.models import User
         if isinstance(user_id, str):
             try:
                 user_id = uuid.UUID(user_id)
             except ValueError:
                 return None
-        return db.session.get(User, user_id)
+        user = db.session.get(User, user_id)
+        if user is None:
+            return None
+        # Reject sessions issued before the user's session_token_version was
+        # bumped (e.g. by a password reset). Sessions without a snapshot (legacy
+        # cookies predating this field) are left intact so we don't mass-logout
+        # on deploy; new logins always carry the snapshot.
+        stv = session.get("stv")
+        if stv is not None and stv != user.session_token_version:
+            return None
+        return user
 
     # CSRF Protection (exempt API routes)
     csrf.init_app(app)
