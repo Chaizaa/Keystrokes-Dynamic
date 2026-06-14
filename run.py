@@ -63,7 +63,7 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
 
     # Get port from environment or default to 5000
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 5001))
 
     # Run application
     app.run(host=host, port=port, debug=app.config.get("DEBUG", False))
