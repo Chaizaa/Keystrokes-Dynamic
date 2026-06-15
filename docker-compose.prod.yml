@@ -1,13 +1,39 @@
-# Production overlay: puts a Caddy HTTPS reverse proxy in front of the app.
+# Production overlay: self-contained Postgres + Caddy HTTPS reverse proxy.
 #
 # On the VPS, run:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# Caddy listens on 80/443 and auto-provisions a Let's Encrypt certificate for
-# the domain in ./Caddyfile, forwarding to the app over the internal compose
-# network (app:5000). Keep the host firewall open ONLY on 22/80/443 — the app's
-# own 5000 port must not be exposed publicly (Caddy reaches it internally).
+# - db    : Postgres for the app (data persists in the pg_data volume; survives
+#           restarts/reboots, independent of any laptop).
+# - caddy : listens on 80/443, auto-provisions a Let's Encrypt cert for the
+#           domain in ./Caddyfile, forwards to the app on the internal network.
+#
+# Required in .env (see README): POSTGRES_PASSWORD, and
+#   DATABASE_TYPE=postgresql
+#   DATABASE_URL=postgresql://identitype:<POSTGRES_PASSWORD>@db:5432/identitype
+#
+# Keep the host firewall open ONLY on 22/80/443.
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-identitype}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-identitype}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-identitype} -d ${POSTGRES_DB:-identitype}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    depends_on:
+      db:
+        condition: service_healthy
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -22,5 +48,6 @@ services:
       - caddy_config:/config
 
 volumes:
+  pg_data:
   caddy_data:
   caddy_config:
