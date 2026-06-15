@@ -1,30 +1,36 @@
-"""Keystroke-dynamics threshold evaluation for the thesis — ALL 3 backends.
+"""Keystroke-dynamics threshold evaluation for the thesis.
 
-Computes FAR / FRR / EER and the optimal threshold (tau*) for each backend
-(statistical, rf, svm), faithfully replicating the production scorers, using a
-leakage-free protocol:
+READ-ONLY analysis tool. It never modifies the app, its models, or the database
+— it only reads collected samples and computes metrics. Running it changes
+nothing about the live system.
+
+It mirrors how the PRODUCTION system actually decides a threshold for each
+backend:
 
   statistical (template distance):
-      genuine  -> leave-one-out within each subject
-      impostor -> every other subject's reps vs the subject's templates
+      A single GLOBAL threshold (production uses a fixed 0.70). This tool sweeps
+      every threshold and reports the optimal one (EER + min-DCF) so the global
+      number can be chosen by calculation instead of guessed.
+      Protocol: leave-one-out genuine + cross-subject impostor.
 
-  rf / svm (two-class target-vs-rest, exactly like the app):
-      genuine  -> 2-fold within each subject (held-out reps never in training)
-      impostor -> leave-one-SUBJECT-out (the test impostor is removed from the
-                  negatives, so it is never seen in training)
+  rf / svm (two-class target-vs-rest):
+      Production computes a PER-USER threshold during training (EER on a
+      validation split) and stores it per user. This tool REPLICATES that exact
+      training procedure offline (60/20/20 stratified split, random_state=42,
+      same model params, EER threshold from the validation ROC) for each
+      subject, and reports each subject's threshold + held-out test EER, plus the
+      aggregate. No models are written to the DB.
 
 Usage
 -----
-Self-test on synthetic data (run right now, no DB):
+Self-test on synthetic data (no DB):
     venv/Scripts/python.exe scripts/eval_threshold.py --synthetic 10 15
 
 Real data collected via /dataset:
     PYTHONPATH=. venv/Scripts/python.exe scripts/eval_threshold.py --source dataset
 
-Real data from account enrollment:
-    PYTHONPATH=. venv/Scripts/python.exe scripts/eval_threshold.py --source users
-
-Outputs a per-backend summary + threshold_eval_<backend>.csv (tau,FAR,FRR).
+Dump the REAL per-user thresholds/EER already trained in the DB (read-only):
+    PYTHONPATH=. venv/Scripts/python.exe scripts/eval_threshold.py --dump-trained
 """
 from __future__ import annotations
 
@@ -35,7 +41,7 @@ import statistics
 
 import numpy as np
 
-# 27 features used by the rf/svm backends (must match base_model_service.FEATURE_COLUMNS)
+# 27 features used by the rf/svm backends (mirrors base_model_service.FEATURE_COLUMNS)
 FEATURE_COLUMNS = [
     "H_mean", "H_std", "H_min", "H_max", "H_cv",
     "DD_mean", "DD_std", "DD_min", "DD_max", "DD_cv",
@@ -101,6 +107,7 @@ def score_statistical(sample, templates):
 
 
 def evaluate_statistical(subjects):
+    """LOO genuine + cross-subject impostor -> (genuine_scores, impostor_scores)."""
     genuine, impostor = [], []
     subs = list(subjects)
     for s in subs:
@@ -122,7 +129,7 @@ def evaluate_statistical(subjects):
 
 
 # ===========================================================================
-# RF / SVM scorers — replicate the app's two-class target-vs-rest models
+# RF / SVM — replicate the production PER-USER training + threshold exactly
 # ===========================================================================
 def make_svm():
     from sklearn.pipeline import Pipeline
@@ -130,7 +137,8 @@ def make_svm():
     from sklearn.svm import SVC
     return Pipeline([
         ("scaler", StandardScaler()),
-        ("svc", SVC(kernel="rbf", C=10.0, gamma="scale", probability=True, random_state=42)),
+        ("svc", SVC(kernel="rbf", C=10.0, gamma="scale", class_weight="balanced",
+                    probability=True, random_state=42)),
     ])
 
 
@@ -142,43 +150,46 @@ def make_rf():
     )
 
 
-def _fit_score(make_model, pos, neg, test):
-    """Train target(1)-vs-rest(0) and return P(target) for each test row."""
-    X = np.vstack([pos, neg])
-    y = np.r_[np.ones(len(pos)), np.zeros(len(neg))]
-    model = make_model()
-    model.fit(X, y)
-    proba = model.predict_proba(test)
-    idx = list(model.classes_).index(1)
-    return proba[:, idx]
+def _eer_threshold(y_true, probs):
+    """(eer, threshold) at the ROC equal-error point — copy of production."""
+    from sklearn.metrics import roc_curve
+    fpr, tpr, thr = roc_curve(y_true, probs)
+    fnr = 1.0 - tpr
+    idx = int(np.argmin(np.abs(fpr - fnr)))
+    return float((fpr[idx] + fnr[idx]) / 2.0), float(thr[idx])
 
 
-def evaluate_classifier(subjects, make_model):
+def evaluate_classifier_peruser(subjects, make_model):
+    """For each subject, replicate production training and return its per-user
+    threshold (from val EER) and held-out test EER. Returns list of dicts."""
+    from sklearn.model_selection import train_test_split
     feats = {s: np.array([smp["featvec"] for smp in reps], dtype=float)
              for s, reps in subjects.items()}
     subs = list(subjects)
-    genuine, impostor = [], []
+    out, skipped = [], 0
     for u in subs:
-        Xu = feats[u]
-        nu = len(Xu)
-        others = [o for o in subs if o != u]
-        neg_all = np.vstack([feats[o] for o in others])
-        # genuine: 2-fold within u (held-out reps never in positives/negatives)
-        half = nu // 2
-        if half >= 1:
-            for tr, te in ((slice(0, half), slice(half, nu)), (slice(half, nu), slice(0, half))):
-                pos_tr, te_x = Xu[tr], Xu[te]
-                if len(pos_tr) and len(te_x):
-                    genuine.extend(_fit_score(make_model, pos_tr, neg_all, te_x).tolist())
-        # impostor: leave-one-subject-out (test impostor removed from negatives)
-        for v in others:
-            neg = np.vstack([feats[o] for o in others if o != v])
-            impostor.extend(_fit_score(make_model, Xu, neg, feats[v]).tolist())
-    return np.array(genuine), np.array(impostor)
+        Xpos = feats[u]
+        Xneg = np.vstack([feats[o] for o in subs if o != u])
+        X_all = np.vstack([Xpos, Xneg])
+        y_all = np.r_[np.ones(len(Xpos), int), np.zeros(len(Xneg), int)]
+        try:
+            X_tr, X_tmp, y_tr, y_tmp = train_test_split(
+                X_all, y_all, test_size=0.4, stratify=y_all, random_state=42)
+            X_val, X_te, y_val, y_te = train_test_split(
+                X_tmp, y_tmp, test_size=0.5, stratify=y_tmp, random_state=42)
+            model = make_model()
+            model.fit(X_tr, y_tr)
+            i1 = list(model.classes_).index(1)
+            val_eer, thr = _eer_threshold(y_val, model.predict_proba(X_val)[:, i1])
+            test_eer, _ = _eer_threshold(y_te, model.predict_proba(X_te)[:, i1])
+            out.append({"subject": u, "threshold": thr, "val_eer": val_eer, "test_eer": test_eer})
+        except Exception:
+            skipped += 1
+    return out, skipped
 
 
 # ===========================================================================
-# Metrics
+# Global-threshold metrics (statistical)
 # ===========================================================================
 def wilson(k, n, z=1.96):
     if n == 0:
@@ -229,7 +240,6 @@ def _stats(vec):
 
 
 def _featvec_from_vectors(vecs):
-    """Build the 27-dim FEATURE_COLUMNS vector from raw H/DD/UD/UU/DU lists."""
     f = {}
     for name in ("H", "DD", "UD", "UU", "DU"):
         m, s, lo, hi, cv = _stats(vecs.get(name, []))
@@ -294,11 +304,30 @@ def load_from_db(source):
     return subjects
 
 
-BACKENDS = {
-    "statistical": evaluate_statistical,
-    "rf": lambda subj: evaluate_classifier(subj, make_rf),
-    "svm": lambda subj: evaluate_classifier(subj, make_svm),
-}
+def dump_trained():
+    """Read-only: print the REAL per-user thresholds + test EER already stored
+    by production training in user_ml_models. Touches nothing."""
+    from sqlalchemy import select
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.models import db
+        from app.models.user_ml_model import UserMLModel
+        rows = db.session.execute(select(UserMLModel)).scalars().all()
+        if not rows:
+            print("No trained per-user models found in user_ml_models.")
+            return
+        print(f"{'username':24} {'type':18} {'threshold':>10} {'test_EER%':>10}")
+        for r in rows:
+            eer = ""
+            try:
+                m = json.loads(r.metrics_json or "{}")
+                e = (m.get("test") or {}).get("EER")
+                eer = f"{e*100:.2f}" if e is not None else ""
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+            print(f"{(r.username or ''):24} {(r.model_type or ''):18} "
+                  f"{float(r.threshold):10.4f} {eer:>10}")
 
 
 # ===========================================================================
@@ -306,12 +335,18 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", choices=["dataset", "users"])
     ap.add_argument("--synthetic", nargs=2, type=int, metavar=("SUBJECTS", "REPS"))
-    ap.add_argument("--sep", type=float, default=1.0, help="synthetic separability (higher=easier)")
-    ap.add_argument("--cfa", type=float, default=1.0, help="cost of a false accept (DCF)")
-    ap.add_argument("--cfr", type=float, default=1.0, help="cost of a false reject (DCF)")
+    ap.add_argument("--dump-trained", action="store_true",
+                    help="read-only: print real per-user thresholds/EER from the DB and exit")
+    ap.add_argument("--sep", type=float, default=1.0, help="synthetic separability")
+    ap.add_argument("--cfa", type=float, default=1.0, help="cost of a false accept (statistical DCF)")
+    ap.add_argument("--cfr", type=float, default=1.0, help="cost of a false reject (statistical DCF)")
     ap.add_argument("--ptarget", type=float, default=0.5, help="prior P(genuine)")
-    ap.add_argument("--backends", default="statistical,rf,svm", help="comma list to evaluate")
+    ap.add_argument("--backends", default="statistical,rf,svm")
     args = ap.parse_args()
+
+    if args.dump_trained:
+        dump_trained()
+        return 0
 
     if args.synthetic:
         subjects = make_synthetic(*args.synthetic, sep=args.sep)
@@ -320,7 +355,7 @@ def main():
         subjects = load_from_db(args.source)
         print(f"[db:{args.source}] loaded {len(subjects)} subjects")
     else:
-        ap.error("provide --synthetic SUBJECTS REPS, or --source {dataset,users}")
+        ap.error("provide --synthetic SUBJECTS REPS, or --source {dataset,users}, or --dump-trained")
 
     subjects = {k: v for k, v in subjects.items() if len(v) >= 2}
     if len(subjects) < 3:
@@ -329,42 +364,73 @@ def main():
     rp = [len(v) for v in subjects.values()]
     print(f"subjects={len(subjects)}  reps/subject min={min(rp)} max={max(rp)} total={sum(rp)}\n")
 
-    rows = []
+    summary = []  # (backend, eer, how, threshold_desc)
     for name in [b.strip() for b in args.backends.split(",") if b.strip()]:
-        if name not in BACKENDS:
-            print(f"  (skip unknown backend '{name}')"); continue
-        print(f"--- evaluating {name} ... ---")
-        genuine, impostor = BACKENDS[name](subjects)
-        if genuine.size == 0 or impostor.size == 0:
-            print(f"  [{name}] not enough comparable samples\n"); continue
-        taus, far, frr = sweep(genuine, impostor)
-        t_eer, eer, far_e, frr_e = find_eer(taus, far, frr)
-        t_dcf, far_d, frr_d = find_min_dcf(taus, far, frr, args.cfa, args.cfr, args.ptarget)
-        auc = roc_auc(far, frr)
-        n_imp, n_gen = impostor.size, genuine.size
-        _, fa_lo, fa_hi = wilson(int(round(far_e * n_imp)), n_imp)
-        _, fr_lo, fr_hi = wilson(int(round(frr_e * n_gen)), n_gen)
 
-        print(f"  genuine n={n_gen} mean={genuine.mean():.3f} | impostor n={n_imp} mean={impostor.mean():.3f}")
-        print(f"  AUC={auc:.4f}  EER={eer*100:.2f}%  tau*(EER)={t_eer:.3f}")
-        print(f"     FAR@EER={far_e*100:.2f}% (95%CI {fa_lo*100:.1f}-{fa_hi*100:.1f}%) | "
-              f"FRR@EER={frr_e*100:.2f}% (95%CI {fr_lo*100:.1f}-{fr_hi*100:.1f}%)")
-        print(f"  min-DCF tau*={t_dcf:.3f}  FAR={far_d*100:.2f}%  FRR={frr_d*100:.2f}%")
-        csv = f"threshold_eval_{name}.csv"
-        with open(csv, "w", encoding="utf-8") as fh:
-            fh.write("tau,FAR,FRR\n")
-            for t, a, b in zip(taus, far, frr):
-                fh.write(f"{t:.4f},{a:.6f},{b:.6f}\n")
-        print(f"  curve -> {csv}\n")
-        rows.append((name, auc, eer, t_eer, far_e, frr_e))
+        # ---- statistical: single GLOBAL threshold (sweep) -----------------
+        if name == "statistical":
+            print("--- statistical (global threshold) ---")
+            genuine, impostor = evaluate_statistical(subjects)
+            if genuine.size == 0 or impostor.size == 0:
+                print("  not enough comparable samples\n"); continue
+            taus, far, frr = sweep(genuine, impostor)
+            t_eer, eer, far_e, frr_e = find_eer(taus, far, frr)
+            t_dcf, far_d, frr_d = find_min_dcf(taus, far, frr, args.cfa, args.cfr, args.ptarget)
+            auc = roc_auc(far, frr)
+            n_imp, n_gen = impostor.size, genuine.size
+            _, fa_lo, fa_hi = wilson(int(round(far_e * n_imp)), n_imp)
+            _, fr_lo, fr_hi = wilson(int(round(frr_e * n_gen)), n_gen)
+            print(f"  genuine n={n_gen} | impostor n={n_imp} | AUC={auc:.4f}")
+            print(f"  EER={eer*100:.2f}%  global tau*={t_eer:.3f}")
+            print(f"     FAR@EER={far_e*100:.2f}% (95%CI {fa_lo*100:.1f}-{fa_hi*100:.1f}%) | "
+                  f"FRR@EER={frr_e*100:.2f}% (95%CI {fr_lo*100:.1f}-{fr_hi*100:.1f}%)")
+            print(f"  min-DCF tau*={t_dcf:.3f}  FAR={far_d*100:.2f}%  FRR={frr_d*100:.2f}%")
+            with open("threshold_eval_statistical.csv", "w", encoding="utf-8") as fh:
+                fh.write("tau,FAR,FRR\n")
+                for t, a, b in zip(taus, far, frr):
+                    fh.write(f"{t:.4f},{a:.6f},{b:.6f}\n")
+            print("  curve -> threshold_eval_statistical.csv\n")
+            summary.append((name, eer, "global", f"tau*={t_eer:.3f}"))
+            continue
 
-    if rows:
-        print("================ SUMMARY (pick lowest EER) ================")
-        print(f"{'backend':12} {'AUC':>7} {'EER%':>7} {'tau*':>7} {'FAR%':>7} {'FRR%':>7}")
-        for name, auc, eer, t, fa, fr in sorted(rows, key=lambda r: r[2]):
-            print(f"{name:12} {auc:7.4f} {eer*100:7.2f} {t:7.3f} {fa*100:7.2f} {fr*100:7.2f}")
-        best = min(rows, key=lambda r: r[2])
-        print(f"\n  -> BEST: ML_BACKEND={best[0]}  VERIFICATION_THRESHOLD={best[3]:.3f}")
+        # ---- rf / svm: PER-USER threshold (replicate production training) --
+        if name in ("rf", "svm"):
+            print(f"--- {name} (per-user threshold, production-replica) ---")
+            maker = make_rf if name == "rf" else make_svm
+            per, skipped = evaluate_classifier_peruser(subjects, maker)
+            if not per:
+                print(f"  could not train any subject (skipped={skipped})\n"); continue
+            test_eers = [p["test_eer"] for p in per]
+            thrs = [p["threshold"] for p in per]
+            print(f"  trained {len(per)} subjects (skipped={skipped})")
+            print(f"  {'subject':18} {'thr(per-user)':>14} {'test_EER%':>10}")
+            for p in per:
+                print(f"  {p['subject']:18} {p['threshold']:14.4f} {p['test_eer']*100:10.2f}")
+            mean_eer = float(np.mean(test_eers))
+            print(f"  --> mean per-user test EER = {mean_eer*100:.2f}%  "
+                  f"(median {np.median(test_eers)*100:.2f}%)")
+            print(f"  --> per-user thresholds: mean={np.mean(thrs):.4f} "
+                  f"min={min(thrs):.4f} max={max(thrs):.4f}  (each user keeps its OWN)")
+            with open(f"threshold_eval_{name}.csv", "w", encoding="utf-8") as fh:
+                fh.write("subject,threshold,val_eer,test_eer\n")
+                for p in per:
+                    fh.write(f"{p['subject']},{p['threshold']:.4f},{p['val_eer']:.6f},{p['test_eer']:.6f}\n")
+            print(f"  per-user table -> threshold_eval_{name}.csv\n")
+            summary.append((name, mean_eer, "per-user", f"per-user (mean {np.mean(thrs):.3f})"))
+            continue
+
+        print(f"  (skip unknown backend '{name}')")
+
+    if summary:
+        print("================ SUMMARY (lower EER = better separability) ================")
+        print(f"{'backend':12} {'EER%':>7}  {'threshold':<26} note")
+        for name, eer, how, desc in sorted(summary, key=lambda r: r[1]):
+            note = "global, tunable" if how == "global" else "auto per-user at training"
+            print(f"{name:12} {eer*100:7.2f}  {desc:<26} {note}")
+        print("\nNotes:")
+        print(" - statistical: ONE global threshold -> set it (production hardcodes 0.70).")
+        print(" - rf/svm: threshold is computed PER USER at training; not a single global value.")
+        print(" - VERIFICATION_THRESHOLD in .env is currently NOT read by the app.")
     return 0
 
 
