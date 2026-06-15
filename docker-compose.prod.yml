@@ -1,0 +1,26 @@
+# Production overlay: puts a Caddy HTTPS reverse proxy in front of the app.
+#
+# On the VPS, run:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# Caddy listens on 80/443 and auto-provisions a Let's Encrypt certificate for
+# the domain in ./Caddyfile, forwarding to the app over the internal compose
+# network (app:5000). Keep the host firewall open ONLY on 22/80/443 — the app's
+# own 5000 port must not be exposed publicly (Caddy reaches it internally).
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
