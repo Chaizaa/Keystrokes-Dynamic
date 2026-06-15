@@ -1,5 +1,5 @@
 /**
- * JANUS Dashboard Service
+ * Identitype Dashboard Service
  * Handles user profile info, API key management, and account actions.
  */
 
