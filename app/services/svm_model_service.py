@@ -46,8 +46,9 @@ class SVMModelService(BaseMLModelService):
     # Single-combination grid keeps per-user training fast for small datasets.
     # Multi-combination grid search was causing partner-side timeouts.
     PARAM_GRID: Dict[str, List[Any]] = {
-        "C": [10.0],
-        "gamma": ["scale"],
+        "C": [0.1, 1, 10],
+        "kernel": ["linear", "rbf"],
+        "gamma": ["scale", "auto"]
     }
 
     # Keep impostor pool quality conservative (complete users only).
@@ -213,32 +214,33 @@ class SVMModelService(BaseMLModelService):
 
         for c_val in self.PARAM_GRID["C"]:
             for gamma in self.PARAM_GRID["gamma"]:
-                model = Pipeline([
-                    ("scaler", StandardScaler()),
-                    ("svc", SVC(
-                        kernel="rbf", 
-                        C=c_val, 
-                        gamma=gamma,
-                        class_weight="balanced", 
-                        probability=True, 
-                        random_state=42,
-                    )),
-                ])
-                model.fit(X_train, y_train)
-                val_probs = model.predict_proba(X_val)[:, 1]
-                eer, thr = _compute_eer_threshold(y_val, val_probs)
-                if eer < best_eer:
-                    best_eer = float(eer)
-                    best_threshold = float(thr)
-                    best_model = model
-                    best_params = {
-                        "kernel": "rbf", 
-                        "C": c_val, 
-                        "gamma": gamma,
-                        "class_weight": "balanced",
-                        "probability": True, 
-                        "random_state": 42,
-                    }
+                for kernel in self.PARAM_GRID["kernel"]:
+                    model = Pipeline([
+                        ("scaler", StandardScaler()),
+                        ("svc", SVC(
+                            kernel=kernel,
+                            C=c_val, 
+                            gamma=gamma,
+                            class_weight="balanced", 
+                            probability=True, 
+                            random_state=42,
+                        )),
+                    ])
+                    model.fit(X_train, y_train)
+                    val_probs = model.predict_proba(X_val)[:, 1]
+                    eer, thr = _compute_eer_threshold(y_val, val_probs)
+                    if eer < best_eer:
+                        best_eer = float(eer)
+                        best_threshold = float(thr)
+                        best_model = model
+                        best_params = {
+                            "kernel": kernel,
+                            "C": c_val,
+                            "gamma": gamma,
+                            "class_weight": "balanced",
+                            "probability": True, 
+                            "random_state": 42,
+                        }
 
         if best_model is None or best_threshold is None:
             return TrainResult(
