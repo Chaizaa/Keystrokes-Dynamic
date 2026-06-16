@@ -1,0 +1,8 @@
+# HTTPS reverse proxy for Identitype.
+# Caddy obtains and auto-renews a real Let's Encrypt certificate for this
+# domain, then forwards traffic to the app container on port 5000.
+# Change the domain below if you use a different one.
+identitype.duckdns.org {
+    encode gzip
+    reverse_proxy app:5000
+}

@@ -84,7 +84,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>SecureAuth Biometric</h1>
+            <h1>Identitype Biometric</h1>
         </div>
         <div class="content">
             <p class="greeting">Halo, {{ username }}</p>
@@ -95,7 +95,7 @@
                     <a href="{{ verification_url }}" class="button">Reset Kata Sandi</a>
                 </div>
             {% elif purpose == 'user_reset' %}
-                <p class="message">Kami menerima permintaan untuk mereset kata sandi akun SecureAuth Anda. Gunakan kode verifikasi di bawah ini pada halaman reset:</p>
+                <p class="message">Kami menerima permintaan untuk mereset kata sandi akun Identitype Anda. Gunakan kode verifikasi di bawah ini pada halaman reset:</p>
                 <div class="code-container">
                     <span class="code">{{ token }}</span>
                 </div>
@@ -104,7 +104,7 @@
                     <a href="{{ verification_url }}" class="button">Buka Halaman Reset</a>
                 </div>
             {% else %}
-                <p class="message">Terima kasih telah mendaftar di SecureAuth. Gunakan kode di bawah ini untuk memverifikasi alamat email Anda:</p>
+                <p class="message">Terima kasih telah mendaftar di Identitype. Gunakan kode di bawah ini untuk memverifikasi alamat email Anda:</p>
                 <div class="code-container">
                     <span class="code">{{ token }}</span>
                 </div>
@@ -117,7 +117,7 @@
             <p class="message" style="margin-top: 32px; font-size: 14px;">Jika Anda tidak merasa melakukan permintaan ini, silakan abaikan email ini.</p>
         </div>
         <div class="footer">
-            &copy; 2026 SecureAuth Biometric Project. All rights reserved.
+            &copy; 2026 Identitype Biometric Project. All rights reserved.
         </div>
     </div>
 </body>

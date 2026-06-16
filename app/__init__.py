@@ -258,11 +258,11 @@ def create_app(config_name="development"):
             "DEV_LENIENT_RATELIMIT": app.config.get("DEV_LENIENT_RATELIMIT", False),
             "RECOMMENDED_SAMPLES": int(app.config.get("RECOMMENDED_SAMPLES", 30)),
         }
-        # In non-production mode Talisman is not initialized, so csp_nonce() would
-        # be undefined in templates. Provide a no-op fallback so templates that
-        # use {{ csp_nonce() }} still render correctly in development.
-        if config_name != "production":
-            flags["csp_nonce"] = lambda: ""
+        # Templates reference {{ csp_nonce() }}. The production CSP below uses
+        # 'unsafe-inline' (not per-request nonces) because the app relies on many
+        # inline event handlers, so provide a no-op csp_nonce() in every
+        # environment to keep templates rendering.
+        flags["csp_nonce"] = lambda: ""
         return flags
 
     # Security Headers (only in production)
@@ -272,17 +272,19 @@ def create_app(config_name="development"):
             force_https=True,
             strict_transport_security=True,
             session_cookie_secure=True,
-            # Nonce is auto-generated per request by Talisman and injected into
-            # templates as csp_nonce(). Inline <script> tags must carry
-            # nonce="{{ csp_nonce() }}" to be allowed. 'unsafe-inline' is removed
-            # so injected scripts (XSS) are blocked even if CSP is somehow bypassed.
+            # 'unsafe-inline' is allowed for scripts because the templates use
+            # many inline event handlers (onclick/onsubmit/onpaste/...) which a
+            # nonce-based CSP cannot cover without a large refactor. Sources are
+            # still restricted to 'self' (no external script/style origins), and
+            # the strong transit protections below (HTTPS, HSTS, secure cookies)
+            # remain in force. Tighten to nonce-based CSP later if the inline
+            # handlers are refactored.
             content_security_policy={
                 "default-src": "'self'",
-                "script-src":  "'self'",  # nonce added automatically via nonce_in
-                "style-src":   ["'self'", "'unsafe-inline'"],  # inline styles kept
+                "script-src":  ["'self'", "'unsafe-inline'"],
+                "style-src":   ["'self'", "'unsafe-inline'"],
                 "img-src":     ["'self'", "data:"],
             },
-            content_security_policy_nonce_in=["script-src"],
             referrer_policy="strict-origin-when-cross-origin",
         )
 

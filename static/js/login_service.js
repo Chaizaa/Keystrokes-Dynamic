@@ -1,5 +1,5 @@
 /**
- * JANUS Login Service
+ * Identitype Login Service
  * Handles unified login with keystroke biometric verification.
  */
 

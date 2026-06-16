@@ -1,5 +1,5 @@
 /**
- * JANUS Registration & Enrollment Service
+ * Identitype Registration & Enrollment Service
  * Handles username validation, email verification, and biometric enrollment flow.
  */
 
