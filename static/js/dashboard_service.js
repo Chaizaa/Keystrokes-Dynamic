@@ -158,7 +158,7 @@ class DashboardService {
                         </div>
                         <div>
                             <label class="${lblCls}">Rate Limit / Hour</label>
-                            <input type="number" id="edit-rate-${key.id}" value="${this.escapeAttr(key.rate_limit)}" class="${inputCls}">
+                            <input type="number" id="edit-rate-${key.id}" value="${this.escapeAttr(key.rate_limit)}" min="1" max="100000" step="1" class="${inputCls}">
                         </div>
                     </div>
                     <div>
@@ -171,7 +171,7 @@ class DashboardService {
                     </div>
                     <div>
                         <label class="${lblCls}">Expires In (Days)</label>
-                        <input type="number" id="edit-expires-${key.id}" value="" class="${inputCls}" placeholder="Blank = keep, 0 = never">
+                        <input type="number" id="edit-expires-${key.id}" value="" min="0" max="3650" step="1" class="${inputCls}" placeholder="Blank = keep, 0 = never">
                         <p class="text-[9px] text-gray-600 mt-1 font-mono">Currently: ${this.formatDate(key.expires_at)}. Leave blank to keep, enter 0 to never expire.</p>
                     </div>
                     <div class="flex gap-3 pt-1">
@@ -186,6 +186,23 @@ class DashboardService {
     async generateApiKey() {
         const partner_name = document.getElementById('partnerName').value.trim();
         if (!partner_name) { window.showToast && window.showToast('Partner name required', 'error'); return; }
+
+        // Validate numeric fields up front so negatives / out-of-range never get
+        // sent (the expiry/rate inputs are type=number but the browser still
+        // allows typed negatives).
+        const rateVal = Number(document.getElementById('apiRateLimit').value) || 100;
+        if (rateVal < 1 || rateVal > 100000) {
+            window.showToast && window.showToast('Rate limit must be between 1 and 100000', 'error');
+            return;
+        }
+        const expValRaw = (document.getElementById('expiresIn').value || '').trim();
+        if (expValRaw !== '') {
+            const d = Number(expValRaw);
+            if (!Number.isInteger(d) || d < 1 || d > 3650) {
+                window.showToast && window.showToast('Expires In must be a whole number between 1 and 3650 days', 'error');
+                return;
+            }
+        }
 
         this.elements.generateBtn.disabled = true;
         this.elements.generateBtn.textContent = 'SECURING...';
