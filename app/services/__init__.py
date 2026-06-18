@@ -7,10 +7,10 @@ from app.services.auth_service import AuthService
 from app.services.api_key_service import APIKeyService
 from app.services.biometric_service import BiometricService
 from app.services.base_model_service import BaseMLModelService, FEATURE_COLUMNS, TrainResult
-from app.services.ml_model_service import MLModelService, ml_model_service
+from app.services.RF import MLModelService, ml_model_service
 from app.services.registry import ServiceRegistry
 from app.services.resolution import resolve_service, resolve_service_from_app
-from app.services.svm_model_service import SVMModelService, svm_model_service
+from app.services.svm import SVMModelService, svm_model_service
 
 __all__ = [
 	"AuthService",
