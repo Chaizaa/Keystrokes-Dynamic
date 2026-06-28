@@ -113,15 +113,28 @@ def main() -> int:
             "events": flow_events,
         },
     )
+    if register_resp.status_code != 200:
+        print(f"[DEBUG] /api/register_sample returned {register_resp.status_code}: {register_resp.get_json()}")
     assert_status(register_resp, 200, "POST /api/register_sample")
     register_body = register_resp.get_json() or {}
     ensure(register_body.get("status") == "success", "Expected success status from /api/register_sample")
+
+    # Get nonce for replay guard
+    challenge_resp = client.post(
+        "/api/login_challenge",
+        json={"username": flow_username},
+    )
+    assert_status(challenge_resp, 200, "POST /api/login_challenge")
+    challenge_body = challenge_resp.get_json() or {}
+    nonce = challenge_body.get("nonce")
+    ensure(nonce, "Expected nonce from /api/login_challenge")
 
     login_resp = client.post(
         "/api/login",
         json={
             "username": flow_username,
             "events": flow_events,
+            "nonce": nonce,
         },
     )
     ensure(
