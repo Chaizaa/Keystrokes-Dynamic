@@ -13,16 +13,29 @@ from __future__ import annotations
 
 import os
 from typing import Any, Dict
+from typing import cast
+from flask import Flask, current_app
 
 from sqlalchemy import func, select
 
 from app.models import UsersVector, db
-from app.services.ml_model_service import (
+# from app.services import RF
+from app.services.RF import (
     is_training_in_progress as rf_is_training_in_progress,
     ml_model_service,
     schedule_background_training as schedule_rf_background_training,
 )
-from app.services.svm_model_service import (
+# from app.services.ml_model_service import (
+#     is_training_in_progress as rf_is_training_in_progress,
+#     ml_model_service,
+#     schedule_background_training as schedule_rf_background_training,
+# )
+# from app.services.svm_model_service import (
+#     is_training_in_progress as svm_is_training_in_progress,
+#     schedule_background_training as schedule_svm_background_training,
+#     svm_model_service,
+# )
+from app.services.svm import (
     is_training_in_progress as svm_is_training_in_progress,
     schedule_background_training as schedule_svm_background_training,
     svm_model_service,
@@ -381,13 +394,25 @@ class BiometricService:
         # If no model exists, trigger background training and ask user to retry.
         if service.get_model_row(username) is None:
             from flask import current_app
+            from typing import Any
             already_running = is_training(username)
             if not already_running:
                 try:
-                    app = current_app._get_current_object()
-                    schedule_training(app, username, force=False)
+                    proxy: Any = current_app
+                    app = proxy._get_current_object()
+
+                    schedule_training(
+                        app,
+                        username,
+                        force=False
+                    )
+
                 except RuntimeError:
-                    service.train_user_model(username, force=False)
+
+                    service.train_user_model(
+                        username,
+                        force=False
+                    )
 
             if service.get_model_row(username) is None:
                 status = "training_started" if not already_running else "training_in_progress"

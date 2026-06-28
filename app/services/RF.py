@@ -1,7 +1,8 @@
 """ML model training + persistence service (RandomForest backend).
 
-Implements the per-user one-vs-rest RandomForest approach from `ml/ml_pta.py`:
-- train/val/test split: 60/20/20 stratified
+Implements the per-user one-vs-rest RandomForest approach:
+- train/val split: 80/20 stratified (No testing split during enrollment)
+- preprocessing: StandardScaler applied via Pipeline
 - model selection: minimise EER on validation set
 - threshold: the EER threshold on the validation set
 
@@ -21,6 +22,8 @@ import numpy as np
 from sqlalchemy import or_, select
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 import skops.io as sio
 import joblib
@@ -37,29 +40,26 @@ from app.services.base_model_service import (
 
 
 class MLModelService(BaseMLModelService):
-    """Train, store, and use per-user RandomForest models."""
+    """Train, store, and use per-user RandomForest models via Pipeline."""
 
     MODEL_TYPE = "RandomForestClassifier"
 
-    # Single-combination grid keeps per-user training under ~2s for small
-    # datasets (5-50 enrollment samples). The previous 72-combination grid
-    # took 50+ seconds with 20 samples and caused partner-side timeouts.
-    # The chosen defaults are sensible RF baselines for keystroke biometrics.
+    # Single-combination grid keeps per-user training under ~2s
     PARAM_GRID: Dict[str, List[Any]] = {
-        "n_estimators": [200],
-        "max_depth": [None],
-        "min_samples_leaf": [2],
-        "max_features": ["sqrt"],
+        "n_estimators": [100],
+        "max_depth": [8, 10],
+        "min_samples_leaf": [1, 2],
+        "max_features": ["sqrt", "log2"]
     }
 
     def __init__(self):
         super().__init__()
 
     # ------------------------------------------------------------------
-    # Backend-specific: deserialise + validate RandomForest
+    # Backend-specific: deserialise + validate RandomForest Pipeline
     # ------------------------------------------------------------------
     def _deserialize_model(self, blob: bytes):
-        """Deserialise and validate the RandomForest model from BLOB."""
+        """Deserialise and validate the model pipeline from BLOB."""
 
         if not isinstance(blob, bytes) or len(blob) == 0:
             raise ValueError("Model blob is empty or invalid")
@@ -74,27 +74,41 @@ class MLModelService(BaseMLModelService):
         except Exception as e:
             raise ValueError(f"Failed to deserialise model: {e}")
 
-        if not isinstance(model, RandomForestClassifier):
+        # Mengizinkan Pipeline selain RandomForestClassifier murni
+        if not isinstance(model, (RandomForestClassifier, Pipeline)):
             raise ValueError(
-                f"Model must be RandomForestClassifier, got {type(model).__name__}"
+                f"Model must be RandomForestClassifier or Pipeline, got {type(model).__name__}"
             )
         if not hasattr(model, "predict_proba"):
             raise ValueError("Model must have predict_proba method")
 
         expected = len(FEATURE_COLUMNS)
-        if not hasattr(model, "n_features_in_"):
-            raise ValueError("Model missing n_features_in_ attribute")
-        if model.n_features_in_ != expected:
-            raise ValueError(
-                f"Feature count mismatch: expected {expected}, got {model.n_features_in_}"
+        
+        # Cek jumlah fitur, handle jika model dibungkus Pipeline
+        # actual_features = getattr(model, "n_features_in_", None)
+        # if actual_features is None and hasattr(model, "steps"):
+        #     actual_features = getattr(model.steps[0][1], "n_features_in_", None)
+        actual_features = getattr(model, "n_features_in_", None)
+
+        if actual_features is None and isinstance(model, Pipeline):
+            actual_features = getattr(
+                model.steps[0][1],
+                "n_features_in_",
+                None
             )
+
+        if actual_features is not None and actual_features != expected:
+            raise ValueError(
+                f"Feature count mismatch: expected {expected}, got {actual_features}"
+            )
+            
         return model
 
     # ------------------------------------------------------------------
     # Train
     # ------------------------------------------------------------------
     def train_user_model(self, username: str, *, force: bool = False) -> TrainResult:
-        """Train (or retrain) a user RandomForest model using the ml_pta procedure."""
+        """Train (or retrain) a user RandomForest model using 80/20 split."""
         username = (username or "").strip()
         if not username:
             return TrainResult(success=False, username="", reason="missing_username")
@@ -106,12 +120,23 @@ class MLModelService(BaseMLModelService):
                 reason="user_not_found", message="User not found",
             )
 
-        if (not force) and self.get_model_row(username):
-            row = self.get_model_row(username)
+        # if (not force) and self.get_model_row(username):
+        #     row = self.get_model_row(username)
+        #     return TrainResult(
+        #         success=True, username=username,
+        #         threshold=float(row.threshold), model_id=int(row.id),
+        #         reason="already_trained", message="Model already exists",
+        #     )
+        row = self.get_model_row(username)
+
+        if (not force) and row:
             return TrainResult(
-                success=True, username=username,
-                threshold=float(row.threshold), model_id=int(row.id),
-                reason="already_trained", message="Model already exists",
+                success=True,
+                username=username,
+                threshold=float(row.threshold),
+                model_id=int(row.id),
+                reason="already_trained",
+                message="Model already exists",
             )
 
         rows = self._load_training_rows()
@@ -139,11 +164,9 @@ class MLModelService(BaseMLModelService):
         n_impostor = int(np.sum(y_all == 0))
 
         try:
-            X_train, X_temp, y_train, y_temp = train_test_split(
-                X_all, y_all, test_size=0.4, stratify=y_all, random_state=42,
-            )
-            X_val, X_test, y_val, y_test = train_test_split(
-                X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42,
+            # Mengubah split menjadi 80% Train, 20% Validation
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_all, y_all, test_size=0.2, stratify=y_all, random_state=42,
             )
         except Exception as exc:
             return TrainResult(
@@ -151,7 +174,7 @@ class MLModelService(BaseMLModelService):
                 reason="split_failed", message=str(exc),
             )
 
-        best_model = None
+        best_pipeline = None
         best_eer = 1.0
         best_threshold = None
         best_params: Dict[str, Any] = {}
@@ -160,40 +183,52 @@ class MLModelService(BaseMLModelService):
             for depth in self.PARAM_GRID["max_depth"]:
                 for leaf in self.PARAM_GRID["min_samples_leaf"]:
                     for feat in self.PARAM_GRID["max_features"]:
-                        model = RandomForestClassifier(
-                            n_estimators=n, max_depth=depth,
-                            min_samples_leaf=leaf, max_features=feat,
-                            class_weight="balanced", random_state=42, n_jobs=-1,
-                        )
-                        model.fit(X_train, y_train)
-                        val_probs = model.predict_proba(X_val)[:, 1]
+                        
+                        # Bungkus Scaler dan RandomForest dalam satu Pipeline
+                        pipeline = Pipeline([
+                            ('scaler', StandardScaler()),
+                            ('rf', RandomForestClassifier(
+                                n_estimators=n, max_depth=depth,
+                                min_samples_leaf=leaf, max_features=feat,
+                                class_weight="balanced", random_state=42, n_jobs=-1,
+                            ))
+                        ])
+                        
+                        # Fit pipeline (otomatis fit_transform scaler, lalu fit model)
+                        pipeline.fit(X_train, y_train)
+                        
+                        # Evaluasi di data validasi (otomatis di-transform oleh scaler)
+                        val_probs = pipeline.predict_proba(X_val)[:, 1]
                         eer, thr = _compute_eer_threshold(y_val, val_probs)
+                        
                         if eer < best_eer:
                             best_eer = float(eer)
                             best_threshold = float(thr)
-                            best_model = model
+                            best_pipeline = pipeline
                             best_params = {
                                 "n_estimators": n, "max_depth": depth,
                                 "min_samples_leaf": leaf, "max_features": feat,
                                 "random_state": 42, "class_weight": "balanced",
                             }
 
-        if best_model is None or best_threshold is None:
+        if best_pipeline is None or best_threshold is None:
             return TrainResult(
                 success=False, username=username,
                 reason="training_failed", message="Unable to select a best model",
             )
 
-        test_probs = best_model.predict_proba(X_test)[:, 1]
-        test_metrics = _compute_metrics(y_test, test_probs, best_threshold)
-        test_eer, _ = _compute_eer_threshold(y_test, test_probs)
+        # Hitung metrik akhir menggunakan data validasi
+        val_probs_final = best_pipeline.predict_proba(X_val)[:, 1]
+        val_metrics = _compute_metrics(y_val, val_probs_final, best_threshold)
+        
         metrics = {
             "best_eer_val": best_eer,
             "threshold": best_threshold,
-            "test": {**test_metrics, "EER": float(test_eer)},
+            "validation": {**val_metrics, "EER": float(best_eer)},
         }
 
-        blob = self._serialize_model(best_model)
+        # Serialize seluruh pipeline (model + scaler tersimpan sekaligus)
+        blob = self._serialize_model(best_pipeline)
 
         row = self.get_model_row_any(username)
         if row is None:
@@ -245,10 +280,13 @@ class MLModelService(BaseMLModelService):
             return {"success": False, "verified": False, "reason": "model_not_found"}
 
         try:
-            model, feature_names = self._get_cached_runtime(row)
+            model_pipeline, feature_names = self._get_cached_runtime(row)
             X = self._build_feature_vector(features, feature_names)
-            prob = float(model.predict_proba(X)[0, 1])
+            
+            # X otomatis masuk ke StandardScaler lalu ke RandomForest
+            prob = float(model_pipeline.predict_proba(X)[0, 1])
             threshold = float(row.threshold)
+            
             return {
                 "success": True,
                 "verified": bool(prob >= threshold),
@@ -264,15 +302,14 @@ class MLModelService(BaseMLModelService):
                 "reason": "predict_failed", "error": str(exc),
             }
 
-
 # ---------------------------------------------------------------------------
 # Module-level singleton + background training helpers
+# (Tidak ada perubahan pada bagian ini)
 # ---------------------------------------------------------------------------
 ml_model_service = MLModelService()
 
 _training_in_progress: set = set()
 _training_lock = threading.Lock()
-
 
 def schedule_background_training(app, username: str, *, force: bool = False) -> bool:
     """Kick off model training for *username* in a background daemon thread."""
@@ -298,7 +335,6 @@ def schedule_background_training(app, username: str, *, force: bool = False) -> 
     t = threading.Thread(target=_run, daemon=True, name=f"ml-train-{username}")
     t.start()
     return True
-
 
 def is_training_in_progress(username: str) -> bool:
     """Return True if a background training thread is active for *username*."""

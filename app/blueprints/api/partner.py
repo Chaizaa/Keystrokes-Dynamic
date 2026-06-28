@@ -198,11 +198,11 @@ def _maybe_schedule_training(username: str, sample_count: int) -> None:
         backend_name = str(current_app.config.get("ML_BACKEND", "rf") or "rf").strip().lower()
         backend_name = "svm" if backend_name == "svm" else "rf"
         if backend_name == "svm":
-            from app.services.svm_model_service import (
+            from app.services.svm import (
                 schedule_background_training as schedule,
             )
         else:
-            from app.services.ml_model_service import (
+            from app.services.RF import (
                 schedule_background_training as schedule,
             )
         app = current_app._get_current_object()

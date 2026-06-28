@@ -11,7 +11,6 @@ Centralises all logic that is identical between the two backends:
   - Background training scaffold (schedule_background_training, is_training_in_progress)
   - Confidence label logic (_confidence_label)
 """
-
 from __future__ import annotations
 
 import io
@@ -21,7 +20,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple,Sequence
 
 import numpy as np
 from sqlalchemy import or_, select
@@ -226,23 +225,34 @@ class BaseMLModelService(ABC):
         return buf.getvalue()
 
     @abstractmethod
-    def _deserialize_model(self, blob: bytes):
+    def _deserialize_model(self, blob: bytes)-> Any:
         """Load and validate a model from bytes. Backend-specific."""
 
     # ------------------------------------------------------------------
     # Dataset helpers (shared)
     # ------------------------------------------------------------------
-    def _load_training_rows(self) -> List[UsersVector]:
+    # def _load_training_rows(self) -> List[UsersVector]:
+    #     return (
+    #         db.session.execute(
+    #             select(UsersVector).where(
+    #                 (UsersVector.event_type == "enrollment")
+    #                 | (UsersVector.data_type == "enrollment")
+    #             )
+    #         )
+    #         .scalars()
+    #         .all()
+    #     )
+    def _load_training_rows(self) -> Sequence[UsersVector]:
         return (
-            db.session.execute(
-                select(UsersVector).where(
-                    (UsersVector.event_type == "enrollment")
-                    | (UsersVector.data_type == "enrollment")
-                )
+        db.session.execute(
+            select(UsersVector).where(
+                (UsersVector.event_type == "enrollment")
+                | (UsersVector.data_type == "enrollment")
             )
-            .scalars()
-            .all()
         )
+        .scalars()
+        .all()
+    )
 
     def _ensure_class_balance(
         self, X_all: np.ndarray, y_all: np.ndarray, min_impostors: int = 5

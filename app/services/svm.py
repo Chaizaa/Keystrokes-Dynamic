@@ -14,16 +14,17 @@ import io
 import json
 import threading
 import zipfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import RobustScaler
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 import skops.io as sio
 import joblib
+from typing import cast, Sequence, Any 
 
 from sqlalchemy import select
 
@@ -46,8 +47,9 @@ class SVMModelService(BaseMLModelService):
     # Single-combination grid keeps per-user training fast for small datasets.
     # Multi-combination grid search was causing partner-side timeouts.
     PARAM_GRID: Dict[str, List[Any]] = {
-        "C": [10.0],
-        "gamma": ["scale"],
+        "C": [1, 10, 50],
+        "kernel": ["linear", "rbf"],
+        "gamma": [0.005, 0.01]
     }
 
     # Keep impostor pool quality conservative (complete users only).
@@ -83,11 +85,21 @@ class SVMModelService(BaseMLModelService):
 
         try:
             buf = io.BytesIO(blob)
-            untrusted = sio.get_untrusted_types(file=buf)
-            model = sio.load(buf, trusted=untrusted)
+
+            untrusted = sio.get_untrusted_types(
+                file=cast(Any, buf)
+            )
+
+            model = sio.load(
+                cast(Any, buf),
+                trusted=untrusted
+            )
+
         except zipfile.BadZipFile:
+
             buf = io.BytesIO(blob)
             model = joblib.load(buf)
+
         except Exception as e:
             raise ValueError(f"Failed to deserialise model: {e}")
 
@@ -122,8 +134,10 @@ class SVMModelService(BaseMLModelService):
     # ------------------------------------------------------------------
     # Dataset helpers (SVM-specific: filter complete users for impostor pool)
     # ------------------------------------------------------------------
+    
+    
     def _filter_complete_user_rows(
-        self, rows: List[UsersVector], target_username: str
+        self, rows: Sequence[UsersVector], target_username: str
     ) -> List[UsersVector]:
         counts: Dict[str, int] = {}
         for r in rows:
@@ -143,139 +157,283 @@ class SVMModelService(BaseMLModelService):
     # Train
     # ------------------------------------------------------------------
     def train_user_model(self, username: str, *, force: bool = False) -> TrainResult:
+
         username = (username or "").strip()
+
         if not username:
             return TrainResult(success=False, username="", reason="missing_username")
 
-        user = db.session.execute(select(User).where(User.username == username)).scalars().one_or_none()
+        user = db.session.execute(
+            select(User).where(User.username == username)
+        ).scalars().one_or_none()
+
         if not user:
             return TrainResult(
-                success=False, username=username,
-                reason="user_not_found", message="User not found",
+                success=False,
+                username=username,
+                reason="user_not_found",
+                message="User not found"
             )
 
         existing = self.get_model_row(username)
+
         if (not force) and existing:
             return TrainResult(
-                success=True, username=username,
-                threshold=float(existing.threshold), model_id=int(existing.id),
-                reason="already_trained", message="SVM model already exists",
+                success=True,
+                username=username,
+                threshold=float(existing.threshold),
+                model_id=int(existing.id),
+                reason="already_trained",
+                message="SVM model already exists"
             )
 
         rows = self._load_training_rows()
         filtered = self._filter_complete_user_rows(rows, username)
         X_all, y_all = self._rows_to_xy(filtered, username)
 
-        # Fallback: if conservative pool is too small, use full corpus
         if X_all.shape[0] == 0 or int(np.sum(y_all == 0)) < 2:
+
             fallback_X, fallback_y = self._rows_to_xy(rows, username)
+
             if fallback_X.shape[0] > X_all.shape[0]:
                 X_all, y_all = fallback_X, fallback_y
 
         if X_all.shape[0] == 0:
             return TrainResult(
-                success=False, username=username,
-                reason="no_training_rows",
-                message="No enrollment rows found for training",
+                success=False,
+                username=username,
+                reason="no_training_rows"
             )
+
+        X_all, y_all = self._ensure_class_balance(X_all, y_all)
 
         n_genuine = int(np.sum(y_all == 1))
         n_impostor = int(np.sum(y_all == 0))
 
         if n_genuine < 2:
             return TrainResult(
-                success=False, username=username,
-                reason="insufficient_class_balance",
-                message=f"Not enough genuine samples: genuine={n_genuine}",
+                success=False,
+                username=username,
+                reason="insufficient_samples"
             )
 
-        X_all, y_all = self._ensure_class_balance(X_all, y_all)
-        n_genuine = int(np.sum(y_all == 1))
-        n_impostor = int(np.sum(y_all == 0))
+        cv = StratifiedKFold(
+            n_splits=5,
+            shuffle=True,
+            random_state=42
+        )
 
-        try:
-            X_train, X_temp, y_train, y_temp = train_test_split(
-                X_all, y_all, test_size=0.4, stratify=y_all, random_state=42,
-            )
-            X_val, X_test, y_val, y_test = train_test_split(
-                X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42,
-            )
-        except Exception as exc:
-            return TrainResult(
-                success=False, username=username,
-                reason="split_failed", message=str(exc),
-            )
-
-        best_model = None
         best_eer = 1.0
-        best_threshold = None
-        best_params: Dict[str, Any] = {}
+        best_params = None
 
-        for c_val in self.PARAM_GRID["C"]:
-            for gamma in self.PARAM_GRID["gamma"]:
-                model = Pipeline([
-                    ("scaler", StandardScaler()),
-                    ("svc", SVC(
-                        kernel="rbf", 
-                        C=c_val, 
-                        gamma=gamma,
-                        class_weight="balanced", 
-                        probability=True, 
-                        random_state=42,
-                    )),
-                ])
-                model.fit(X_train, y_train)
-                val_probs = model.predict_proba(X_val)[:, 1]
-                eer, thr = _compute_eer_threshold(y_val, val_probs)
-                if eer < best_eer:
-                    best_eer = float(eer)
-                    best_threshold = float(thr)
-                    best_model = model
-                    best_params = {
-                        "kernel": "rbf", 
-                        "C": c_val, 
-                        "gamma": gamma,
-                        "class_weight": "balanced",
-                        "probability": True, 
-                        "random_state": 42,
-                    }
+        all_probs = []
+        all_labels = []
 
-        if best_model is None or best_threshold is None:
-            return TrainResult(
-                success=False, username=username,
-                reason="training_failed", message="Unable to select a best SVM model",
-            )
+        # ============================
+        # CROSS VALIDATION
+        # ============================
 
-        test_probs = best_model.predict_proba(X_test)[:, 1]
-        test_metrics = _compute_metrics(y_test, test_probs, best_threshold)
-        test_eer, _ = _compute_eer_threshold(y_test, test_probs)
+        for train_idx, test_idx in cv.split(X_all, y_all):
+
+            X_train = X_all[train_idx]
+            X_test = X_all[test_idx]
+
+            y_train = y_all[train_idx]
+            y_test = y_all[test_idx]
+
+            fold_best_eer = 1.0
+            fold_best_model = None
+            fold_best_params = None
+
+            # ============================
+            # GRID SEARCH
+            # ============================
+
+            for C in self.PARAM_GRID["C"]:
+
+                for kernel in self.PARAM_GRID["kernel"]:
+
+                    # LINEAR
+                    if kernel == "linear":
+
+                        model = Pipeline([
+                            ("scaler", RobustScaler()),
+                            ("svc", SVC(
+                                kernel="linear",
+                                C=C,
+                                probability=True,
+                                class_weight="balanced",
+                                random_state=42
+                            ))
+                        ])
+
+                        model.fit(X_train, y_train)
+
+                        probs = model.predict_proba(X_test)[:, 1]
+
+                        eer, _ = _compute_eer_threshold(
+                            y_test,
+                            probs
+                        )
+
+                        if eer < fold_best_eer:
+
+                            fold_best_eer = eer
+                            fold_best_model = model
+
+                            fold_best_params = {
+                                "kernel": "linear",
+                                "C": C,
+                                "gamma": "-"
+                            }
+
+                    # RBF
+                    else:
+
+                        for gamma in self.PARAM_GRID["gamma"]:
+
+                            model = Pipeline([
+                                ("scaler", RobustScaler()),
+                                ("svc", SVC(
+                                    kernel="rbf",
+                                    C=C,
+                                    gamma=gamma,
+                                    probability=True,
+                                    class_weight="balanced",
+                                    random_state=42
+                                ))
+                            ])
+
+                            model.fit(X_train, y_train)
+
+                            probs = model.predict_proba(X_test)[:, 1]
+
+                            eer, _ = _compute_eer_threshold(
+                                y_test,
+                                probs
+                            )
+
+                            if eer < fold_best_eer:
+
+                                fold_best_eer = eer
+                                fold_best_model = model
+
+                                fold_best_params = {
+                                    "kernel": "rbf",
+                                    "C": C,
+                                    "gamma": gamma
+                                }
+
+            # ============================
+            # SAVE FOLD RESULT
+            # ============================
+            if fold_best_model is None:
+                continue
+
+            probs = fold_best_model.predict_proba(X_test)[:, 1]
+
+            all_probs.extend(probs)
+            all_labels.extend(y_test)
+
+            if fold_best_eer < best_eer:
+                best_eer = fold_best_eer
+                best_params = fold_best_params
+
+        # ============================
+        # GLOBAL EVALUATION
+        # ============================
+
+        all_probs = np.array(all_probs)
+        all_labels = np.array(all_labels)
+
+        eer, threshold = _compute_eer_threshold(
+            all_labels,
+            all_probs
+        )
+
+        metrics_test = _compute_metrics(
+            all_labels,
+            all_probs,
+            threshold
+        )
+
         metrics = {
-            "best_eer_val": best_eer,
-            "threshold": best_threshold,
-            "test": {**test_metrics, "EER": float(test_eer)},
-            "impostor_filter_min_enrollment_rows": self.MIN_REQUIRED_ENROLLMENT_ROWS,
+            "threshold": threshold,
+            "test": {
+                **metrics_test,
+                "EER": float(eer)
+            }
         }
+   
+        # ============================
+        # FINAL TRAINING
+        # ============================
+        if best_params is None:
+            return TrainResult(
+                success=False,
+                username=username,
+                reason="training_failed",
+                message="No best model selected"
+        )
 
-        blob = self._serialize_model(best_model)
+        if best_params["kernel"] == "linear":
+
+            final_model = Pipeline([
+                ("scaler", RobustScaler()),
+                ("svc", SVC(
+                    kernel="linear",
+                    C=best_params["C"],
+                    probability=True,
+                    class_weight="balanced",
+                    random_state=42
+                ))
+            ])
+
+        else:
+
+            final_model = Pipeline([
+                ("scaler", RobustScaler()),
+                ("svc", SVC(
+                    kernel="rbf",
+                    C=best_params["C"],
+                    gamma=best_params["gamma"],
+                    probability=True,
+                    class_weight="balanced",
+                    random_state=42
+                ))
+            ])
+
+        final_model.fit(X_all, y_all)
+
+        blob = self._serialize_model(final_model)
 
         row = self.get_model_row_any(username)
+
         if row is None:
+
             row = UserMLModel(
-                user_id=user.id, username=username,
-                model_blob=blob, threshold=float(best_threshold),
+                user_id=user.id,
+                username=username,
+                model_blob=blob,
+                threshold=float(threshold),
                 feature_names_json=json.dumps(FEATURE_COLUMNS),
-                model_type=self.MODEL_TYPE, sklearn_version=None,
+                model_type=self.MODEL_TYPE,
                 metrics_json=json.dumps(metrics),
                 train_params_json=json.dumps(best_params),
                 n_samples_total=int(X_all.shape[0]),
-                n_genuine=n_genuine, n_impostor=n_impostor,
-                created_at=_now_utc(), updated_at=_now_utc(),
+                n_genuine=n_genuine,
+                n_impostor=n_impostor,
+                created_at=_now_utc(),
+                updated_at=_now_utc()
             )
+
             db.session.add(row)
+
         else:
+
             row.user_id = user.id
             row.model_blob = blob
-            row.threshold = float(best_threshold)
+            row.threshold = float(threshold)
             row.feature_names_json = json.dumps(FEATURE_COLUMNS)
             row.model_type = self.MODEL_TYPE
             row.metrics_json = json.dumps(metrics)
@@ -286,14 +444,20 @@ class SVMModelService(BaseMLModelService):
             row.updated_at = _now_utc()
 
         db.session.commit()
-        self._invalidate_user_runtime_cache(username)
-        return TrainResult(
-            success=True, username=username,
-            threshold=float(best_threshold), eer=float(best_eer),
-            metrics=metrics, model_id=int(row.id),
-            reason="trained", message="SVM model trained successfully",
-        )
 
+        self._invalidate_user_runtime_cache(username)
+
+        return TrainResult(
+            success=True,
+            username=username,
+            threshold=float(threshold),
+            eer=float(eer),
+            metrics=metrics,
+            model_id=int(row.id),
+            reason="trained",
+            message="SVM model trained successfully"
+        )
+        
     # ------------------------------------------------------------------
     # Verify
     # ------------------------------------------------------------------

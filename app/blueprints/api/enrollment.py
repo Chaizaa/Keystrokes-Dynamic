@@ -318,11 +318,11 @@ def _schedule_auto_training_if_ready(username, new_count):
             backend_name = "svm" if backend_name == "svm" else "rf"
 
             if backend_name == "svm":
-                from app.services.svm_model_service import (
+                from app.services.svm import (
                     schedule_background_training as schedule_background_training_backend,
                 )
             else:
-                from app.services.ml_model_service import (
+                from app.services.RF import (
                     schedule_background_training as schedule_background_training_backend,
                 )
 
