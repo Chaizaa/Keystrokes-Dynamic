@@ -9,7 +9,7 @@ POST /api/login
 import traceback
 from datetime import datetime, timezone
 
-from flask import current_app, jsonify, request, session
+from flask import current_app, jsonify, request, session, url_for
 from sqlalchemy import select
 
 from app import limiter as _limiter
@@ -208,7 +208,15 @@ def login():
                 )
                 return error_response("Incorrect password", reason="PASSWORD_MISMATCH", status_code=403)
 
-        # Enrollment status
+        # ── Enrollment adequacy gate ───────────────────────────────────────
+        # A user MUST complete the required number of enrollment samples before
+        # login is allowed. This runs BEFORE biometric verification on purpose:
+        # a per-user model only needs 2 genuine samples to train, and a model
+        # trained on that few samples can be degenerate and return
+        # verified=True. Trusting the verification result alone therefore let an
+        # under-enrolled account authenticate (the count check used to live only
+        # in the `not verified` branch below, so the success path skipped it).
+        # Gating on the sample count here means no downstream path can bypass it.
         enrollment_status = get_biometric_service().get_enrollment_status(username)
         enrollment_count = enrollment_status["count"]
 
@@ -222,6 +230,24 @@ def login():
                 user_agent=user_agent,
             )
             return error_response("User not registered", reason="no_enrollment", status_code=404)
+
+        if not enrollment_status["ready_for_login"]:
+            _log_login_attempt(
+                username,
+                user_id=user_id,
+                success=False,
+                failure_reason="insufficient_enrollment",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            recommended = enrollment_status.get(
+                "recommended_samples"
+            ) or get_biometric_service().get_recommended_samples()
+            return jsonify({
+                "success": False,
+                "message": f"Enrollment incomplete ({enrollment_count}/{recommended})",
+                "reason": "insufficient_enrollment",
+            }), 403
 
         # Biometric verification
         verification_result = get_biometric_service().verify_keystroke_sample(username, features)
@@ -258,25 +284,9 @@ def login():
               f"templates={verification_result.get('templates_used')}")
 
         if not verification_result.get("verified"):
-            if not enrollment_status["ready_for_login"]:
-                _log_login_attempt(
-                    username,
-                    user_id=user_id,
-                    success=False,
-                    failure_reason="insufficient_enrollment",
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                )
-                _rec = getattr(get_biometric_service(), "RECOMMENDED_SAMPLES", 30)
-                payload = {
-                    "success": False,
-                    "message": f"Enrollment incomplete ({enrollment_count}/{_rec})",
-                    "reason": "insufficient_enrollment",
-                }
-                if DEV_LENIENT or debug_requested:
-                    payload["debug"] = verification_result
-                return jsonify(payload), 400
-
+            # Enrollment adequacy is already enforced above, so reaching here
+            # with a failed verification means the biometric genuinely did not
+            # match — treat it as an impostor attempt.
             _log_login_attempt(
                 username,
                 user_id=user_id,

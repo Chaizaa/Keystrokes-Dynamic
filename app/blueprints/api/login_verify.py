@@ -37,8 +37,22 @@ def pre_verify_password():
             return jsonify({"valid": False, "message": "Data tidak lengkap"}), 400
 
         enrollment_status = get_biometric_service().get_enrollment_status(username)
-        if int(enrollment_status.get("count", 0)) == 0:
+        enrollment_count = int(enrollment_status.get("count", 0))
+        if enrollment_count == 0:
             return jsonify({"valid": False, "message": "User not registered"}), 404
+
+        # Same enrollment-adequacy gate as /api/login: never report a match for
+        # an account that has not completed the required enrollment samples. A
+        # model trained on too few samples can be degenerate and falsely verify.
+        if not enrollment_status.get("ready_for_login"):
+            return jsonify({
+                "valid": False,
+                "message": (
+                    f"Enrollment incomplete "
+                    f"({enrollment_count}/{enrollment_status.get('recommended_samples')})"
+                ),
+                "reason": "insufficient_enrollment",
+            }), 403
 
         result = process_events(raw_events, username)
         if result["status"] != "success":
@@ -103,11 +117,16 @@ def verify_user():
 
         new_features = process_result["features"]
         enrollment_status = get_biometric_service().get_enrollment_status(username)
-        if int(enrollment_status.get("count", 0)) < 5:
+        enrollment_count = int(enrollment_status.get("count", 0))
+        # Enrollment-adequacy gate (see /api/login): require the full enrollment
+        # sample count before a verification result can be trusted. The old
+        # hard-coded `< 5` let an under-enrolled account be "authenticated" by a
+        # model trained on too few samples.
+        if not enrollment_status.get("ready_for_login"):
             return jsonify({
                 "status": "error",
                 "message": (f"User not registered or enrollment data insufficient "
-                            f"({int(enrollment_status.get('count', 0))} samples)"),
+                            f"({enrollment_count}/{enrollment_status.get('recommended_samples')} samples)"),
             }), 404
 
         verification_result = get_biometric_service().verify_keystroke_sample(username, new_features)
