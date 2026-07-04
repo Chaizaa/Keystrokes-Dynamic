@@ -162,21 +162,31 @@ def admin_delete_user(user_id):
         #   EnrollmentLog / VerificationLog reference BOTH users.id AND api_keys.id,
         #   so they must be cleared before APIKey, which itself FKs users.id.
         try:
-            # 1. Partner-API logs (FK -> users.id AND FK -> api_keys.id)
+            # 1. First, delete all EnrollmentLog/VerificationLog records that reference THIS USER
             db.session.execute(delete(EnrollmentLog).where(EnrollmentLog.user_id == user.id))
             db.session.execute(delete(VerificationLog).where(VerificationLog.user_id == user.id))
-            # 2. Partner-API keys (FK -> users.id, no ondelete)
+            
+            # 2. Then, delete logs that reference API KEYS owned by this user (created via partner API)
+            #    An API key belongs to this user, but may have been used to enroll/verify OTHER users
+            user_api_key_ids = db.session.execute(
+                select(APIKey.id).where(APIKey.user_id == user.id)
+            ).scalars().all()
+            if user_api_key_ids:
+                db.session.execute(delete(EnrollmentLog).where(EnrollmentLog.api_key_id.in_(user_api_key_ids)))
+                db.session.execute(delete(VerificationLog).where(VerificationLog.api_key_id.in_(user_api_key_ids)))
+            
+            # 3. Partner-API keys (FK -> users.id, no ondelete)
             db.session.execute(delete(APIKey).where(APIKey.user_id == user.id))
-            # 3. Biometric samples + per-user ML model
+            # 4. Biometric samples + per-user ML model
             db.session.execute(delete(UsersVector).where(UsersVector.username == target_username))
             db.session.execute(delete(UserMLModel).where(UserMLModel.user_id == user.id))
-            # 4. Audit logs referencing this user
+            # 5. Audit logs referencing this user
             db.session.execute(
                 delete(AdminAudit).where(
                     (AdminAudit.user_id == user.id) | (AdminAudit.username == target_username)
                 )
             )
-            # 5. Finally, the user row
+            # 6. Finally, the user row
             db.session.execute(delete(User).where(User.id == user.id))
 
             # Centralized logging of the action before commit

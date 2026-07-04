@@ -1,7 +1,41 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./venv/Scripts/python.exe -m pip install -r requirements.txt)"
+      "Bash(./venv/Scripts/python.exe -m pip install -r requirements.txt)",
+      "Bash(venv/Scripts/python.exe -)",
+      "Bash(npm run *)",
+      "Bash(venv/Scripts/python.exe scripts/quick_smoke.py)",
+      "Bash(git commit *)",
+      "Bash(venv/Scripts/python.exe -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['app/models/user.py','app/services/auth_service.py','app/__init__.py','config.py','app/services/verification_service.py','app/blueprints/api/verification.py','app/blueprints/auth.py','migrations/versions/0001_reset_hardening_columns.py']]; print\\('ALL COMPILE OK'\\)\")",
+      "Bash(FLASK_APP=run.py venv/Scripts/python.exe -m flask db upgrade)",
+      "Bash(FLASK_APP=run.py venv/Scripts/python.exe -m flask db current)",
+      "Bash(FLASK_APP=run.py venv/Scripts/python.exe -c ' *)",
+      "Bash(venv/Scripts/python.exe scripts/eval_threshold.py --synthetic 10 15 --sep 1.0)",
+      "Bash(venv/Scripts/python.exe scripts/eval_threshold.py --synthetic 10 15 --sep 3.0)",
+      "Bash(venv/Scripts/python.exe scripts/eval_threshold.py --synthetic 10 15)",
+      "Bash(cd \"c:\\\\Users\\\\Asus\\\\Documents\\\\Keystroke_dynamics\\\\Keystrokes-Dynamic\" && echo \"=== _ensure_class_balance ===\" ; grep -nE \"def _ensure_class_balance\" app/services/base_model_service.py ; sed -n '/def _ensure_class_balance/,/return/p' app/services/base_model_service.py 2>/dev/null | head -40)",
+      "Bash(venv/Scripts/python.exe scripts/eval_threshold.py --synthetic 6 15)",
+      "Bash(ls -1 docker-compose.yml Dockerfile Procfile requirements.txt run.py)",
+      "Bash(cat docker-compose.yml)",
+      "Bash(head -30 Dockerfile)",
+      "Bash(grep -nE \"latest|==\\\\s*$|^[a-zA-Z].*[^=<>~]$\" requirements.txt)",
+      "Bash(venv/Scripts/python.exe -c \"import uuid6, importlib.metadata as m; print\\('uuid6 version:', m.version\\('uuid6'\\)\\)\")",
+      "Bash(cd \"c:\\\\Users\\\\Asus\\\\Documents\\\\Keystroke_dynamics\\\\Keystrokes-Dynamic\" && echo \"=== _serialize_api_key \\(apa yang dikirim ke UI\\) ===\" ; sed -n '/def _serialize_api_key/,/^def /p' app/blueprints/api/user.py | head -40 ; echo ; echo \"=== input expiry & tampilan hari di template ===\" ; grep -niE \"expire|expir|days|hari|berakhir|number|min=|valueAsNumber|<input\" templates/api_key_dashboard.html | head -30)",
+      "Bash(git checkout *)",
+      "Bash(grep -nA4 \"PARAM_GRID\" app/services/svm_model_service.py)",
+      "Bash(venv/Scripts/python.exe -c \"import py_compile; py_compile.compile\\('app/services/svm_model_service.py', doraise=True\\); py_compile.compile\\('scripts/import_dataset_subjects.py', doraise=True\\); print\\('COMPILE OK'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/python.exe scripts/import_dataset_subjects.py \"dataset_export\\(2\\).csv\" --samples-per-subject 10)",
+      "Bash(grep -iE \"DATABASE|POSTGRES|SQLITE|DB_\" .env)",
+      "Bash(ls -1 docker-compose*.yml compose*.yml)",
+      "Bash(find \"/c/Users/Asus/Downloads\" \"/c/Users/Asus/Desktop\" \"/c/Users/Asus/Documents\" -maxdepth 2 \\\\\\( -iname \"*.pdf\" -o -iname \"*.docx\" \\\\\\) -mtime -3 2>/dev/null | head -30; echo \"--- done ---\")",
+      "Read(//c/Users/Asus/Downloads/**)",
+      "Bash(./venv/Scripts/python.exe -m pip install --quiet pypdf)",
+      "Bash(./venv/Scripts/python.exe -m scripts.quick_smoke)",
+      "Bash(git -c core.pager=cat diff HEAD -- app/services/svm_model_service.py)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Asus\\Documents\\Keystroke_dynamics\\Keystrokes-Dynamic"
     ]
   }
 }
